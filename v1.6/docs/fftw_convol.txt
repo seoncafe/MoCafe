@@ -1,0 +1,41 @@
+For each dimension, the indexes of samples should be from -n/2 ... 0 ... n/2 -1, so if the dimension is odd, center around the middle.
+If the dimension is even, center so that before the new 0 you have one sample more than after the new 0.
+
+E.g. -4, -3, -2, -1, 0, 1, 2, 3 for a width/height of 8 or -3, -2, -1, 0, 1, 2, 3 for a width/height of 7.
+
+The FFT is relative to the middle, in its scale there are negative points.
+In the memory the points are 0...n-1, but the FFT treats them as -ceil(n/2)...floor(n/2), where 0 is -ceil(n/2) and n-1 is floor(n/2)
+
+The identity matrix is a matrix of zeros with 1 in the 0,0 location (the center - according to above numbering).
+(In the spatial domain.)
+
+In the frequency domain the identity matrix should be a constant (all real values 1 or 1/(N*M) and all imaginary values 0).
+
+If you do not receive this result, then the identify matrix might need padding differently
+(to the left and down instead of around all sides) - this may depend on the FFT implementation.
+
+Center each dimension separately (this is an index centering, no change in actual memory).
+
+You will probably need to pad the image (after centering) to a whole power of 2 in each dimension
+(2^n * 2^m where n doesn't have to equal m).
+
+Pad relative to FFT's 0,0 location (to center, not corner) by copying existing pixels into a new larger image,
+using center-based-indexes in both source and destination images (e.g. (0,0) to (0,0), (0,1) to (0,1), (1,-2) to (1,-2))
+
+Assuming your FFT uses regular floating point cells and not complex cells, the complex image has to be of size
+2*ceil(2/n) * 2*ceil(2/m) even if you don't need a whole power of 2 (since it has half the samples, but the samples are complex).
+
+If your image has more than one color channel, you will first have to reshape it, so that the channel are the most significant
+in the sub-pixel ordering, instead of the least significant. You can reshape and pad in one go to save time and space.
+
+Don't forget the FFTSHIFT after the IFFT. (To swap the quadrants.)
+The result of the IFFT is 0...n-1. You have to take pixels floor(n/2)+1..n-1 and move them before 0...floor(n/2).
+This is done by copying pixels to a new image, copying floor(n/2)+1 to memory-location 0,
+floor(n/2)+2 to memory-location 1, ..., n-1 to memory-location floor(n/2),
+then 0 to memory-location ceil(n/2), 1 to memory-location ceil(n/2)+1, ..., floor(n/2) to memory-location n-1.
+
+When you multiply in the frequency domain, remember that the samples are complex (one cell real then one cell imaginary)
+so you have to use a complex multiplication.
+
+The result might need dividing by N^2*M^2 where N is the size of n after padding (and likewise for M and m).
+- You can tell this by (a. looking at the frequency domain's values of the identity matrix, b. comparing result to input.)
