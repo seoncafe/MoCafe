@@ -1,0 +1,4 @@
+ftnchek -nocheck -quiet -makedcl galaxy_car_idl.for
+\rm galaxy_car_idl_load.c
+dlmform galaxy_car_idl.for
+\rm galaxy_car_idl.f

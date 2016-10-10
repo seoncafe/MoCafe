@@ -1,0 +1,16 @@
+#!/bin/bash
+#$ -N job_name
+#$ -cwd
+#$ -S /bin/bash
+#$ -o out.txt
+#$ -e err.txt
+#$ -M your_email_here
+#$ -m ea
+#$ -pe mpich 64
+
+# Set Intel MPI environment
+mpi_dir=/share/apps/intel/impi/5.0.3.048/intel64/bin
+source $mpi_dir/mpivars.sh intel64
+
+echo "Got $NSLOTS slots."
+mpirun -genv I_MPI_FABRICS shm:dapl -n $NSLOTS ./galaxy_mpi.x model.in

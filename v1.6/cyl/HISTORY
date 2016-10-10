@@ -1,0 +1,62 @@
+--------------------------------------------------------------------------------
+Author:
+   Kwang-Il Seon
+
+History:
+  1.6.4  - 2016/03/22
+           Now, grid spacing is automatically determined.
+              (unless r_alpha and z_alpha are explicitly defined in model.in)
+           xshift and yshift are added as parameters. output images will be shifted by (xshift, yshift).
+              (default values are 0, 0)
+           if left_right_fold = .true. (default), symmetric image will be obtained regardless with position_angle.
+  1.6.3  - 2016/01/31, 2016/02/02
+           Bug-fix in convolution_2D
+           Bug-fix in sersic.f90
+  1.6.2  - 2016/01/16
+           Calling method of random number generators are changed.
+           random_ and rand_ indicate subroutine and function, respectively.
+  1.6.1  - 2016/01/09
+           Include output_mode option is added.
+           Coordination System definition is changed.
+           inclination_angle, position_angle, and phase_angle are introduced instead of obs_angles(1:3).
+  1.6    - 2015/12/16
+           radial and vertical grids spacing is distributed in power-law (delta (z^pow_idx) = constant.)
+           raytrace.f90 is modified to use arbitrariy grid spacing.
+  1.5d   - 2015/12/11
+           bug-fixed in random.f90 and sersic.f90 (saved varaibles should be declared in THREADPRIVATE directive)
+  1.5c   - 2015/12/07
+           a bug-fixed in random_rexp. $OMP CRITICAL section is inserted for saved variables in random.f90
+           left_right_fold parameter is introduced to increase SNR
+  1.5b   - 2015/12/03
+           The program now accpet commandline argument. (usage: galaxy_cyl.x model.in)
+           (Don't do "galaxy_cyl.x < model.in")
+           minor bug fixed in setup.f90 and in setting iseed.
+           mpi version is also included.
+           raytrace routines are now in a module single file and explicit INLINE compiler directives have been added.
+           add_direc and peelingoff are now in a single module file.
+           readfits and write_out are in a single module file.
+  1.5a   - 2015/11/29
+           image convolution is performed for each thread (not for final image).
+           the convolved images are used to obtain not only intensities but only uncertainties.
+           The previous method gave negative values in sqrt, sometime.
+  1.5    - 2015/11/28
+           overall structure is changed.
+           convolution of sigma^2 and PSF^2 is set to 0.0 when it gives negative value.
+  1.4a   - 2015/11/21
+           can convolve output images (scatt, direc, scatt_sig, direc_sig) with an instrumental PSF.
+           bug-fixed in sersic.f90. SAVE attributed vaiables are implicitly assumed to be SHARED in openMP.
+  1.4    - 2015/11/19
+           included the Sersic Bulge component.
+           bug-fixed in galaxy_cyl_idl.f90 and setup[_idl].f90 routines. (memory leaked in idl interfaced routines)
+  1.3    - 2015/10/21
+           calculate uncertainties maps.
+           (0st HDU - scattered light, 1st HDU - direct light)
+            (2nd HDU - uncertainty of scattered light, 3rd HDU - uncertainty of direct light)
+           forced first scattering - main_omp.f90 (openmp) or main_serial.f90
+           pathlength strentching (biasing) algorithm - main_v2, main_v3, main_v4.f90
+  1.2    - 2013/07/11
+           bug fixed in luminosity scaling in add_direc.f90 and peelingoff.f90
+  1.1    - 2013/07/04
+           minor bug fix in setup.f90
+  1.0    - 2013/06/27
+           bug fixed in tmatrix

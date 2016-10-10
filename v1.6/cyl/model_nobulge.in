@@ -1,0 +1,55 @@
+&input_parameters
+ no_photons     = 5e6
+ hgg            = 0.41
+ albedo         = 0.4
+ luminosity     = 1e48
+ distance_unit  = 'kpc'
+ out_file       = 'out_nobulge.fits.gz'
+ nprint  = 10000000
+! psf_file = ''
+ psf_file = 'PSF/PSF_GALEX_FUV.fits.gz'
+! psf_file = 'PSF/PSFfuv.fits.gz'
+! psf_file = 'PSF/PSF_TNG_V.fits.gz'
+ left_right_fold = .true.
+ output_mode = 1
+/
+&geometry_parameters
+ nr = 30
+ np = 1
+ nz = 61
+ rmax = 18.0
+ zmax = 18.0
+ pow_idx = 2.5
+! dust geometry
+ dust(1)%name       = 'exponential'
+ dust(1)%tau_faceon = 0.8
+ dust(1)%rscale     = 6.6
+ dust(1)%zscale     = 0.25
+ dust(1)%rmax       = 18.0
+ dust(1)%zmax       = 18.0
+ dust(2)%name       = 'exponential'
+ dust(2)%tau_faceon = 0.0
+ dust(2)%rscale     = 6.6
+ dust(2)%zscale     = 1.50
+ dust(2)%rmax       = 18.0
+ dust(2)%zmax       = 18.0
+
+! disk_name, rscale, zscale, rmax, zmax
+! bulge_name, sersic_index, Reff, axial_ratio, BulgeToDisk
+ source%diskname     = 'exponential'
+ source%rscale       = 4.4
+ source%zscale       = 0.5
+ source%rmax         = 18.0
+ source%zmax         = 18.0
+/
+&observer_parameters
+! rotation angles about z, y, and x-axes
+ inclination_angle = 89.0
+ position_angle    = 10.0
+ phase_angle       = 0.0
+ distance          = 9500.0
+ nxim = 500
+ nyim = 160
+ dxim = 0.00041666667
+ dyim = 0.00041666667
+/
