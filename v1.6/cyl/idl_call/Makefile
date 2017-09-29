@@ -4,8 +4,8 @@ FC      =	ifort
 CC      =	icc
 LD	=	ifort
 
-FFLAGS  =	-xHost -ipo -O3 -no-prec-div -fp-model fast=2 -openmp -cpp -I$(SRC_DIR)/
-LDFLAGS =	-xHost -ipo -O3 -no-prec-div -fp-model fast=2 -openmp -lcfitsio -lfftw3 -lfftw3f
+FFLAGS  =	-xHost -ipo -O3 -no-prec-div -fp-model fast=2 -fopenmp -cpp -I$(SRC_DIR)/
+LDFLAGS =	-xHost -ipo -O3 -no-prec-div -fp-model fast=2 -fopenmp -lcfitsio -lfftw3 -lfftw3f
 CFLAGS  =	-xHost -ipo -O3 -no-prec-div -fp-model fast=2 -I/usr/local/exelis/idl82/external/include
 
 HOST = $(shell hostname)
