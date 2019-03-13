@@ -229,7 +229,8 @@ contains
 
 !--- setup sources luminosity scale
   steradian_pix = (par%dxim*par%dyim)*(deg2rad**2)
-  photon%lscale = (par%luminosity/dble(par%nphotons))/(distance2cm**2)/steradian_pix
+  !photon%lscale = (par%luminosity/dble(par%nphotons))/(distance2cm**2)/steradian_pix
+  photon%lscale = (par%luminosity/(dble(par%nphotons)/dble(par%nthreads))/(distance2cm**2)/steradian_pix
   if (par%left_right_fold .and. par%phase_angle == 0.0_wp) photon%lscale = photon%lscale/2.0_wp
 
   return
