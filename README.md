@@ -38,7 +38,7 @@ Howto run:
    2. make
       You need the CFITSIO library installed. (http://heasarc.gsfc.nasa.gov/fitsio/)
 
-   3. nebula.x
+   3. MoCafe.x
 
    4. change directory to idl ("cd idl"), run idl ("idl" or "spear")
        and excute plot_out (".r plot_out")
