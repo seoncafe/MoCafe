@@ -31,7 +31,7 @@
    3. MoCafe.x
 
 ### References
-If you use LaRT, please acknowledge the following papers.
+If you use MoCafe, please acknowledge the following papers.
    - [Seon & Draine (2016, ApJ, 833, 201)](https://ui.adsabs.harvard.edu/abs/2016ApJ...833..201S/abstract)
    - [Seon (2018, ApJL, 862, 87)](https://ui.adsabs.harvard.edu/abs/2018ApJ...862...87S/abstract)
 
