@@ -6,6 +6,7 @@
 ### Purpose:
    Dust Radiative Transfer in cartesian grid system (x, y, z) \
    Basic Monte-Carlo Simulation for a Dust RT in a cartesian grid system. \
+   This version is capable of dealing with the polarization of continuum radiation. \
    Unit of the output image = (luminosity unit) cm^-2 sr^-1
 
 ### Howto run:
