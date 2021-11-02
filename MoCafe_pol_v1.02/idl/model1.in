@@ -1,0 +1,29 @@
+&parameters
+ par%no_photons=1e8
+ par%hgg=0.6592
+ par%albedo=0.3899
+ par%scatt_mat_file='../data/mueller_V.dat'
+ par%calculate_stokes = .true.
+ par%taumax=1.0
+ par%distance_unit=''
+ par%out_file='test1.fits.gz'
+ par%iseed=0
+ par%nprint=10000000
+ par%use_master_slave=.true.
+
+! grid_parameters
+ par%nx=1
+ par%ny=1
+ par%nz=1
+ par%xmax=100.0
+ par%ymax=100.0
+ par%zmax=100.0
+
+! rotation angles about z, y, and x-axes
+ par%inclination_angle=0.0
+ par%position_angle=0.0
+ par%phase_angle=0.0
+ par%distance=1e3
+ par%nxim=128
+ par%nyim=128
+/

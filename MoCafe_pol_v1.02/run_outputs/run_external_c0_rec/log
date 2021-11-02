@@ -1,0 +1,330 @@
+
++++++ M000_001K_t001.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.000E-02
+tau_pole  (dust) :        1.000E-02
+      10000000 photons calculated:    0.076 mins
+      20000000 photons calculated:    0.155 mins
+      30000000 photons calculated:    0.233 mins
+      40000000 photons calculated:    0.311 mins
+      50000000 photons calculated:    0.390 mins
+      60000000 photons calculated:    0.469 mins
+      70000000 photons calculated:    0.548 mins
+      80000000 photons calculated:    0.628 mins
+      90000000 photons calculated:    0.708 mins
+     100000000 photons calculated:    0.788 mins
+Now Gathering Results...
+Average Number of scattering :   8.2963E-01
+Total Excution Time          :    0.788 mins
+
++++++ M000_001K_t010.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.000E-01
+tau_pole  (dust) :        1.000E-01
+      10000000 photons calculated:    0.078 mins
+      20000000 photons calculated:    0.157 mins
+      30000000 photons calculated:    0.236 mins
+      40000000 photons calculated:    0.315 mins
+      50000000 photons calculated:    0.394 mins
+      60000000 photons calculated:    0.474 mins
+      70000000 photons calculated:    0.553 mins
+      80000000 photons calculated:    0.633 mins
+      90000000 photons calculated:    0.712 mins
+     100000000 photons calculated:    0.792 mins
+Now Gathering Results...
+Average Number of scattering :   8.9210E-01
+Total Excution Time          :    0.794 mins
+
++++++ M000_001K_t100.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.000E+00
+tau_pole  (dust) :        1.000E+00
+      10000000 photons calculated:    0.081 mins
+      20000000 photons calculated:    0.162 mins
+      30000000 photons calculated:    0.243 mins
+      40000000 photons calculated:    0.325 mins
+      50000000 photons calculated:    0.406 mins
+      60000000 photons calculated:    0.488 mins
+      70000000 photons calculated:    0.569 mins
+      80000000 photons calculated:    0.651 mins
+      90000000 photons calculated:    0.732 mins
+     100000000 photons calculated:    0.814 mins
+Now Gathering Results...
+Average Number of scattering :   1.6426E+00
+Total Excution Time          :    0.815 mins
+
++++++ M005_001K_t001.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.060E-02
+tau_pole  (dust) :        9.095E-03
+      10000000 photons calculated:    0.080 mins
+      20000000 photons calculated:    0.161 mins
+      30000000 photons calculated:    0.242 mins
+      40000000 photons calculated:    0.323 mins
+      50000000 photons calculated:    0.404 mins
+      60000000 photons calculated:    0.485 mins
+      70000000 photons calculated:    0.566 mins
+      80000000 photons calculated:    0.647 mins
+      90000000 photons calculated:    0.727 mins
+     100000000 photons calculated:    0.808 mins
+Now Gathering Results...
+Average Number of scattering :   8.2959E-01
+Total Excution Time          :    0.812 mins
+
++++++ M005_001K_t010.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.060E-01
+tau_pole  (dust) :        9.095E-02
+      10000000 photons calculated:    0.082 mins
+      20000000 photons calculated:    0.166 mins
+      30000000 photons calculated:    0.248 mins
+      40000000 photons calculated:    0.331 mins
+      50000000 photons calculated:    0.414 mins
+      60000000 photons calculated:    0.498 mins
+      70000000 photons calculated:    0.580 mins
+      80000000 photons calculated:    0.664 mins
+      90000000 photons calculated:    0.748 mins
+     100000000 photons calculated:    0.831 mins
+Now Gathering Results...
+Average Number of scattering :   8.9232E-01
+Total Excution Time          :    0.835 mins
+
++++++ M005_001K_t100.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.060E+00
+tau_pole  (dust) :        9.095E-01
+      10000000 photons calculated:    0.081 mins
+      20000000 photons calculated:    0.163 mins
+      30000000 photons calculated:    0.244 mins
+      40000000 photons calculated:    0.326 mins
+      50000000 photons calculated:    0.408 mins
+      60000000 photons calculated:    0.489 mins
+      70000000 photons calculated:    0.571 mins
+      80000000 photons calculated:    0.653 mins
+      90000000 photons calculated:    0.734 mins
+     100000000 photons calculated:    0.816 mins
+Now Gathering Results...
+Average Number of scattering :   1.6446E+00
+Total Excution Time          :    0.819 mins
+
++++++ M010_001K_t001.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.013E-02
+tau_pole  (dust) :        9.664E-03
+      10000000 photons calculated:    0.080 mins
+      20000000 photons calculated:    0.161 mins
+      30000000 photons calculated:    0.242 mins
+      40000000 photons calculated:    0.322 mins
+      50000000 photons calculated:    0.403 mins
+      60000000 photons calculated:    0.484 mins
+      70000000 photons calculated:    0.564 mins
+      80000000 photons calculated:    0.645 mins
+      90000000 photons calculated:    0.726 mins
+     100000000 photons calculated:    0.807 mins
+Now Gathering Results...
+Average Number of scattering :   8.2976E-01
+Total Excution Time          :    0.810 mins
+
++++++ M010_001K_t010.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.013E-01
+tau_pole  (dust) :        9.664E-02
+      10000000 photons calculated:    0.079 mins
+      20000000 photons calculated:    0.160 mins
+      30000000 photons calculated:    0.240 mins
+      40000000 photons calculated:    0.320 mins
+      50000000 photons calculated:    0.400 mins
+      60000000 photons calculated:    0.481 mins
+      70000000 photons calculated:    0.561 mins
+      80000000 photons calculated:    0.641 mins
+      90000000 photons calculated:    0.721 mins
+     100000000 photons calculated:    0.802 mins
+Now Gathering Results...
+Average Number of scattering :   8.9435E-01
+Total Excution Time          :    0.806 mins
+
++++++ M010_001K_t100.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.013E+00
+tau_pole  (dust) :        9.664E-01
+      10000000 photons calculated:    0.081 mins
+      20000000 photons calculated:    0.163 mins
+      30000000 photons calculated:    0.244 mins
+      40000000 photons calculated:    0.326 mins
+      50000000 photons calculated:    0.407 mins
+      60000000 photons calculated:    0.488 mins
+      70000000 photons calculated:    0.570 mins
+      80000000 photons calculated:    0.651 mins
+      90000000 photons calculated:    0.733 mins
+     100000000 photons calculated:    0.814 mins
+Now Gathering Results...
+Average Number of scattering :   1.6704E+00
+Total Excution Time          :    0.818 mins
+
++++++ M020_001K_t001.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.177E-02
+tau_pole  (dust) :        1.108E-02
+      10000000 photons calculated:    0.083 mins
+      20000000 photons calculated:    0.166 mins
+      30000000 photons calculated:    0.249 mins
+      40000000 photons calculated:    0.333 mins
+      50000000 photons calculated:    0.416 mins
+      60000000 photons calculated:    0.499 mins
+      70000000 photons calculated:    0.583 mins
+      80000000 photons calculated:    0.666 mins
+      90000000 photons calculated:    0.749 mins
+     100000000 photons calculated:    0.833 mins
+Now Gathering Results...
+Average Number of scattering :   8.2998E-01
+Total Excution Time          :    0.836 mins
+
++++++ M020_001K_t010.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.177E-01
+tau_pole  (dust) :        1.108E-01
+      10000000 photons calculated:    0.081 mins
+      20000000 photons calculated:    0.161 mins
+      30000000 photons calculated:    0.242 mins
+      40000000 photons calculated:    0.323 mins
+      50000000 photons calculated:    0.404 mins
+      60000000 photons calculated:    0.485 mins
+      70000000 photons calculated:    0.566 mins
+      80000000 photons calculated:    0.647 mins
+      90000000 photons calculated:    0.728 mins
+     100000000 photons calculated:    0.809 mins
+Now Gathering Results...
+Average Number of scattering :   8.9635E-01
+Total Excution Time          :    0.813 mins
+
++++++ M020_001K_t100.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        1.177E+00
+tau_pole  (dust) :        1.108E+00
+      10000000 photons calculated:    0.081 mins
+      20000000 photons calculated:    0.162 mins
+      30000000 photons calculated:    0.244 mins
+      40000000 photons calculated:    0.325 mins
+      50000000 photons calculated:    0.407 mins
+      60000000 photons calculated:    0.488 mins
+      70000000 photons calculated:    0.570 mins
+      80000000 photons calculated:    0.651 mins
+      90000000 photons calculated:    0.732 mins
+     100000000 photons calculated:    0.814 mins
+Now Gathering Results...
+Average Number of scattering :   1.6871E+00
+Total Excution Time          :    0.817 mins
+
++++++ M030_001K_t001.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        9.181E-03
+tau_pole  (dust) :        4.288E-03
+      10000000 photons calculated:    0.080 mins
+      20000000 photons calculated:    0.160 mins
+      30000000 photons calculated:    0.241 mins
+      40000000 photons calculated:    0.322 mins
+      50000000 photons calculated:    0.402 mins
+      60000000 photons calculated:    0.483 mins
+      70000000 photons calculated:    0.563 mins
+      80000000 photons calculated:    0.644 mins
+      90000000 photons calculated:    0.725 mins
+     100000000 photons calculated:    0.805 mins
+Now Gathering Results...
+Average Number of scattering :   8.2997E-01
+Total Excution Time          :    0.809 mins
+
++++++ M030_001K_t010.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        9.181E-02
+tau_pole  (dust) :        4.288E-02
+      10000000 photons calculated:    0.081 mins
+      20000000 photons calculated:    0.162 mins
+      30000000 photons calculated:    0.243 mins
+      40000000 photons calculated:    0.324 mins
+      50000000 photons calculated:    0.405 mins
+      60000000 photons calculated:    0.487 mins
+      70000000 photons calculated:    0.568 mins
+      80000000 photons calculated:    0.649 mins
+      90000000 photons calculated:    0.730 mins
+     100000000 photons calculated:    0.811 mins
+Now Gathering Results...
+Average Number of scattering :   8.9612E-01
+Total Excution Time          :    0.815 mins
+
++++++ M030_001K_t100.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : T
+Dust Parameters(a, g)     :  0.4386 0.1310
+Dust Extinction per H     :    1.606E-21
+Total photons             :      100000000
+tau_equat (dust) :        9.181E-01
+tau_pole  (dust) :        4.288E-01
+      10000000 photons calculated:    0.085 mins
+      20000000 photons calculated:    0.171 mins
+      30000000 photons calculated:    0.257 mins
+      40000000 photons calculated:    0.343 mins
+      50000000 photons calculated:    0.428 mins
+      60000000 photons calculated:    0.514 mins
+      70000000 photons calculated:    0.600 mins
+      80000000 photons calculated:    0.686 mins
+      90000000 photons calculated:    0.772 mins
+     100000000 photons calculated:    0.858 mins
+Now Gathering Results...
+Average Number of scattering :   1.6693E+00
+Total Excution Time          :    0.861 mins

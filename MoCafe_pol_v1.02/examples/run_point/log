@@ -1,0 +1,112 @@
+
+Running ../MoCafe_pol.x on geminga with 16 threads.
+
++++++ point_tau10_R.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : F
+Dust Parameters(a, g)     :  0.6730 0.4960
+Dust Extinction per H     :    1.606E-21
+Total photons             :       10000000
+tau_equat (dust) :        1.000E+00
+tau_pole  (dust) :        1.000E+00
+   1.00000E+06 photons calculated:    0.004 mins
+   2.00000E+06 photons calculated:    0.008 mins
+   3.00000E+06 photons calculated:    0.012 mins
+   4.00000E+06 photons calculated:    0.016 mins
+   5.00000E+06 photons calculated:    0.020 mins
+   6.00000E+06 photons calculated:    0.024 mins
+   7.00000E+06 photons calculated:    0.028 mins
+   8.00000E+06 photons calculated:    0.032 mins
+   9.00000E+06 photons calculated:    0.036 mins
+   1.00000E+07 photons calculated:    0.040 mins
+Now Gathering Results...
+Average Number of scattering :   1.8498E+00
+Total Excution Time          :    0.042 mins
+
++++++ point_tau10_hgg00_a10.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : F
+Dust Parameters(a, g)     :  1.0000 0.0000
+Dust Extinction per H     :    1.606E-21
+Total photons             :       10000000
+tau_equat (dust) :        1.000E+00
+tau_pole  (dust) :        1.000E+00
+   1.00000E+06 photons calculated:    0.004 mins
+   2.00000E+06 photons calculated:    0.008 mins
+   3.00000E+06 photons calculated:    0.012 mins
+   4.00000E+06 photons calculated:    0.016 mins
+   5.00000E+06 photons calculated:    0.020 mins
+   6.00000E+06 photons calculated:    0.024 mins
+   7.00000E+06 photons calculated:    0.028 mins
+   8.00000E+06 photons calculated:    0.032 mins
+   9.00000E+06 photons calculated:    0.036 mins
+   1.00000E+07 photons calculated:    0.040 mins
+Now Gathering Results...
+Average Number of scattering :   2.2082E+00
+Total Excution Time          :    0.042 mins
+
++++++ point_tau10_hgg02_a10.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : F
+Dust Parameters(a, g)     :  1.0000 0.2000
+Dust Extinction per H     :    1.606E-21
+Total photons             :       10000000
+tau_equat (dust) :        1.000E+00
+tau_pole  (dust) :        1.000E+00
+   1.00000E+06 photons calculated:    0.004 mins
+   2.00000E+06 photons calculated:    0.008 mins
+   3.00000E+06 photons calculated:    0.012 mins
+   4.00000E+06 photons calculated:    0.016 mins
+   5.00000E+06 photons calculated:    0.019 mins
+   6.00000E+06 photons calculated:    0.023 mins
+   7.00000E+06 photons calculated:    0.027 mins
+   8.00000E+06 photons calculated:    0.032 mins
+   9.00000E+06 photons calculated:    0.036 mins
+   1.00000E+07 photons calculated:    0.040 mins
+Now Gathering Results...
+Average Number of scattering :   2.0542E+00
+Total Excution Time          :    0.041 mins
+
++++++ point_tau10_hgg02_a05.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : F
+Dust Parameters(a, g)     :  0.5000 0.2000
+Dust Extinction per H     :    1.606E-21
+Total photons             :       10000000
+tau_equat (dust) :        1.000E+00
+tau_pole  (dust) :        1.000E+00
+   1.00000E+06 photons calculated:    0.004 mins
+   2.00000E+06 photons calculated:    0.008 mins
+   3.00000E+06 photons calculated:    0.012 mins
+   4.00000E+06 photons calculated:    0.016 mins
+   5.00000E+06 photons calculated:    0.021 mins
+   6.00000E+06 photons calculated:    0.026 mins
+   7.00000E+06 photons calculated:    0.030 mins
+   8.00000E+06 photons calculated:    0.035 mins
+   9.00000E+06 photons calculated:    0.039 mins
+   1.00000E+07 photons calculated:    0.043 mins
+Now Gathering Results...
+Average Number of scattering :   2.0549E+00
+Total Excution Time          :    0.044 mins
+
++++++ b040_point_tau50_hgg02_a05.in +++++
+Use_Shared_Memory         : F
+Use_Master_Slave          : F
+Dust Parameters(a, g)     :  0.5000 0.2000
+Dust Extinction per H     :    1.606E-21
+Total photons             :       10000000
+tau_equat (dust) :        5.937E+00
+tau_pole  (dust) :        5.593E+00
+   1.00000E+06 photons calculated:    0.020 mins
+   2.00000E+06 photons calculated:    0.039 mins
+   3.00000E+06 photons calculated:    0.059 mins
+   4.00000E+06 photons calculated:    0.078 mins
+   5.00000E+06 photons calculated:    0.096 mins
+   6.00000E+06 photons calculated:    0.115 mins
+   7.00000E+06 photons calculated:    0.134 mins
+   8.00000E+06 photons calculated:    0.153 mins
+   9.00000E+06 photons calculated:    0.172 mins
+   1.00000E+07 photons calculated:    0.192 mins
+Now Gathering Results...
+Average Number of scattering :   1.3051E+01
+Total Excution Time          :    0.197 mins
