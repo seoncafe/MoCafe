@@ -3,16 +3,10 @@ Author:
    Kwang-il Seon, KASI
 
 Version:
-   1.0 - 2013/06/27
-         bug fixed in tmatrix
-   1.1 - 2013/07/11
-         bug fixed in luminosity scaling in add_direc.f90 and peelingoff.f90
-   1.2 - 2014/03/14
-         minor bug fixed. array memories were not deallocated.
-   1.3 - 2020/08/08
+   1.02 - 2021/11/01
 
 Purpose:
-   Radiative Transfer in cartesian grid system (x, y, z)
+   Radiative Transfer in cartesian grid system (x, y, z) \
    Basic Monte-Carlo Simulation for a reflection nebula with a point source embedded
    in a uniform constant-density cloud.
 
