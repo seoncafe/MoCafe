@@ -5,8 +5,7 @@
 
 ### Purpose:
    Dust Radiative Transfer in cartesian grid system (x, y, z) \
-   Basic Monte-Carlo Simulation for a reflection nebula with a point source embedded
-   in a uniform constant-density cloud. \
+   Basic Monte-Carlo Simulation for a Dust RT in a cartesian grid system. \
    Unit of the output image = (luminosity unit) cm^-2 sr^-1
 
 ### Howto run:
