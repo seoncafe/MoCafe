@@ -17,6 +17,7 @@ module random
 !         where harvest is a number (32- or 64-bit) or an 1-, 2-, or 3-dimentional array.
 !
 ! History:
+!   v2.52 (2022/07/23) 64-bit random number generator are added
 !   v2.50 (2021/09/15) random_alias_linear and random_alias_linear_wgt are added
 !   v2.49 (2021/09/12) rand_alias_linear gives an optional output of bin index.
 !   v2.48 (2021/08/30) random_alias_setup, rand_alias_choise, rand_alias_constant, and rand_alias_linear are added
@@ -36,7 +37,7 @@ module random
 !   v2.30 (2018/08/01) init_random_seed has been slightly modified (with regard to pid) for hybrid programming (MPI+openMP).
 !   v2.29 (2018/06/29) added rand_planck and rand_planck_num.
 !   v2.28 (2018/02/08) numerical bugs fixed in rand_resonance_vz_seon, Negative values in sqrt (x1) and Division by zero (h1).
-!   v2.27 (2018/01/23) added rand_r2exp and rand_pick. rand_rexp is now faster than the algorithm given by Baes (2003).
+!   v2.27 (2018/01/23) added rand_r2exp and rand_pick. rand_r1exp is now faster than the algorithm given by Baes (2003).
 !   v2.26 (2017/12/19) added rand_resonance_vz_seon, hoping to be faster.
 !   v2.25 (2017/09/05) added rand_resonance, rand_resonance_rybicki, and "new" rand_voigt.
 !         changed the name of "old" rand_voigt into rand_resonance_vz
@@ -83,7 +84,7 @@ module random
 
   public init_random_seed
   public random_seed, random_number, random_gauss, random_3Dsphere, random_sphere, random_t
-  public rand_number, rand_gauss, rand_exp, rand_rexp, rand_r2exp, rand_zexp, rand_sech2
+  public rand_number, rand_gauss, rand_exp, rand_r1exp, rand_r2exp, rand_zexp, rand_sech2
   public rand_permutation, rand_pick, rand_cyclic_permutation, rand_index, rand_binomial, rand_multinomial
   public rand_t, rand_gamma, rand_scaled_inv_chi2
   public rand_bactrian
@@ -100,10 +101,18 @@ module random
 
   !======= parameter for Mersenne Twister Random Number Generator (MT19937)
   ! Period parameters
-  INTEGER, PARAMETER :: mt_n = 624, mt_n1 = mt_n+1, mt_m = 397, mt_mata = -1727483681 ! constant vector a
-  INTEGER, PARAMETER :: mt_seed0 = 4357
-  INTEGER, SAVE      :: mt(0:mt_n-1)     ! the array for the state vector
-  INTEGER, SAVE      :: mti = mt_n1      ! mti == N+1 means mt(:) is not initialized
+  !INTEGER, PARAMETER :: mt_n = 624, mt_m = 397
+  !INTEGER, PARAMETER :: mt_mata = -1727483681   ! constant vector a
+  !INTEGER, PARAMETER :: mt_seed0 = 4357
+  !INTEGER, SAVE      :: mt(0:mt_n-1)     ! the array for the state vector
+  !INTEGER, SAVE      :: mti = mt_n+1     ! mti == N+1 means mt(:) is not initialized
+  !!$OMP THREADPRIVATE(mt, mti)
+
+  INTEGER,        PARAMETER :: mt_n = 312, mt_m = 156
+  INTEGER(int64), PARAMETER :: mt_mata = -5403634167711393303_int64 ! constant vector a
+  INTEGER,        PARAMETER :: mt_seed0 = 5489
+  INTEGER(int64), SAVE :: mt(mt_n)         ! the array for the state vector
+  INTEGER,        SAVE :: mti = mt_n+1     ! mti == N+1 means mt(:) is not initialized
   !$OMP THREADPRIVATE(mt, mti)
 
   !====== parameters for KISS Random Number Generator
@@ -124,12 +133,12 @@ module random
   !end interface random_number
 
   !interface rand_number
-  !   module procedure kiss64
+  !   module procedure rand_kiss64
   !end interface rand_number
   !=================================================================================
 
   !=================================================================================
-  !--- If you want to use Marsaglis KISS (Keep It Simple and Stupid) RNGs, then comment out the following lines.
+  !--- If you want to use Mersenne Twister Random Number Generator (MT199937), then uncomment the following lines.
   interface init_random_seed
      module procedure init_random_mt_seed
   end interface init_random_seed
@@ -142,6 +151,10 @@ module random
      module procedure random_mt32,random_mt64,random_mt_v32,random_mt_v64,&
                       random_mt_vv32,random_mt_vv64,random_mt_vvv32,random_mt_vvv64
   end interface random_number
+
+  interface rand_number
+     module procedure rand_mt
+  end interface rand_number
   !=================================================================================
 
   interface rand_resonance_vz
@@ -213,19 +226,19 @@ contains
   subroutine random_kiss32(harvest)
      implicit none
      real(sp), intent(out) :: harvest
-     harvest = kiss32()
+     harvest = rand_kiss32()
   end subroutine random_kiss32
   subroutine random_kiss64(harvest)
      implicit none
      real(dp), intent(out) :: harvest
-     harvest = kiss64()
+     harvest = rand_kiss64()
   end subroutine random_kiss64
   subroutine random_kiss_v32(harvest)
      implicit none
      real(sp), intent(out) :: harvest(:)
      integer :: i
      do i=1, size(harvest)
-        harvest(i) = kiss32()
+        harvest(i) = rand_kiss32()
      enddo
   end subroutine random_kiss_v32
   subroutine random_kiss_v64(harvest)
@@ -233,7 +246,7 @@ contains
      real(dp), intent(out) :: harvest(:)
      integer :: i
      do i=1, size(harvest)
-        harvest(i) = kiss64()
+        harvest(i) = rand_kiss64()
      enddo
   end subroutine random_kiss_v64
   subroutine random_kiss_vv32(harvest)
@@ -268,19 +281,19 @@ contains
   subroutine random_mt32(harvest)
      implicit none
      real(sp), intent(out) :: harvest
-     harvest = rand_number()
+     harvest = rand_mt()
   end subroutine random_mt32
   subroutine random_mt64(harvest)
      implicit none
      real(dp), intent(out) :: harvest
-     harvest = rand_number()
+     harvest = rand_mt()
   end subroutine random_mt64
   subroutine random_mt_v32(harvest)
      implicit none
      real(sp), intent(out) :: harvest(:)
      integer :: i
      do i=1, size(harvest)
-        harvest(i) = rand_number()
+        harvest(i) = rand_mt()
      enddo
   end subroutine random_mt_v32
   subroutine random_mt_v64(harvest)
@@ -288,7 +301,7 @@ contains
      real(dp), intent(out) :: harvest(:)
      integer :: i
      do i=1, size(harvest)
-        harvest(i) = rand_number()
+        harvest(i) = rand_mt()
      enddo
   end subroutine random_mt_v64
   subroutine random_mt_vv32(harvest)
@@ -320,7 +333,7 @@ contains
      harvest = reshape(vv, [size(harvest,1), size(harvest,2), size(harvest,3)])
   end subroutine random_mt_vvv64
   !----------------------------------
-  function kiss32() result(u)
+  function rand_kiss32() result(u)
   !------------------------------------------------------------------
   ! Pseudo-random uniform 32-bit integer random number generator
   ! The Marsaglia KISS (Keep It Simple Stupid) random number generator
@@ -353,9 +366,9 @@ contains
     seed_kiss32(4) = 30903 * iand(seed_kiss32(4), 65535) + ishft(seed_kiss32(4), - 16)
     kiss = seed_kiss32(1) + seed_kiss32(2) + ishft(seed_kiss32(3), 16) + seed_kiss32(4)
     u    = b + a*real(kiss,sp)
-  end function kiss32
+  end function rand_kiss32
   !----------------------------------
-  function kiss64() result(u)
+  function rand_kiss64() result(u)
   !--------------------------------------------------------------------
   ! The 64-bit KISS (Keep It Simple Stupid) random number generator.
   ! Components:
@@ -394,15 +407,8 @@ contains
     seed_kiss(3) = 6906969069_int64 * seed_kiss(3) + 1234567_int64
     kiss         = seed_kiss(1) + seed_kiss(2) + seed_kiss(3)
     u            = b + a*real(kiss,dp)
-  end function kiss64
-!----------------------------------
-!==================================
+  end function rand_kiss64
   !-----------------------------------------------------------------------
-  !   genrand() generates one pseudorandom real number (double) which is
-  ! uniformly distributed on [0,1]-interval, for each call.
-  ! sgenrand(seed) set initial values to the working area of 624 words.
-  ! Before genrand(), sgenrand(seed) must be called once.  (seed is any 32-bit
-  ! integer except for 0).
   !-----------------------------------------------------------------------
   ! Mersenne Twister Random Number Generator (MT19937)
   !   Matsumoto & Nishimura (1998, ACM Transactions of Modeling and Computer Simulation, 8, 3)
@@ -416,104 +422,190 @@ contains
   ! When you use this, send an email to: matumoto@math.keio.ac.jp
   ! with an appropriate reference to your work.
   !-----------------------------------------------------------------------
-  SUBROUTINE sgrnd(seed)
-  ! This is the original version of the seeding routine.
-  ! It was replaced in the Japanese version in C on 26 January 2002
-  ! It is recommended that routine init_genrand is used instead.
-
-  INTEGER, INTENT(IN)   :: seed
-  !    setting initial seeds to mt[N] using the generator Line 25 of Table 1 in
-  !    [KNUTH 1981, The Art of Computer Programming Vol. 2 (2nd Ed.), pp102]
-
-  mt(0) = IAND(seed, -1)
-  DO  mti=1,mt_n-1
-    mt(mti) = IAND(69069 * mt(mti-1), -1)
-  END DO
-
-  RETURN
-  END SUBROUTINE sgrnd
+!  SUBROUTINE sgrnd(seed)
+!  ! This is the original version of the seeding routine.
+!  ! It was replaced in the Japanese version in C on 26 January 2002
+!  ! It is recommended that routine init_genrand is used instead.
+!
+!  INTEGER, INTENT(IN)   :: seed
+!  !    setting initial seeds to mt[N] using the generator Line 25 of Table 1 in
+!  !    [KNUTH 1981, The Art of Computer Programming Vol. 2 (2nd Ed.), pp102]
+!
+!  mt(0) = IAND(seed, -1)
+!  DO  mti=1,mt_n-1
+!    mt(mti) = IAND(69069 * mt(mti-1), -1)
+!  END DO
+!
+!  RETURN
+!  END SUBROUTINE sgrnd
 
   !-----------------------------------------------------------------------
-  SUBROUTINE init_mt(seed)
-  ! This initialization is based upon the multiplier given on p.106 of the
-  ! 3rd edition of Knuth, The Art of Computer Programming Vol. 2.
-  ! This version assumes that integer overflow does NOT cause a crash.
+!  SUBROUTINE init_mt(seed)
+!  ! This initialization is based upon the multiplier given on p.106 of the
+!  ! 3rd edition of Knuth, The Art of Computer Programming Vol. 2.
+!  ! This version assumes that integer overflow does NOT cause a crash.
+!
+!  INTEGER, INTENT(IN)  :: seed
+!  INTEGER  :: latest
+!
+!  mt(0)  = seed
+!  latest = seed
+!  DO mti = 1, mt_n-1
+!    latest  = IEOR( latest, ISHFT( latest, -30 ) )
+!    latest  = latest * 1812433253 + mti
+!    mt(mti) = latest
+!  END DO
+!
+!  RETURN
+!  END SUBROUTINE init_mt
+  !-----------------------------------------------------------------------------
 
-  INTEGER, INTENT(IN)  :: seed
-  INTEGER  :: latest
+  ! Initializes mt(mt_n) with a seed
+  subroutine init_mt(seed)
+    implicit none
+    !integer(int64), intent(in) :: seed
+    integer, intent(in) :: seed
+    integer :: i
 
-  mt(0)  = seed
-  latest = seed
-  DO mti = 1, mt_n-1
-    latest  = IEOR( latest, ISHFT( latest, -30 ) )
-    latest  = latest * 1812433253 + mti
-    mt(mti) = latest
-  END DO
+    mt(1) = seed
+    do i = 1, mt_n-1
+      mt(i+1) = 6364136223846793005_int64 * ieor(mt(i), ishft(mt(i), -62)) + i
+    end do
 
-  RETURN
-  END SUBROUTINE init_mt
-  !-----------------------------------------------------------------------
-  FUNCTION rand_number() RESULT(fn_val)
-  REAL (dp) :: fn_val
+    mti = mt_n
+  end subroutine init_mt
+  !-------------------------------------------------------------------------------
+  !   These are Fortran translations of the 32-bit and 64-bit versions of
+  !   the Mersenne Twister pseudorandom number generator
+  !
+  !   Translated from C-program for MT19937-64 (2004/9/29 version)
+  !   originally coded by Takuji Nishimura and Makoto Matsumoto
+  !   http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt64.html
+  !
+  !   32-bit: Fortran translation by Hiroshi Takano.  Jan. 13, 1999.
+  !           matumoto@math.keio.ac.jp
+  !   64-bit: Fortran translation by Rémi Piatek
+  !           The University of Copenhagen
+  !           Department of Economics
+  !           email: {first}.{last}@econ.ku.dk
+  !
+  !   Modified slightly to make them tread-safe for openmp (K.-I. Seon)
+  !-------------------------------------------------------------------------------
+!  FUNCTION rand_mt32() RESULT(fn_val)
+!  REAL (dp) :: fn_val
+!
+!  INTEGER, SAVE :: mag01(0:1) = [0, mt_mata]
+!  !$OMP THREADPRIVATE(mag01)
+!  INTEGER       :: kk, y
+!  ! Period parameters
+!  INTEGER, PARAMETER :: lmask =  2147483647                            ! least significant r bits
+!  INTEGER, PARAMETER :: umask = -2147483647 - 1                        ! most significant w-r bits
+!  ! Tempering parameters
+!  INTEGER, PARAMETER  :: tmaskb= -1658038656, tmaskc= -272236544
+!  real(dp), parameter :: a = 1.0_real64/4294967297.0_real64
+!  real(dp), parameter :: b = 2147483649.0_real64/4294967297.0_real64
+!  !  ishft(i,n): If n > 0, shifts bits in i by n positions to left.
+!  !              If n < 0, shifts bits in i by n positions to right.
+!  !  iand (i,j): Performs logical AND on corresponding bits of i and j.
+!  !  ior  (i,j): Performs inclusive OR on corresponding bits of i and j.
+!  !  ieor (i,j): Performs exclusive OR on corresponding bits of i and j.
+!  !  statement functions
+!  integer :: tshftu, tshfts, tshftt, tshftl
+!  tshftu(y) = ISHFT(y,-11)
+!  tshfts(y) = ISHFT(y,7)
+!  tshftt(y) = ISHFT(y,15)
+!  tshftl(y) = ISHFT(y,-18)
+!
+!  IF(mti >= mt_n) THEN       !  generate N words at one time
+!    IF(mti == mt_n+1) THEN   !  if sgrnd() has not been called,
+!      !CALL sgrnd(4357)       !  a default initial seed is used
+!      CALL init_mt(mt_seed0)  !  a default initial seed is used
+!    END IF
+!
+!    DO  kk = 0, mt_n-mt_m-1
+!      y      = IOR(IAND(mt(kk),umask), IAND(mt(kk+1),lmask))
+!      mt(kk) = IEOR(IEOR(mt(kk+mt_m), ISHFT(y,-1)),mag01(IAND(y,1)))
+!    END DO
+!    DO  kk = mt_n-mt_m, mt_n-2
+!      y      = IOR(IAND(mt(kk),umask), IAND(mt(kk+1),lmask))
+!      mt(kk) = IEOR(IEOR(mt(kk+(mt_m-mt_n)), ISHFT(y,-1)),mag01(IAND(y,1)))
+!    END DO
+!    y          = IOR(IAND(mt(mt_n-1),umask), IAND(mt(0),lmask))
+!    mt(mt_n-1) = IEOR(IEOR(mt(mt_m-1), ISHFT(y,-1)),mag01(IAND(y,1)))
+!    mti        = 0
+!  END IF
+!
+!  y   = mt(mti)
+!  mti = mti + 1
+!  y = IEOR(y, tshftu(y))
+!  y = IEOR(y, IAND(tshfts(y),tmaskb))
+!  y = IEOR(y, IAND(tshftt(y),tmaskc))
+!  y = IEOR(y, tshftl(y))
 
-  INTEGER, SAVE :: mag01(0:1) = [0, mt_mata]
-  !$OMP THREADPRIVATE(mag01)
-  INTEGER       :: kk, y
-  ! Period parameters
-  INTEGER, PARAMETER :: lmask =  2147483647                            ! least significant r bits
-  INTEGER, PARAMETER :: umask = -2147483647 - 1                        ! most significant w-r bits
-  ! Tempering parameters
-  INTEGER, PARAMETER  :: tmaskb= -1658038656, tmaskc= -272236544
-  real(dp), parameter :: a = 1.0_real64/4294967297.0_real64
-  real(dp), parameter :: b = 2147483649.0_real64/4294967297.0_real64
-  !  ishft(i,n): If n > 0, shifts bits in i by n positions to left.
-  !              If n < 0, shifts bits in i by n positions to right.
-  !  iand (i,j): Performs logical AND on corresponding bits of i and j.
-  !  ior  (i,j): Performs inclusive OR on corresponding bits of i and j.
-  !  ieor (i,j): Performs exclusive OR on corresponding bits of i and j.
-  !  statement functions
-  integer :: tshftu, tshfts, tshftt, tshftl
-  tshftu(y) = ISHFT(y,-11)
-  tshfts(y) = ISHFT(y,7)
-  tshftt(y) = ISHFT(y,15)
-  tshftl(y) = ISHFT(y,-18)
-
-  IF(mti >= mt_n) THEN       !  generate N words at one time
-    IF(mti == mt_n+1) THEN   !  if sgrnd() has not been called,
-      !CALL sgrnd(4357)       !  a default initial seed is used
-      CALL init_mt(mt_seed0)  !  a default initial seed is used
-    END IF
-
-    DO  kk = 0, mt_n-mt_m-1
-      y      = IOR(IAND(mt(kk),umask), IAND(mt(kk+1),lmask))
-      mt(kk) = IEOR(IEOR(mt(kk+mt_m), ISHFT(y,-1)),mag01(IAND(y,1)))
-    END DO
-    DO  kk = mt_n-mt_m, mt_n-2
-      y      = IOR(IAND(mt(kk),umask), IAND(mt(kk+1),lmask))
-      mt(kk) = IEOR(IEOR(mt(kk+(mt_m-mt_n)), ISHFT(y,-1)),mag01(IAND(y,1)))
-    END DO
-    y          = IOR(IAND(mt(mt_n-1),umask), IAND(mt(0),lmask))
-    mt(mt_n-1) = IEOR(IEOR(mt(mt_m-1), ISHFT(y,-1)),mag01(IAND(y,1)))
-    mti        = 0
-  END IF
-
-  y   = mt(mti)
-  mti = mti + 1
-  y = IEOR(y, tshftu(y))
-  y = IEOR(y, IAND(tshfts(y),tmaskb))
-  y = IEOR(y, IAND(tshftt(y),tmaskc))
-  y = IEOR(y, tshftl(y))
-
-  !IF (y < 0) THEN
-  !  fn_val = (DBLE(y) + 2.0D0**32) / (2.0D0**32 - 1.0D0)
-  !ELSE
-  !  fn_val = DBLE(y) / (2.0D0**32 - 1.0D0)
-  !END IF
-  fn_val = b + a * dble(y)
-
-  RETURN
-  END FUNCTION rand_number
+!  !IF (y < 0) THEN
+!  !  fn_val = (DBLE(y) + 2.0D0**32) / (2.0D0**32 - 1.0D0)
+!  !ELSE
+!  !  fn_val = DBLE(y) / (2.0D0**32 - 1.0D0)
+!  !END IF
+!  fn_val = b + a * dble(y)
+!
+!  RETURN
+!  END FUNCTION rand_mt32
 !==================================
+  !-----------------------------------------------------------------------------
+  ! Generates a random number on [-2^63, 2^63-1]-interval
+  function rand_mt() result(fn_Val)
+    implicit none
+    real (real64) :: fn_val
+    integer(int64), save :: mag01(0:1) = [0_int64, mt_mata]
+    !$OMP THREADPRIVATE(mag01)
+    integer(int64) :: x
+    integer        :: i
+    integer(int64), parameter :: umask    = -2147483648_int64 ! most  significant 33 bits
+    integer(int64), parameter :: lmask    =  2147483647_int64 ! least significant 31 bits
+    real(real64),   parameter :: pi253_1  = 1.0_real64/(2.0_real64**53 - 1.0_real64)
+    real(real64),   parameter :: pi253    = 1.0_real64/(2.0_real64**53)
+    real(real64)  , parameter :: pi252    = 1.0_real64/(2.0_real64**52)
+
+    if(mti >= mt_n) then ! generate mt_n words at one time
+      ! if init_mt() has not been called, a default initial seed is used
+      if(mti == mt_n+1) call init_mt(mt_seed0)
+
+      do i = 1, mt_n-mt_m
+        x = ior(iand(mt(i),umask), iand(mt(i+1), lmask))
+        mt(i) = ieor(ieor(mt(i+mt_m), ishft(x, -1)), mag01(iand(x, 1_int64)))
+      end do
+
+      do i = mt_n-mt_m+1, mt_n-1
+        x = ior(iand(mt(i), umask), iand(mt(i+1), lmask))
+        mt(i) = ieor(ieor(mt(i+mt_m-mt_n), ishft(x, -1)), mag01(iand(x, 1_int64)))
+      end do
+
+      x = ior(iand(mt(mt_n), umask), iand(mt(1), lmask))
+      mt(mt_n) = ieor(ieor(mt(mt_m), ishft(x, -1)), mag01(iand(x, 1_int64)))
+
+      mti = 0
+    end if
+
+    mti = mti + 1
+    x = mt(mti)
+
+    x = ieor(x, iand(ishft(x,-29), 6148914691236517205_int64))
+    x = ieor(x, iand(ishft(x, 17), 8202884508482404352_int64))
+    x = ieor(x, iand(ishft(x, 37),   -2270628950310912_int64))
+    x = ieor(x, ishft(x, -43))
+    !- the final x is a random number on [-2^63, 2^63-1]-interval
+
+    !- Generates a random number on [0,1]-real-interval
+    !fn_val = real(ishft(x, -11), kind=int64) * pi253_1
+
+    !- Generates a random number on [0,1)-real-interval
+    !fn_val = real(ishft(x, -11), kind=int64) * pi253
+
+    ! return a random number on (0,1)-real-interval
+    fn_val = real(ishft(x, -12), kind=real64)
+    fn_val = (fn_val + 0.5_real64) * pi252
+  end function rand_mt
 
 !----------------------------------
   subroutine random_kiss_seed_(seed_size,put,get)
@@ -1012,8 +1104,8 @@ contains
   ! random number generator for exponential distribution in radial direction (for cylindrical coordinate system).
   ! p(r) dr = r x exp(-r) dr when r <= rmax
   !         = 0              otherwise
-  ! This is faster than rand_rexp_baes (2018-01-23).
-  function rand_rexp(rmax) result(rand)
+  ! This is faster than rand_r1exp_baes (2018-01-23).
+  function rand_r1exp(rmax) result(rand)
     implicit none
     real(kind=wp), intent(in) :: rmax
     real(kind=wp) :: rand
@@ -1026,7 +1118,7 @@ contains
        rand = r1 + r2
        if (rand <= rmax) exit
     enddo
-  end function rand_rexp
+  end function rand_r1exp
   !-----------------
   ! random number generator for exponential distribution in radial direction (for spherical coordinate system).
   ! p(r) dr = r^2 x exp(-r) dr when r <= rmax
@@ -1054,7 +1146,7 @@ contains
   ! see, Baes et al. (2003, MNRAS, 343, 1081)
   ! History:
   !      2015-12-07, bug-fixed
-  function rand_rexp_baes(rmax) result(r)
+  function rand_r1exp_baes(rmax) result(r)
     implicit none
     real(dp), intent(in) :: rmax
     integer, parameter   :: n=2001
@@ -1092,7 +1184,7 @@ contains
        r = log(rarr(i+1)/rarr(i))/log(parr(i+1)/parr(i)) * log(p/parr(i)) + log(rarr(i))
        r = exp(r)
     endif
-  end function rand_rexp_baes
+  end function rand_r1exp_baes
   !--------------------------
   ! Solver of the Lambert W function with Halley Interation Method.
   ! Input parameter range: -1/exp(1.0) < z < 0.0

@@ -73,7 +73,7 @@ OBJSB	= \
 	define.o \
 	utility_c.o \
 	utility.o \
-	random_mt_v2.50.o \
+	random_mt_v2.52.o \
 	memory_mod_hybrid_v2a.o \
 	fitsio_mod.o \
         read_mod.o \
