@@ -144,7 +144,11 @@ subroutine peeling_direct_photon_nostokes(photon,grid,mode)
 
   if (ix >= 1 .and. ix <= observer%nxim .and. iy >= 1 .and. iy <= observer%nyim) then
      call raytrace_to_edge_car(pobs,grid,tau)
-     wgt = exp(-tau)/(fourpi*r2) * photon%wgt
+     if (peeloff_mode == 0) then
+        wgt = exp(-tau)/(fourpi*r2) * photon%wgt
+     else
+        wgt = exp(-tau) * photon%wgt
+     endif
      observer%direc(ix,iy) = observer%direc(ix,iy) + wgt
      ! The input photon is assumed to be unpolarized.
      if (par%use_stokes) then
