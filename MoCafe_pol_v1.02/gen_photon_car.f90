@@ -225,12 +225,14 @@ contains
   photon%albedo = par%albedo
   photon%hgg    = par%hgg
 
-  !--- comment added, 2021.11.01
-  !--- For external isotropic source, the direct ray is a sum of all rays coming from the sightline.
-  !--- Then, the direct image cannot be calculated unless the whole system containing the cloud is known.
-  if (trim(par%source_geometry(1:8)) /= 'external') then
-     call peeling_direct_photon(photon,grid)
-  endif
+  !+++ Even for an isotropic radiation source, the peeling-off of the direction photons should be included (2022.10.07).
+  call peeling_direct_photon(photon,grid)
+  !!--- comment added, 2021.11.01
+  !!--- For external isotropic source, the direct ray is a sum of all rays coming from the sightline.
+  !!--- Then, the direct image cannot be calculated unless the whole system containing the cloud is known.
+  !!if (trim(par%source_geometry(1:8)) /= 'external') then
+  !!   call peeling_direct_photon(photon,grid)
+  !!endif
 
   return
   end subroutine gen_photon
