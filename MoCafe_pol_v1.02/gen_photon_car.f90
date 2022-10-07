@@ -84,6 +84,15 @@ contains
      cosp = cos(phi)
      sinp = sin(phi)
 
+     kx = 0.0
+     ky = 0.0
+     kz = 0.0
+     mx = 0.0
+     my = 0.0
+     mz = 0.0
+     nx = 0.0
+     ny = 0.0
+     nz = 0.0
      !--- random number for incident location
      select case(floor(6.0*rand_number() + 1.0))
      case (1)
@@ -91,79 +100,43 @@ contains
         photon%y = grid%yrange * rand_number() + grid%ymin
         photon%z = grid%zrange * rand_number() + grid%zmin
         kx = 1.0
-        ky = 0.0
-        kz = 0.0
-        mx = 0.0
         my = 1.0
-        mz = 0.0
-        nx = 0.0
-        ny = 0.0
         nz = 1.0
      case (2)
         photon%x = grid%xface(1)
         photon%y = grid%yrange * rand_number() + grid%ymin
         photon%z = grid%zrange * rand_number() + grid%zmin
         kx = -1.0
-        ky = 0.0
-        kz = 0.0
-        mx = 0.0
         my = 1.0
-        mz = 0.0
-        nx = 0.0
-        ny = 0.0
         nz = 1.0
      case (3)
         photon%y = grid%yface(grid%ny+1)
         photon%z = grid%zrange * rand_number() + grid%zmin
         photon%x = grid%xrange * rand_number() + grid%xmin
-        kx = 0.0
         ky = 1.0
-        kz = 0.0
         mx = 1.0
-        my = 0.0
-        mz = 0.0
-        nx = 0.0
-        ny = 0.0
         nz = 1.0
      case (4)
         photon%y = grid%yface(1)
         photon%z = grid%zrange * rand_number() + grid%zmin
         photon%x = grid%xrange * rand_number() + grid%xmin
-        kx = 0.0
         ky = -1.0
-        kz = 0.0
         mx = 1.0
-        my = 0.0
-        mz = 0.0
-        nx = 0.0
-        ny = 0.0
         nz = 1.0
      case (5)
         photon%z = grid%zface(grid%nz+1)
         photon%x = grid%xrange * rand_number() + grid%xmin
         photon%y = grid%yrange * rand_number() + grid%ymin
-        kx = 0.0
-        ky = 0.0
         kz = 1.0
         mx = 1.0
-        my = 0.0
-        mz = 0.0
-        nx = 0.0
         ny = 1.0
-        nz = 0.0
      case (6)
         photon%z = grid%zface(1)
         photon%x = grid%xrange * rand_number() + grid%xmin
         photon%y = grid%yrange * rand_number() + grid%ymin
-        kx = 0.0
-        ky = 0.0
         kz = -1.0
         mx = 1.0
-        my = 0.0
-        mz = 0.0
-        nx = 0.0
         ny = 1.0
-        nz = 0.0
      end select
 
      photon%kx = sint * (cosp * mx + sinp * nx) + cost * kx
@@ -225,14 +198,13 @@ contains
   photon%albedo = par%albedo
   photon%hgg    = par%hgg
 
-  !+++ Even for an isotropic radiation source, the peeling-off of the direction photons should be included (2022.10.07).
-  call peeling_direct_photon(photon,grid)
-  !!--- comment added, 2021.11.01
-  !!--- For external isotropic source, the direct ray is a sum of all rays coming from the sightline.
-  !!--- Then, the direct image cannot be calculated unless the whole system containing the cloud is known.
-  !!if (trim(par%source_geometry(1:8)) /= 'external') then
-  !!   call peeling_direct_photon(photon,grid)
-  !!endif
+  !+++ For an external radiaiton source, only the photons that are incident onto the director will be peeled-off.
+  !+++ 2022.10.07
+  if (trim(par%source_geometry(1:8)) == 'external') then
+     call peeling_direct_photon(photon,grid,mode=1)
+  else
+     call peeling_direct_photon(photon,grid)
+  endif
 
   return
   end subroutine gen_photon

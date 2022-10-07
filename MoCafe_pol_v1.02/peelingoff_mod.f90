@@ -101,25 +101,37 @@ subroutine sightline_tau(grid)
   call reduce_mem(observer%tau)
 end subroutine sightline_tau
 !--------------------------------------------------
-subroutine peeling_direct_photon_nostokes(photon,grid)
+!-- if mode /= 0, capture only the input photons that are injected toward the observer.
+!-- update on 2022.10.07
+subroutine peeling_direct_photon_nostokes(photon,grid,mode)
   implicit none
   type(photon_type), intent(in) :: photon
   type(grid_type),   intent(in) :: grid
+  integer, intent(in), optional :: mode
   ! local variables
   type(photon_type) :: pobs
   real(kind=wp) :: r2,r,vdet(3),wgt,tau
+  integer :: peeloff_mode
   integer :: ix,iy
   integer :: i
 
-  pobs    = photon
-  pobs%kx = (observer%x-photon%x)
-  pobs%ky = (observer%y-photon%y)
-  pobs%kz = (observer%z-photon%z)
-  r2      = pobs%kx*pobs%kx + pobs%ky*pobs%ky + pobs%kz*pobs%kz
-  r       = sqrt(r2)
-  pobs%kx = pobs%kx/r
-  pobs%ky = pobs%ky/r
-  pobs%kz = pobs%kz/r
+  if (present(mode)) then
+     peeloff_mode = mode
+  else
+     peeloff_mode = 0
+  endif
+
+  pobs = photon
+  if (peeloff_mode == 0) then
+     pobs%kx = (observer%x-photon%x)
+     pobs%ky = (observer%y-photon%y)
+     pobs%kz = (observer%z-photon%z)
+     r2      = pobs%kx*pobs%kx + pobs%ky*pobs%ky + pobs%kz*pobs%kz
+     r       = sqrt(r2)
+     pobs%kx = pobs%kx/r
+     pobs%ky = pobs%ky/r
+     pobs%kz = pobs%kz/r
+  endif
 
   do i=1,3
      vdet(i) = observer%rmatrix(i,1) * pobs%kx + &

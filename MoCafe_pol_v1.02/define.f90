@@ -257,10 +257,11 @@ public
 
   procedure(peeling_direct), pointer :: peeling_direct_photon => null()
   abstract interface
-     subroutine peeling_direct(photon,grid)
+     subroutine peeling_direct(photon,grid,mode)
      import
      type(photon_type), intent(in) :: photon
      type(grid_type),   intent(in) :: grid
+     integer, intent(in), optional :: mode
    end subroutine peeling_direct
   end interface
 
