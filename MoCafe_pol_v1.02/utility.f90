@@ -10,6 +10,7 @@ module utility
    public :: is_finite, finite
    public :: copy_file
    public :: time_stamp
+   public :: get_date_time
    character(*), private, parameter :: LOWER_CASE = 'abcdefghijklmnopqrstuvwxyz'
    character(*), private, parameter :: UPPER_CASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -43,7 +44,7 @@ contains
       if (angle < 0.0_real64) angle = angle + twopi
    end function arctan64
    elemental logical function is_finite32(x)
-      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      use, intrinsic :: ieee_arithmetic
       real(real32),intent(in) :: x
       !is_finite32 = .not. (isnan(x) .or. abs(x) > huge(x))
       !--- in polaris machine, it is not allowed to compare NaN with huge(x).
@@ -51,11 +52,15 @@ contains
       !--- in PGI fortran, isnan is not defined. (2020.11.05)
       !is_finite32 = (x == x)
       !if (is_finite32) is_finite32 = .not. (abs(x) > huge(x))
-      !--- this is the easiest way to do (2020.11.05).
-      is_finite32 = ieee_is_finite(x)
+      !--- the following is the easiest way to do (2020.11.05).
+      !--- But, this does not work when gfortran is used with -Ofast option (2022.08.20).
+      !is_finite32 = ieee_is_finite(x)
+      !--- All the above does not work when gfortran is used with -Ofast option (2022.08.20).
+      is_finite32 = (ieee_class(x) /= ieee_quiet_nan) .and.&
+                    (ieee_class(x) /= ieee_negative_inf) .and. (ieee_class(x) /= ieee_positive_inf)
    end function is_finite32
    elemental logical function is_finite64(x)
-      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      use, intrinsic :: ieee_arithmetic
       real(real64),intent(in) :: x
       !is_finite64 = .not. (isnan(x) .or. abs(x) > huge(x))
       !--- in polaris machine, it is not allowed to compare NaN with huge(x).
@@ -63,8 +68,11 @@ contains
       !--- in PGI fortran, isnan is not defined. (2020.11.05)
       !is_finite64 = (x == x)
       !if (is_finite64) is_finite64 = .not. (abs(x) > huge(x))
-      !--- this is the easiest way to do (2020.11.05).
-      is_finite64 = ieee_is_finite(x)
+      !--- the following is the easiest way to do (2020.11.05).
+      !is_finite64 = ieee_is_finite(x)
+      !--- All the above does not work when gfortran is used with -Ofast option (2022.08.20).
+      is_finite64 = (ieee_class(x) /= ieee_quiet_nan) .and.&
+                    (ieee_class(x) /= ieee_negative_inf) .and. (ieee_class(x) /= ieee_positive_inf)
    end function is_finite64
  
    function strupcase(input_string) result(output_string)
@@ -284,19 +292,28 @@ contains
    array(i:i) = C_NULL_CHAR
    end function str2arr
    !------------------------------------------------
-   subroutine time_stamp(dtime)
+   subroutine time_stamp(dtime, reset)
 #ifdef MPI
    use mpi
 #elif _OPENMP
    use omp_lib
 #endif
    implicit none
-   real(kind=real64), save :: time1
-   real(kind=real64) :: time2
-   real(kind=real64) :: dtime
-   logical, save :: first_time_stamp__ = .true.
+   real(kind=real64), intent(out) :: dtime
+   logical, optional, intent(in)  :: reset
+   !--- local variables
+   real(kind=real64)  :: time2
+   logical            :: time_stamp_reset
+   real(real64), save :: time1
+   logical,      save :: first_time_stamp__ = .true.
 
-   if (first_time_stamp__) then
+   if (present(reset)) then
+      time_stamp_reset = reset
+   else
+      time_stamp_reset = .false.
+   endif
+
+   if (first_time_stamp__ .or. time_stamp_reset) then
 #ifdef MPI
       time1 = MPI_WTIME()
 #elif _OPENMP
@@ -305,7 +322,7 @@ contains
       call cpu_time(time1)
 #endif
       first_time_stamp__ = .false.
-      dtime = 0.0_real64
+      dtime              = 0.0_real64
       return
    endif
 
@@ -318,5 +335,15 @@ contains
 #endif
    dtime = time2 - time1
    end subroutine time_stamp
+   !------------------------------------------------
+   function get_date_time() result(date_time)
+   implicit none
+   integer,dimension(8) :: values
+   character(len=19)    :: date_time
+   call date_and_time(VALUES=values)
+   write(date_time,'(i4,a,i2.2,a,i2.2,x,i2.2,a,i2.2,a,i2.2)') &
+               values(1),'/',values(2),'/',values(3), values(5),':',values(6),':',values(7)
+   return
+   end function get_date_time
    !------------------------------------------------
 end module utility
