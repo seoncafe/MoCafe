@@ -148,7 +148,7 @@ public
      !--- shared memory & master-slave algorithm
      integer       :: num_send_at_once   = 10000
      logical       :: use_shared_memory  = .false.
-     logical       :: use_master_slave   = .false.
+     logical       :: use_master_slave   = .true.
      logical       :: use_reduced_wgt    = .true.
      !--- Dust-related parameters
      real(kind=wp) :: hgg           = 0.6761
