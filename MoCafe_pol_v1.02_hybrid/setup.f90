@@ -239,7 +239,8 @@ contains
      call MPI_ALLREDUCE(MPI_IN_PLACE, mpar%num_threads, mpar%num_nodes, MPI_INTEGER, MPI_SUM, MPI_COMM_WORLD, ierr)
 #endif
 
-     mpar%num_procs = sum(mpar%num_threads)
+     mpar%max_num_threads = maxval(mpar%num_threads)
+     mpar%num_procs       = sum(mpar%num_threads)
   end subroutine setup_MPI_openMP_parameters
   !+++++++++++++++++++++++++++++++++++++++++++
 end module setup_mod

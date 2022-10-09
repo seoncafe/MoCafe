@@ -10,7 +10,9 @@ module run_simulation_mod
   use omp_lib
 contains
   !============================================
-  !--- This routine works now. But, further tests are required. (comment added 2020.11.02).
+  !--- Now, this routine works fine (2021.05.05).
+  !--- 2021.05.05 (bug-fixed) prevent a thread from receiving messages sent by itself.
+  !--- 2020.12.17 (bug-fixed) "ans" should be int64 because several threads in a single node do "send" and "receive" simultaneously.
   subroutine run_master_slave(grid)
   implicit none
   type(grid_type), intent(inout) :: grid
@@ -24,10 +26,11 @@ contains
   !--- for MPI & OpenMP
   integer :: ierr
   integer :: my_threadid, master, irank, ithread, ithread0
-  integer :: ans, tag, worker
+  integer :: tag, worker
 #ifdef MPI
   integer :: status(MPI_STATUS_SIZE)
-  integer(kind=int64) :: numsent, numreceived
+  integer(kind=int64) :: ans
+  integer(kind=int64) :: numsent, numreceived, numdone
 
   !--- Initialize
   my_threadid = omp_get_thread_num()
@@ -44,23 +47,34 @@ contains
         do ithread = ithread0, mpar%num_threads(irank+1)-1
            tag     = ithread
            numsent = numsent + par%num_send_at_once
-           if (numsent > par%nphotons) numsent = -1
+           if (numsent > par%nphotons) numsent = -1_int64
            !write(*,'(a,i6,a,2i4)') '-- Hello, sending ip = ', numsent, '   to (rank, thread) = ', irank, tag
            call MPI_SEND(numsent,1,MPI_INTEGER8,irank,tag,MPI_COMM_WORLD,ierr)
         enddo
      enddo
+     numdone = 0_int64
      do ip = 1, par%nphotons, par%num_send_at_once
-        call MPI_RECV(ans,1,MPI_INTEGER,MPI_ANY_SOURCE,MPI_ANY_TAG,MPI_COMM_WORLD,status,ierr)
-        worker = status(MPI_SOURCE)
-        tag    = status(MPI_TAG)
+        do while (.true.)
+           call MPI_PROBE(MPI_ANY_SOURCE,MPI_ANY_TAG,MPI_COMM_WORLD,status,ierr)
+           worker = status(MPI_SOURCE)
+           tag    = status(MPI_TAG)
+           !--- do not receive a message sent by the master itself (p_rank = 0, threadid = 0).
+           !--- receive messages only from other threads (tag >= tau_offset) (2021.05.05).
+           if (tag >= mpar%max_num_threads) then
+              call MPI_RECV(ans,1,MPI_INTEGER8,MPI_ANY_SOURCE,MPI_ANY_TAG,MPI_COMM_WORLD,status,ierr)
+              !--- will send the threadid. (Note a negative tag is not allowed in MPI. 2021.05.05)
+              tag = tag - mpar%max_num_threads
+              exit
+           endif
+        enddo
+        numdone = numdone + par%num_send_at_once
+        if (mod(numdone,int(par%nprint,int64)) == 0) then
+           call time_stamp(dtime)
+           write(6,'(es14.5,a,f8.3,a)') dble(numdone),' photons calculated: ',dtime/60.0_wp,' mins'
+        endif
         if (numsent < par%nphotons) then
            numsent = numsent + par%num_send_at_once
-           !write(*,'(a,i6,a,2i4)') '-- Hello, sending ip = ', numsent, '   to (rank, thread) = ', worker, tag
            call MPI_SEND(numsent,1,MPI_INTEGER8,worker,tag,MPI_COMM_WORLD,ierr)
-           if (mod(numsent, par%nprint) == 0) then
-              call time_stamp(dtime)
-              write(6,'(es14.5,a,f8.3,a)') dble(numsent),' photons calculated: ',dtime/60.0_wp,' mins'
-           endif
         else
            call MPI_SEND(-1_int64,1,MPI_INTEGER8,worker,tag,MPI_COMM_WORLD,ierr)
         endif
@@ -72,6 +86,8 @@ contains
         if (numreceived == -1) exit
         do ii = 1, par%num_send_at_once
            ip = numreceived - par%num_send_at_once + ii
+           !--- Condition for the case of mod(par%nphotons, par%num_send_at_once) /= 0. (2020.12.05)
+           if (ip > par%nphotons) exit
            !++++++++++++++++++++++++++++++++
            !--- Main Part of the simulation
            !--- Release photon
@@ -99,9 +115,9 @@ contains
            nscatt_tot = nscatt_tot + photon%nscatt
            !++++++++++++++++++++++++++++++++
         enddo
-        ans = 1
-        tag = my_threadid
-        call MPI_SEND(ans,1,MPI_INTEGER,master,tag,MPI_COMM_WORLD,ierr)
+        ans = 1_int64
+        tag = my_threadid + mpar%max_num_threads
+        call MPI_SEND(ans,1,MPI_INTEGER8,master,tag,MPI_COMM_WORLD,ierr)
      enddo
   endif
   !$OMP BARRIER

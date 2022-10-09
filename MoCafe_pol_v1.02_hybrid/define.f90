@@ -220,6 +220,7 @@ public
      integer :: num_nodes
      integer :: num_procs
      integer :: rank
+     integer :: max_num_threads
      integer, pointer :: num_threads(:) => null()
   end type params_mpi
 
