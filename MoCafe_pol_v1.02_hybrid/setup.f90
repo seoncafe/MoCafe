@@ -94,7 +94,9 @@ contains
   use mathlib
   use memory_mod
   use random
+#ifdef MPI
   use mpi
+#endif
   implicit none
   character(len=*), intent(in) :: scatt_mat_file
 

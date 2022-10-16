@@ -43,7 +43,7 @@ else ifeq ($(UNAME), Darwin)
     endif
     # 10440 warning: Use of IPO with macOS* SDK 11 or higher is not supported, disabling the warning. (2021.01.12)
     CFLAGS  = -fopenmp -xhost -fast -diag-disable 10440,10441
-    FFLAGS  = -fopenmp -xhost -fast -diag-disable 10440,10441 $(FLAGS)
+    FFLAGS  = -fopenmp -xhost -fast -diag-disable 10440,10441 $(FLAGS) $(ext_FLAGS)
     #FFLAGS  = -g -O0 $(ext_FLAGS)
     LDFLAGS = $(extra) $(FFLAGS) -lcfitsio
 endif
