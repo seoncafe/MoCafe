@@ -1,8 +1,0 @@
-&input
-  iseed    = 0,
-  bvalue   =   0.4000,
-  mach     =  16.0000,
-  nx       =     128,
-  outfile  = 'M160b040_010.fits.gz',
-  out_mode = 1
-/
