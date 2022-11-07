@@ -1,0 +1,12 @@
+2014-10-25, This is how the figures made for the paper.
+1. ds9 -colorbar vertical -colorbar fontsize 16 -3d -3d az 30 -3d el 30 -3d border color white M010_001.fits.gz -zoom to fit
+ds9 -width 420 -colorbar vertical -colorbar fontsize 16 -3d -3d az 30 -3d el 30 -3d border color white M010_001.fits.gz -zoom to fit -cmap bb -psprint
+2. 3D rotation angles: azimuth = 30, elevation = 30
+3. 3D border color -> white
+4. color = bb
+5. adjust the picture frame size
+6. zoom -> fit
+7. file -> print
+
+2015-04-24
+Bounding Boxes of the resulting eps files are all different. The bouding boxes should be editted to make all the same.

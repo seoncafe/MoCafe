@@ -1,0 +1,8 @@
+&input
+  iseed    = 0,
+  bvalue   =   0.4000,
+  mach     =  10.0000,
+  nx       =     128,
+  outfile  = 'M100b040_001.fits.gz',
+  out_mode = 1
+/
