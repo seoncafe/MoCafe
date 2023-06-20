@@ -1,7 +1,7 @@
 ## MoCafe (Monte Carlo Radiative Transfer)
 
 ### Version:
-   1.04 - 2023.06.20
+   1.04 - 2023.06.20 \
    1.02 - 2021.11.01
 
 ### Purpose:
