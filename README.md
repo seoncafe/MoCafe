@@ -3,7 +3,7 @@ Author:
    Kwang-il Seon, KASI
 
 Version:
-   1.13 - 2024/04/14
+   1.14 - 2024/04/19
 
 Purpose:
    Radiative Transfer in cartesian grid system (x, y, z)
