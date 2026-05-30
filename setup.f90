@@ -141,12 +141,8 @@ contains
         call MPI_FINALIZE(ierr)
         stop
      endif
-     if (par%use_tau_list .and. trim(par%source_geometry(1:8)) == 'external') then
-        if (mpar%p_rank == 0) write(*,'(a)') &
-           'ERROR: par%use_tau_list is not yet supported for external illumination (internal source only).'
-        call MPI_FINALIZE(ierr)
-        stop
-     endif
+     !--- (tau scan + external illumination is now supported: the external
+     !--- direct peel writes the tau-axis direct image; see external_radiation.f90.)
      if (.not. par%use_reduced_wgt .and. mpar%p_rank == 0) write(*,'(a)') &
         'WARNING: scan forces a continuous/immortal forward pass (par%use_reduced_wgt ignored).'
      call scan_setup()
@@ -368,7 +364,10 @@ contains
      !--- path only; the (a,g) axes collapse to length 1 when use_ag_list = .false.
      scattering               => scatter_dust_nostokes_scan
      peeling_scattered_photon => peeling_scattered_photon_nostokes_scan_tau
-     peeling_direct_photon    => peeling_direct_photon_nostokes_tau
+     !--- External sources keep the (now tau-aware) external direct peel bound
+     !--- above; only an internal source uses the point-source tau direct peel.
+     if (trim(par%source_geometry(1:8)) /= 'external') &
+        peeling_direct_photon => peeling_direct_photon_nostokes_tau
   else if (par%use_ag_list) then
      !--- (albedo, asymmetry-factor) scan: H-G no-Stokes path only.
      scattering               => scatter_dust_nostokes_scan

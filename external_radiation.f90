@@ -3,6 +3,7 @@ module external_radiation
   use random
   use mathlib
   use raytrace, only : raytrace_to_edge_car
+  use scan_mod, only : scan_nt, scan_s
 
   !--- external radiation distribution vs. cos(theta), theta = angle from z-axis.
   type ISRF_type
@@ -513,7 +514,7 @@ subroutine peeling_direct_external_sph1(photon,grid)
   real(kind=wp) :: r2,r,kx,ky,kz,wgt,wgt0,tau,scal
   real(kind=wp) :: kx0,ky0,kz0,kr0
   real(kind=wp) :: cost
-  integer :: ix,iy
+  integer :: ix,iy,it_tau
   integer :: k
 
   do k=1, par%nobs
@@ -567,14 +568,23 @@ subroutine peeling_direct_external_sph1(photon,grid)
     if (ix >= 1 .and. ix <= observer(k)%nxim .and. iy >= 1 .and. iy <= observer(k)%nyim) then
        call raytrace_to_edge_car(pobs,grid,tau)
        wgt0 = 1.0_wp/r2 * pobs%wgt
-       wgt  = exp(-tau) * wgt0
-       observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
+       if (par%use_tau_list) then
+          !--- polychromatic (tau) scan: the direct beam gains a tau axis,
+          !--- attenuated per optical-depth scaling s_t (Jonsson 2006).
+          do it_tau = 1, scan_nt
+             observer(k)%direc_t(ix,iy,it_tau) = observer(k)%direc_t(ix,iy,it_tau) &
+                  + exp(-scan_s(it_tau)*tau) * wgt0
+          enddo
+       else
+          wgt  = exp(-tau) * wgt0
+          observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
+          ! The input photon is assumed to be unpolarized.
+          if (par%use_stokes) then
+             observer(k)%I(ix,iy) = observer(k)%I(ix,iy) + wgt
+          endif
+       endif
        if (par%save_direc0) then
           observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
-       endif
-       ! The input photon is assumed to be unpolarized.
-       if (par%use_stokes) then
-          observer(k)%I(ix,iy) = observer(k)%I(ix,iy) + wgt
        endif
     endif
   enddo
@@ -589,7 +599,7 @@ subroutine peeling_direct_external_sph2(photon,grid)
   real(kind=wp) :: r2,r,kx,ky,kz,wgt,wgt0,tau,scal
   real(kind=wp) :: kx0,ky0,kz0,kr0,xx,yy,zz
   real(kind=wp) :: cost, cosvt0, cosvt, sinvt, vphi, cosvp, sinvp, lum_fac
-  integer :: ix,iy
+  integer :: ix,iy,it_tau
   integer :: k
 
   !-- Assume the isotropic intensity.
@@ -672,14 +682,23 @@ subroutine peeling_direct_external_sph2(photon,grid)
     if (ix >= 1 .and. ix <= observer(k)%nxim .and. iy >= 1 .and. iy <= observer(k)%nyim) then
        call raytrace_to_edge_car(pobs,grid,tau)
        wgt0 = 1.0_wp/r2 * pobs%wgt
-       wgt  = exp(-tau) * wgt0
-       observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
+       if (par%use_tau_list) then
+          !--- polychromatic (tau) scan: the direct beam gains a tau axis,
+          !--- attenuated per optical-depth scaling s_t (Jonsson 2006).
+          do it_tau = 1, scan_nt
+             observer(k)%direc_t(ix,iy,it_tau) = observer(k)%direc_t(ix,iy,it_tau) &
+                  + exp(-scan_s(it_tau)*tau) * wgt0
+          enddo
+       else
+          wgt  = exp(-tau) * wgt0
+          observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
+          ! The input photon is assumed to be unpolarized.
+          if (par%use_stokes) then
+             observer(k)%I(ix,iy) = observer(k)%I(ix,iy) + wgt
+          endif
+       endif
        if (par%save_direc0) then
           observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
-       endif
-       ! The input photon is assumed to be unpolarized.
-       if (par%use_stokes) then
-          observer(k)%I(ix,iy) = observer(k)%I(ix,iy) + wgt
        endif
     endif
   enddo
@@ -694,7 +713,7 @@ subroutine peeling_direct_external_rec1(photon,grid)
   real(kind=wp) :: r2,r,kx,ky,kz,wgt,wgt0,tau
   real(kind=wp) :: kx0,ky0,kz0,kr0
   real(kind=wp) :: cost
-  integer :: ix,iy
+  integer :: ix,iy,it_tau
   integer :: k
 
   do k=1, par%nobs
@@ -744,14 +763,23 @@ subroutine peeling_direct_external_rec1(photon,grid)
     if (ix >= 1 .and. ix <= observer(k)%nxim .and. iy >= 1 .and. iy <= observer(k)%nyim) then
        call raytrace_to_edge_car(pobs,grid,tau)
        wgt0 = 1.0_wp/r2 * pobs%wgt
-       wgt  = exp(-tau) * wgt0
-       observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
+       if (par%use_tau_list) then
+          !--- polychromatic (tau) scan: the direct beam gains a tau axis,
+          !--- attenuated per optical-depth scaling s_t (Jonsson 2006).
+          do it_tau = 1, scan_nt
+             observer(k)%direc_t(ix,iy,it_tau) = observer(k)%direc_t(ix,iy,it_tau) &
+                  + exp(-scan_s(it_tau)*tau) * wgt0
+          enddo
+       else
+          wgt  = exp(-tau) * wgt0
+          observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
+          ! The input photon is assumed to be unpolarized.
+          if (par%use_stokes) then
+             observer(k)%I(ix,iy) = observer(k)%I(ix,iy) + wgt
+          endif
+       endif
        if (par%save_direc0) then
           observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
-       endif
-       ! The input photon is assumed to be unpolarized.
-       if (par%use_stokes) then
-          observer(k)%I(ix,iy) = observer(k)%I(ix,iy) + wgt
        endif
     endif
   enddo
@@ -766,7 +794,7 @@ subroutine peeling_direct_external_cyl1(photon,grid)
   real(kind=wp) :: r2,r,kx,ky,kz,wgt,wgt0,tau
   real(kind=wp) :: kx0,ky0,kz0,kr0
   real(kind=wp) :: cost
-  integer :: ix,iy
+  integer :: ix,iy,it_tau
   integer :: k
 
   do k=1, par%nobs
@@ -820,14 +848,23 @@ subroutine peeling_direct_external_cyl1(photon,grid)
     if (ix >= 1 .and. ix <= observer(k)%nxim .and. iy >= 1 .and. iy <= observer(k)%nyim) then
        call raytrace_to_edge_car(pobs,grid,tau)
        wgt0 = 1.0_wp/r2 * pobs%wgt
-       wgt  = exp(-tau) * wgt0
-       observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
+       if (par%use_tau_list) then
+          !--- polychromatic (tau) scan: the direct beam gains a tau axis,
+          !--- attenuated per optical-depth scaling s_t (Jonsson 2006).
+          do it_tau = 1, scan_nt
+             observer(k)%direc_t(ix,iy,it_tau) = observer(k)%direc_t(ix,iy,it_tau) &
+                  + exp(-scan_s(it_tau)*tau) * wgt0
+          enddo
+       else
+          wgt  = exp(-tau) * wgt0
+          observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
+          ! The input photon is assumed to be unpolarized.
+          if (par%use_stokes) then
+             observer(k)%I(ix,iy) = observer(k)%I(ix,iy) + wgt
+          endif
+       endif
        if (par%save_direc0) then
           observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
-       endif
-       ! The input photon is assumed to be unpolarized.
-       if (par%use_stokes) then
-          observer(k)%I(ix,iy) = observer(k)%I(ix,iy) + wgt
        endif
     endif
   enddo

@@ -200,7 +200,8 @@ reweighting (Jonsson eq. 31) produces every `tau_list` slice.  Composes with the
 Unlike `(a,g)`, the **direct** beam is `tau`-dependent (it gains a `tau` axis;
 `Direct0` stays 2-D).  Variance grows as `tau/taumax` departs from 1 — keep
 `tau_list` within ~2–3× of `par%taumax` and put `par%taumax` near the middle.
-Internal sources only.
+Works with internal point/extended sources **and** external illumination
+(`external_{sph,cyl,rec}`) — the external direct beam is tau-aware.
 
 ---
 
