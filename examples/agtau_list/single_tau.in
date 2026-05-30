@@ -1,0 +1,35 @@
+&parameters
+ !--- Single ordinary run at one optical depth (taumax = 2.0), NO scan.
+ !--- Ground-truth reference for validating the tau_only polychromatic scan:
+ !--- the tau_only.h5 slice at tau = 2.0 (reweighted from the simulated tau0 = 1.0)
+ !--- should reproduce this independent run.  Same settings as tau_only.in
+ !--- except par%taumax and the scan switch.
+ par%no_photons      = 1.0e7
+ par%hgg             = 0.5
+ par%albedo          = 0.5
+ par%taumax          = 2.0
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+
+ par%distance_unit   = ''
+ par%xmax = 1.0
+ par%ymax = 1.0
+ par%zmax = 1.0
+ par%rmax = 1.0
+ par%nx = 100
+ par%ny = 100
+ par%nz = 100
+
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .true.
+ par%iseed    = 0
+ par%no_print = 1.0e6
+ par%file_format = 'hdf5'
+ par%out_file = 'single_tau.h5'
+/

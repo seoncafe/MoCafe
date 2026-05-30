@@ -1,0 +1,32 @@
+&parameters
+ !--- Basic clumpy-medium run (internal generation path).
+ !--- A point source at the center; N non-overlapping dust clumps of radius
+ !--- clump_radius fill a sphere of radius rmax with covering factor f_cov.
+ !--- Each clump has dust optical depth clump_tau0 (center -> surface).
+ par%no_photons      = 2.0e6
+ par%hgg             = 0.0
+ par%albedo          = 0.5
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+
+ par%grid_type       = 'clump'
+ par%rmax            = 1.0
+ par%clump_radius    = 0.10
+ par%clump_f_cov     = 1.0
+ par%clump_tau0      = 1.0
+ par%save_clump_info = .true.
+
+ par%distance_unit   = ''
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .false.
+ par%iseed    = 0
+ par%no_print = 2.0e6
+ par%file_format = 'fits'
+ par%out_file    = 'clump_basic'
+/

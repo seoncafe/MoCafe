@@ -1,0 +1,24 @@
+&parameters
+ par%no_photons      = 5.0e5
+ par%hgg             = 0.5
+ par%albedo          = 0.5
+ par%tauhomo         = 1.0
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+ par%grid_type       = 'amr'
+ par%amr_file        = 'tng_amr.h5'
+ par%dust_model      = 'global_dgr'
+ par%DGR             = 1.0e-2
+ par%distance_unit   = 'kpc'
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+05
+ par%use_master_slave = .false.
+ par%iseed    = 0
+ par%no_print = 5.0e5
+ par%file_format = 'fits'
+ par%out_file    = 'tng_amr_image'
+/

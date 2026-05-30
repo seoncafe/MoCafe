@@ -1,0 +1,56 @@
+&parameters
+ !--- hgg    : assymmetry g-factor
+ !--- albedo : dust scattering albedo
+ !--- taumax : optical depth from the center to the outer boundary.
+ par%no_photons     = 1.0e8
+ par%hgg            = 0.568
+ par%albedo         = 0.612
+ !par%tauhomo         = 1.236
+ par%tauhomo         = 2.462737
+ par%source_geometry = 'external_sph'
+ par%sightline_tau   = .true.
+ par%save_direc0     = .true.
+
+ par%use_stokes     = .false.
+ par%density_file    = '../../b040_fbm3d_128/M040b040_001.fits.gz'
+ !par%centering       = 2
+ !---
+
+ par%geometry       = 'Plummer'
+ par%density_rscale         = 0.2
+ par%density_powerlaw_index = 1.8
+
+ !-- intensity versus incident angle (Prob vs. cost)
+ !-- par%radiation_angular_PDF_file = 'Prob_vs_cost_u.txt'
+
+ par%nx = 201
+ par%ny = 201
+ par%nz = 201
+
+ par%nxim = 129
+ par%nyim = 129
+
+ !-- cloud radius of LDN1642
+ par%xmax    =   0.764
+ par%ymax    =   0.764
+ par%zmax    =   0.764
+ par%rmax    =   0.764
+
+ !par%obsx = 0.0
+ !par%obsy = 0.0
+ !par%obsz = 1.0
+
+ !-- location of observer in the reference frame of cloud.
+ par%alpha = 0.0
+ par%beta  = 36.5
+ par%gamma = 0.0
+
+ !-- distance to LDN1642
+ par%distance      = 124.0
+ par%distance_unit = 'pc'
+
+ !--
+ par%use_master_slave = .true.
+ par%iseed    = 0
+ par%no_print = 1.0e7
+/

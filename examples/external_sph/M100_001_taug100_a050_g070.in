@@ -1,0 +1,31 @@
+&parameters
+ par%no_photons     = 1.00e+08
+ par%albedo         = 0.50000
+ par%hgg            = 0.70000
+ par%use_stokes     = .false.
+ par%sightline_tau  = .true.
+ par%tauhomo        = 1.00e+00
+ par%density_file    = '../../b040_fbm3d_128/M100b040_001.fits.gz'
+ par%centering       = 0
+ par%source_geometry = 'external_sph'
+
+ par%distance_unit   = 'pc'
+ par%xmax    =  0.86
+ par%ymax    =  0.86
+ par%zmax    =  0.86
+ par%rmax    =  0.86
+ par%nx = 128
+ par%ny = 128
+ par%nz = 128
+
+ par%nxim = 128
+ par%nyim = 128
+ par%inclination_angle = 0.0
+ par%position_angle    = 0.0
+ par%phase_angle       = 0.0
+ par%distance          = 1.4e+02
+
+ par%save_direc0 = .true.
+ par%use_master_slave  = .true.
+ par%no_print = 1.00e+07
+/

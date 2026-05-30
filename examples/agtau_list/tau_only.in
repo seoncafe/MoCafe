@@ -1,0 +1,35 @@
+&parameters
+ !--- Case 2: polychromatic optical-depth (tau) scan only -> scatt(x,y,tau).
+ !--- Jonsson 2006, MNRAS, 372, 2.  par%taumax is the simulated reference tau0.
+ par%no_photons      = 1.0e7
+ par%hgg             = 0.5
+ par%albedo          = 0.5
+ par%taumax          = 1.0
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+
+ par%use_tau_list    = .true.
+ par%tau_list        = 0.5, 1.0, 2.0
+
+ par%distance_unit   = ''
+ par%xmax = 1.0
+ par%ymax = 1.0
+ par%zmax = 1.0
+ par%rmax = 1.0
+ par%nx = 100
+ par%ny = 100
+ par%nz = 100
+
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .true.
+ par%iseed    = 0
+ par%no_print = 1.0e6
+ par%file_format = 'hdf5'
+ par%out_file = 'tau_only.h5'
+/

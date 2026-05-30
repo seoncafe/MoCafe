@@ -1,0 +1,32 @@
+&parameters
+ !--- Single giant clump (radius = rmax, centered) loaded from a file.
+ !--- It fills the whole sphere with uniform dust opacity kappa = tau0/rmax,
+ !--- so the radial optical depth from the center equals tau0 = 1.0.  This
+ !--- must reproduce the homogeneous-sphere reference (smooth_ref.in) to
+ !--- within Monte-Carlo noise -- the rigorous correctness test of the clump
+ !--- ray-tracer (AMR_CLUMPS_PLAN.md Part B, validation item 3).
+ par%no_photons      = 2.0e6
+ par%hgg             = 0.0
+ par%albedo          = 0.5
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+
+ par%grid_type        = 'clump'
+ par%rmax             = 1.0
+ par%clump_radius     = 1.0
+ par%clump_input_file = 'clump_giant.fits'
+
+ par%distance_unit   = ''
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .false.
+ par%iseed    = 0
+ par%no_print = 2.0e6
+ par%file_format = 'fits'
+ par%out_file    = 'clump_giant'
+/

@@ -1,0 +1,38 @@
+< examples >
+
+external_rec
+   - A rectangular cloud is illuminated by external radiation.
+     The radiation field is assumed to be isotropic.
+     In other words, the cloud is embedded within an isotropic radiation field.
+
+external_sph
+   - A spherical cloud is illuminated by external radiation.
+     The radiation field is assumed to be isotropic.
+
+external_cyl
+   - A cylinderical cloud is illuminated by external radiation.
+     The cylinder is assumed to be symmetric about the z-axis.
+     The radiation field is assumed to be isotropic.
+
+point_source
+   - A point radiation source is located at the center of a spherical (or rectangular) cloud.
+     Radiation is isotropically emitted from the central source.
+
+uniform_source
+   - Radiation is uniformly emitted within a (spherical or rectangular) cloud.
+     In other words, the medium has a uniformly emissivity.
+
+external_powerlaw
+   - A spherical cloud is illuminated by external radiation.
+     The radiation field is assumed to be isotropic.
+     The density profile is given as a powerlaw: rho(r) = rho0 * r^(par%density_powerlaw_index)
+
+external_rexp
+   - A spherical cloud is illuminated by external radiation.
+     The radiation field is assumed to be isotropic.
+     The density profile is given as an exponential function: rho(r) = rho0 * exp^(-r/par%density_rscale)
+
+external_Plummer
+   - A spherical cloud is illuminated by external radiation.
+     The density profile is given as a Plummer function: rho(r) = rho0 /(1 +  (-r/par%density_rscale)**2)**(par%density_powerlaw_index/2)
+     See Zucker et al. (2021, ApJ, 919, 35).

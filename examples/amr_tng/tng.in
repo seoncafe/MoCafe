@@ -1,0 +1,28 @@
+&parameters
+ !--- Central point source illuminating the TNG50 galaxy's dust (dust-only).
+ !--- dust_model='laursen09' uses the per-cell metallicity + xHI columns;
+ !--- normalized to a volume-averaged tauhomo=1 (robust for an asymmetric
+ !--- galaxy; the pole sightline is not representative).  Demonstration of the
+ !--- converter->MoCafe pipeline on real Illustris-TNG data.
+ par%no_photons      = 1.0e6
+ par%hgg             = 0.5
+ par%albedo          = 0.5
+ par%tauhomo         = 1.0
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+ par%grid_type       = 'amr'
+ par%amr_file        = 'tng_uniform.fits'
+ par%dust_model      = 'laursen09'
+ par%distance_unit   = 'kpc'
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+05
+ par%use_master_slave = .false.
+ par%iseed    = 0
+ par%no_print = 1.0e6
+ par%file_format = 'fits'
+ par%out_file    = 'tng_image'
+/

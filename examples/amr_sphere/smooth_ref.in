@@ -1,0 +1,26 @@
+&parameters
+ !--- Homogeneous-sphere reference (Cartesian grid) at the same effective
+ !--- resolution as the level-5 uniform AMR sphere (32 cells across).
+ par%no_photons      = 2.0e6
+ par%hgg             = 0.0
+ par%albedo          = 0.5
+ par%taumax          = 1.0
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+ par%distance_unit   = ''
+ par%rmax = 1.0
+ par%nx = 32
+ par%ny = 32
+ par%nz = 32
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+ par%use_master_slave = .false.
+ par%iseed    = 0
+ par%no_print = 2.0e6
+ par%file_format = 'fits'
+ par%out_file    = 'smooth_ref'
+/

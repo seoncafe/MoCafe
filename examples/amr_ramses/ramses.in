@@ -1,0 +1,32 @@
+&parameters
+ !--- Template: dust scattering on a RAMSES octree converted to generic AMR.
+ !--- First run:
+ !---   python ../../python/AMR_grid/convert_ramses_to_generic.py \
+ !---       /path/to/output_00042 -o ramses.fits --output-unit kpc \
+ !---       --metallicity-index 6 --emit-ndust
+ par%no_photons      = 1.0e6
+ par%hgg             = 0.5
+ par%albedo          = 0.5
+ par%tauhomo         = 1.0          ! volume-averaged optical-depth normalization
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+
+ par%grid_type       = 'amr'
+ par%amr_file        = 'ramses.fits'
+ par%dust_model      = 'global_dgr' ! 'laursen09' (metallicity+xHI) | 'from_file' (ndust)
+ par%DGR             = 1.0e-2
+ par%distance_unit   = 'kpc'
+
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+05
+
+ par%use_master_slave = .false.
+ par%iseed    = 0
+ par%no_print = 1.0e6
+ par%file_format = 'fits'
+ par%out_file    = 'ramses_image'
+/

@@ -1,0 +1,36 @@
+&parameters
+ !--- Clumpy medium with a centrally-concentrated clump DENSITY profile.
+ !--- Clumps are placed uniformly (so the count follows the usual f_cov), but
+ !--- each clump's dust opacity is scaled by a power law of its center radius,
+ !--- kappa(r) ~ r^(-alpha): clumps near the center are more opaque
+ !--- (exercises the radial-profile tables and per-clump opacity assignment).
+ par%no_photons      = 2.0e6
+ par%hgg             = 0.0
+ par%albedo          = 0.5
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+
+ par%grid_type        = 'clump'
+ par%rmax             = 1.0
+ par%clump_radius     = 0.08
+ par%clump_f_cov      = 1.0
+ par%clump_tau0       = 1.0
+ par%clump_density_profile = 'powerlaw'
+ par%clump_density_alpha   = 1.0
+ par%clump_density_r0      = 1.0
+ par%save_clump_info  = .true.
+
+ par%distance_unit   = ''
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .false.
+ par%iseed    = 0
+ par%no_print = 2.0e6
+ par%file_format = 'fits'
+ par%out_file    = 'clump_powerlaw'
+/

@@ -1,0 +1,31 @@
+&parameters
+ !--- Homogeneous-sphere reference (Cartesian grid) for the clump validation.
+ !--- A point source at the center inside a uniform dust sphere of radial
+ !--- optical depth taumax = 1.0.  The single-giant-clump run (clump_giant.in)
+ !--- must reproduce this image to within Monte-Carlo noise.
+ par%no_photons      = 2.0e6
+ par%hgg             = 0.0
+ par%albedo          = 0.5
+ par%taumax          = 1.0
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+
+ par%distance_unit   = ''
+ par%rmax            = 1.0
+ par%nx = 101
+ par%ny = 101
+ par%nz = 101
+
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .false.
+ par%iseed    = 0
+ par%no_print = 2.0e6
+ par%file_format = 'fits'
+ par%out_file    = 'smooth_ref'
+/

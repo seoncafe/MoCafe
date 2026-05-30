@@ -1,0 +1,26 @@
+&parameters
+ !--- Uniform-density dust sphere on a uniform-level-5 AMR octree.
+ !--- Normalized to taumax = 1; must reproduce the homogeneous sphere.
+ par%no_photons      = 2.0e6
+ par%hgg             = 0.0
+ par%albedo          = 0.5
+ par%taumax          = 1.0
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+ par%grid_type       = 'amr'
+ par%amr_file        = 'amr_sphere_uniform.fits'
+ par%dust_model      = 'global_dgr'
+ par%DGR             = 1.0e-2
+ par%distance_unit   = ''
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+ par%use_master_slave = .false.
+ par%iseed    = 0
+ par%no_print = 2.0e6
+ par%file_format = 'fits'
+ par%out_file    = 'amr_uniform'
+/

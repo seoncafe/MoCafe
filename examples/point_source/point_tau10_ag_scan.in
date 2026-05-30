@@ -1,0 +1,38 @@
+&parameters
+ !--- (albedo, asymmetry-factor) scan: one run -> scatt(x,y,albedo,hgg).
+ !--- Seon 2010, PKAS, 25, 177.  par%hgg is the simulated g0 (use 0.4-0.5).
+ par%no_photons      = 1.0e7
+ par%hgg             = 0.5
+ par%taumax          = 1.0
+ par%source_geometry = 'point'
+ par%sightline_tau   = .true.
+ par%save_direc0     = .true.
+
+ par%use_ag_list     = .true.
+ !--- Leave albedo_list / hgg_list empty to use the paper grids:
+ !---   albedo_list = 0.1, 0.2, ..., 1.0   (10 values)
+ !---   hgg_list    = 0.0, 0.1, ..., 0.9   (10 values)
+ !--- Or set them explicitly, e.g.:
+ !--- par%albedo_list = 0.3, 0.5, 0.7
+ !--- par%hgg_list    = 0.0, 0.4, 0.8
+
+ par%distance_unit   = ''
+ par%xmax    =   1.0
+ par%ymax    =   1.0
+ par%zmax    =   1.0
+ par%rmax    =   1.0
+ par%nx = 100
+ par%ny = 100
+ par%nz = 100
+
+ par%nxim = 129
+ par%nyim = 129
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .true.
+ par%iseed    = 0
+ par%no_print = 1.0e6
+/

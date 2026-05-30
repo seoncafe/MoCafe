@@ -1,0 +1,29 @@
+&parameters
+ par%no_photons     = 1.00e+08
+ par%albedo         = 0.64223
+ par%hgg            = 0.40385
+ par%scatt_mat_file = '../../data/mueller_SDSS_z.dat'
+ par%use_stokes     = .false.
+ par%sightline_tau  = .true.
+ par%tauhomo        = 4.00e-01
+ par%density_file    = '../../b040_fbm3d_128/M020b040_001.fits.gz'
+ par%centering       = 0
+ par%source_geometry = 'external_sph'
+
+ par%distance_unit   = ''
+ par%xmax    =   1.0
+ par%ymax    =   1.0
+ par%zmax    =   1.0
+ par%rmax    =   1.0
+ par%nx = 128
+ par%ny = 128
+ par%nz = 128
+
+ par%nxim = 128
+ par%nyim = 128
+ par%distance          = 1.0e+03
+
+ par%save_direc0 = .true.
+ par%use_master_slave  = .true.
+ par%no_print = 1.00e+07
+/
