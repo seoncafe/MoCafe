@@ -34,10 +34,10 @@ temperature, or Lyman-α machinery).
 
 ## References
 
-- [Seon 2010, PKAS, 25, 177](https://ui.adsabs.harvard.edu/abs/2010PKAS...25..177S/abstract) — the `(a,g)` single-run scan.
+- [Seon & Draine 2016, ApJ, 833, 201](https://ui.adsabs.harvard.edu/abs/2016ApJ...833..201S/abstract) & [Seon & Kim 2020, ApJS, 250, 9](https://ui.adsabs.harvard.edu/abs/2020ApJS..250....9S/abstract) — dust/Monte-Carlo radiative transfer by the author (general background; the shared MC machinery is ported from LaRT).
+- [Seon 2010, PKAS, 25, 177](https://koreascience.kr/journal/CMHHCI/v25n4.do) — the `(a,g)` single-run scan.
 - [Jonsson 2006, MNRAS, 372, 2](https://ui.adsabs.harvard.edu/abs/2006MNRAS.372....2J/abstract) — the polychromatic optical-depth scan (SUNRISE).
 - Amanatides & Woo 1987, *A Fast Voxel Traversal Algorithm for Ray Tracing*, Eurographics '87 — the DDA used to step the clump CSR acceleration grid.
-- [Seon & Draine 2016, ApJ, 833, 201](https://ui.adsabs.harvard.edu/abs/2016ApJ...833..201S/abstract) & [Seon & Kim 2020, ApJS, 250, 9](https://ui.adsabs.harvard.edu/abs/2020ApJS..250....9S/abstract) — dust/Monte-Carlo radiative transfer by the author (general background; the shared MC machinery is ported from LaRT).
 
 ## Documentation
 
