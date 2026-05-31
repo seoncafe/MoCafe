@@ -79,11 +79,17 @@ contains
   call io_open_new(file,trim(filename1),status)
 
   !--- write scattered data
-  if (par%use_tau_list) then
+  if (par%use_tau_list .and. par%use_ag_list) then
      !--- 5-D scattered image: (x, y, albedo, hgg, tau)
      call io_append_image(file,obs%scatt_agt,status,bitpix=par%out_bitpix)
      call io_put_keyword(file,'EXTNAME','Scattered','J(x,y,albedo,hgg,tau)',status)
      call write_agt_axes(file)
+     call write_common_header(file,obs)
+  else if (par%use_tau_list) then
+     !--- a,g are singletons (na = ng = 1): collapse to a 3-D image (x, y, tau)
+     call io_append_image(file,obs%scatt_agt(:,:,1,1,:),status,bitpix=par%out_bitpix)
+     call io_put_keyword(file,'EXTNAME','Scattered','J(x,y,tau) (intensity)',status)
+     call write_tau_axis_keys(file, 3)
      call write_common_header(file,obs)
   else if (par%use_ag_list) then
      !--- 4-D scattered image: (x, y, albedo, hgg)

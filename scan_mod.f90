@@ -66,8 +66,20 @@ contains
     integer :: i
     logical :: have_ref
     real(kind=wp), parameter :: stol = 1.0e-6_wp
+    real(kind=wp) :: tau_ref
 
     scan_g0 = par%hgg
+
+    !--- scan reference optical depth: follow the grid-normalization choice
+    !--- (taumax takes precedence, else tauhomo), so tau_list is expressed in
+    !--- the same measure that normalizes the medium (cf. grid_create).
+    if (par%taumax > 0.0_wp) then
+       tau_ref = par%taumax
+    else if (par%tauhomo > 0.0_wp) then
+       tau_ref = par%tauhomo
+    else
+       tau_ref = 0.0_wp
+    endif
 
     !--- albedo / asymmetry-factor lists
     if (par%use_ag_list) then
@@ -101,7 +113,7 @@ contains
 
     !--- polychromatic optical-depth (tau) list (target taumax values)
     if (par%use_tau_list) then
-       scan_taumax_ref = par%taumax
+       scan_taumax_ref = tau_ref
        scan_nt = count(is_finite(par%tau_list))
        if (scan_nt > 0) then
           scan_tlist(1:scan_nt) = pack(par%tau_list, is_finite(par%tau_list))
@@ -131,8 +143,8 @@ contains
        endif
     else
        scan_nt         = 1
-       scan_taumax_ref = par%taumax
-       scan_tlist(1)   = par%taumax
+       scan_taumax_ref = tau_ref
+       scan_tlist(1)   = tau_ref
        scan_s(1)       = 1.0_wp
     endif
   end subroutine scan_setup

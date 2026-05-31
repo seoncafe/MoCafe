@@ -258,9 +258,18 @@ class MoCafeFile:
 
     @property
     def is_tau_scan(self) -> bool:
-        """True if this file holds a 5-D polychromatic (a,g,tau) scan."""
+        """True if this file holds a polychromatic (tau) scan: a 5-D (a,g,tau)
+        Scattered cube, a 3-D tau-only Scattered cube (na = ng = 1), or a 3-D
+        Direct cube."""
         s = self.section('Scattered')
-        return s is not None and s.data is not None and s.data.ndim == 5
+        if s is not None and s.data is not None:
+            if s.data.ndim == 5:
+                return True
+            if s.data.ndim == 3 and (s.attr('AG_NT') is not None or
+                                     str(s.attr('CTYPE3', '')).upper() == 'TAU'):
+                return True
+        d = self.section('Direct')
+        return d is not None and d.data is not None and d.data.ndim == 3
 
     def _ag_axes(self):
         """Return (albedo_axis, hgg_axis) as 1-D arrays, or (None, None).
@@ -293,21 +302,24 @@ class MoCafeFile:
         return None, None
 
     def _tau_axis(self):
-        """Return the 1-D tau (target taumax) axis of a 5-D scan, or None.
+        """Return the 1-D tau (target taumax) axis of a tau scan, or None.
 
-        Prefers the explicit TVALnnn list (authoritative); falls back to the
-        CRVAL5/CDELT5 WCS keywords on the Scattered HDU.
+        The explicit TVALnnn list (authoritative) is written by
+        write_tau_axis_keys on whichever HDU carries the tau axis -- the 5-D or
+        3-D Scattered cube, or the 3-D Direct cube -- so read it from the first
+        HDU that provides it.
         """
-        s = self.section('Scattered')
-        if s is None or s.data is None or s.data.ndim != 5:
-            return None
-        nt = int(s.attr('AG_NT', s.data.shape[0]))
-        t = [s.attr(f'TVAL{i:03d}') for i in range(1, nt + 1)]
-        if all(v is not None for v in t):
-            return np.asarray(t, float)
-        t0, dt = s.attr('CRVAL5'), s.attr('CDELT5')
-        if None not in (t0, dt):
-            return float(t0) + float(dt) * np.arange(nt)
+        for name in ('Scattered', 'Direct'):
+            s = self.section(name)
+            if s is None or s.data is None:
+                continue
+            nt = s.attr('AG_NT')
+            if nt is None:
+                continue
+            nt = int(nt)
+            t = [s.attr(f'TVAL{i:03d}') for i in range(1, nt + 1)]
+            if all(v is not None for v in t):
+                return np.asarray(t, float)
         return None
 
     @property
@@ -346,8 +358,13 @@ class MoCafeFile:
         s = self.section('Scattered')
         if s is None or s.data is None:
             return None
-        if s.data.ndim not in (4, 5):
+        if s.data.ndim == 2:
             return s.data
+        if s.data.ndim == 3:
+            # tau-only cube (na = ng = 1): (nt, ny, nx)
+            tax = self._tau_axis()
+            it = 0 if (tau is None or tax is None) else int(np.argmin(np.abs(tax - tau)))
+            return s.data[it, :, :]
         aax, gax = self._ag_axes()
         ia = 0 if (a is None or aax is None) else int(np.argmin(np.abs(aax - a)))
         ig = 0 if (g is None or gax is None) else int(np.argmin(np.abs(gax - g)))
