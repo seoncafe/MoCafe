@@ -154,6 +154,7 @@ public
      character(len=128) :: base_name       = ''
      character(len=128) :: out_file        = ''
      integer            :: out_bitpix      = -32
+     logical            :: out_bitpix_force = .false.   ! .true. = keep out_bitpix, skip the float32->float64 auto-promote
      character(len=8)   :: file_format     = 'hdf5'
      !--- location of a point source.
      real(kind=wp) :: xs_point = 0.0_wp

@@ -59,7 +59,7 @@ contains
   filename1 = trim(get_base_name(filename))//trim(filename_end)//trim(ext)
 
   !--- updated on 2024.04.04
-  if (par%out_bitpix == -32) then
+  if (par%out_bitpix == -32 .and. .not. par%out_bitpix_force) then
      if (par%use_tau_list) then
         min_value     = minval(obs%scatt_agt, obs%scatt_agt > 0.0)
         min_value_tmp = minval(obs%direc_t,   obs%direc_t   > 0.0)
