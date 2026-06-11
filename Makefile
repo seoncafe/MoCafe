@@ -22,6 +22,10 @@ ifeq ($(F90), mpiifort)
 endif
 
 #---------------------------
+# Fortran sources, objects (*.o) and modules (*.mod) all live in src/;
+# only the final MoCafe.x is written to the top-level directory.
+SRCDIR		= src
+
 MAIN		= main
 FLAGS		= -cpp -DMPI
 DEBUG		= 0
@@ -38,6 +42,7 @@ endif
 
 ifeq ($(FC), $(filter $(FC), mpiifort mpiifx))
     FFLAGS  = -ipo -O3 -no-prec-div -fp-model fast=2 $(FLAGS) $(Fextra)
+    MODFLAG = -module $(SRCDIR)
     LDFLAGS = $(extra) $(FFLAGS) -lcfitsio
     ifeq ($(HOST), polaris)
        LDFLAGS = $(FFLAGS) -lcfitsio -L$(HOME)/local/lib
@@ -45,9 +50,11 @@ ifeq ($(FC), $(filter $(FC), mpiifort mpiifx))
 else ifeq ($(FC), mpif90)
     #--- GNU compilers
     FFLAGS = -O3 -ffpe-summary=none $(FLAGS) $(EXTRAFLAG)
+    MODFLAG = -J$(SRCDIR) -I$(SRCDIR)
 else ifeq ($(UNAME), Darwin)
     FC      = mpif90
     FFLAGS  = -O3 $(ext_FLAGS) $(FLAGS)
+    MODFLAG = -J$(SRCDIR) -I$(SRCDIR)
     LDFLAGS = $(extra) $(FFLAGS) -lcfitsio
 endif
 
@@ -65,13 +72,13 @@ LDFLAGS = $(extra) $(FFLAGS) -lcfitsio -L/usr/local/lib $(HDF5_LIBS)
 #*********************************************************************
 .SUFFIXES: .f .f90 .o
 
-.f.o:
-	$(FC) $(FFLAGS) $(OMP_FLAGS) -c -o $@ $<
+$(SRCDIR)/%.o: $(SRCDIR)/%.f
+	$(FC) $(FFLAGS) $(MODFLAG) $(OMP_FLAGS) -c -o $@ $<
 
-.f90.o:
-	$(FC) $(FFLAGS) $(OMP_FLAGS) -c -o $@ $<
+$(SRCDIR)/%.o: $(SRCDIR)/%.f90
+	$(FC) $(FFLAGS) $(MODFLAG) $(OMP_FLAGS) -c -o $@ $<
 
-OBJSB	= \
+OBJS	= \
 	define.o \
 	utility.o \
 	scan_mod.o \
@@ -101,20 +108,22 @@ OBJSB	= \
 	sightline_tau_mod.o \
 	scattering_car.o \
 	setup.o \
-	output_sum_car.o \
+	output_sum_car.o
+
+OBJSB	= $(addprefix $(SRCDIR)/, $(OBJS))
 
 default:clean
-	make main
-	make clean
+	$(MAKE) main
+	$(MAKE) clean
 
-main:$(OBJSB) $(MAIN).o
-	$(FC) $(MAIN).o $(OBJSB) $(LDFLAGS) $(OMP_FLAGS) -o MoCafe.x
+main:$(OBJSB) $(SRCDIR)/$(MAIN).o
+	$(FC) $(SRCDIR)/$(MAIN).o $(OBJSB) $(LDFLAGS) $(OMP_FLAGS) -o MoCafe.x
 
 clean:
-	/bin/rm -f *.o *.mod
+	/bin/rm -f $(SRCDIR)/*.o $(SRCDIR)/*.mod *.o *.mod
 
 distclean: cleanall
 
 cleanall:
-	/bin/rm -f *.o *.mod nebula.x
+	/bin/rm -f $(SRCDIR)/*.o $(SRCDIR)/*.mod *.o *.mod nebula.x
 	/bin/rm -f *.fits.gz *.log

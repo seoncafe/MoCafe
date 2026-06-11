@@ -3,7 +3,7 @@
 
 Dust-only slim of LaRT's AMR_grid.py: builds an octree over a cubic box and
 writes the generic AMR file MoCafe reads via ``par%grid_type='amr'``
-(read_generic_amr.f90).  Only the geometry and the dust-relevant leaf fields
+(src/read_generic_amr.f90).  Only the geometry and the dust-relevant leaf fields
 are kept --- there is no velocity, temperature, electron/ion density, or
 Lyman-alpha emissivity.
 
@@ -11,7 +11,7 @@ Leaf fields:  nH (mandatory) + optional metallicity, xHI, ndust.
 File schema:  binary table columns  x, y, z, level, nH [, metallicity, xHI,
 ndust]  with header keywords  BOXLEN, ORIGINX/Y/Z, NLEAF, NAXIS2.
 
-Octant convention matches the Fortran octree (octree_mod.f90 / amr_build_tree):
+Octant convention matches the Fortran octree (src/octree_mod.f90 / amr_build_tree):
 child center = parent center + (2*bit-1)*child_half, bit = ix + 2*iy + 4*iz.
 
 See AMR_CLUMPS_PLAN.md Part A and AMR_CONVERTERS_PLAN.md.

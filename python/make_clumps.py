@@ -3,7 +3,7 @@
 
 Writes a clump file (FITS binary table or HDF5) that MoCafe reads via
 ``par%clump_input_file``.  The layout mirrors the Fortran ``write_clumps_info``
-routine in ``clump_mod.f90``:
+routine in ``src/clump_mod.f90``:
 
   * HDU 0 / group 0 : empty primary
   * HDU 2 / group 2 : binary table with columns ``X, Y, Z`` (clump centers, in

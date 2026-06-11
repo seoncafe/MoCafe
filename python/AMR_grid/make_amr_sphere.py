@@ -2,7 +2,7 @@
 """Build a generic AMR octree dust sphere for MoCafe (dust-only validation).
 
 Writes a FITS/HDF5 binary table that MoCafe reads via ``par%amr_file``
-(grid_type='amr'), with the schema expected by read_generic_amr.f90:
+(grid_type='amr'), with the schema expected by src/read_generic_amr.f90:
 
   columns : x, y, z, level, nH, T, vx, vy, vz   (mandatory, by index)
   header  : NAXIS2 (= nleaf), BOXLEN, ORIGINX/Y/Z

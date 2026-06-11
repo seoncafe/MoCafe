@@ -44,7 +44,7 @@ scripts are under `examples/*/`.
 
 ### Reference
 
-See `params_type` in `define.f90` for the default value of every parameter.
+See `params_type` in `src/define.f90` for the default value of every parameter.
 All parameters take the `par%` prefix in the namelist (`&parameters / par%... /`).
 
 ---
