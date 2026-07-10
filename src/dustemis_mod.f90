@@ -20,8 +20,10 @@ module dustemis_mod
 !--- absorbed power (radiative equilibrium), which is exact by construction and
 !--- sidesteps the SEDust absolute-normalization convention.
   use define
-  use dust_lib, only : dust_model_t, build_astrodust, build_dl07, build_zubko, &
-                       dust_emission, dust_nlam, dust_lambda
+  use dust_lib, only : dust_model_t, dust_emis_table_t, &
+                       build_astrodust, build_dl07, build_zubko, &
+                       dust_emission, dust_build_table, dust_emission_interp, &
+                       dust_nlam, dust_lambda
   implicit none
   private
   public :: setup_dustemis, compute_dustemis, write_dustemis, gen_dust_photon
@@ -30,6 +32,14 @@ module dustemis_mod
   type(dust_model_t)         :: dmodel
   integer                    :: nl_sed = 0            ! SEDust wavelength grid length
   real(kind=wp), allocatable :: lam_sed(:)           ! SEDust lambda grid [um]
+  !--- fast-path emission table (par%dust_fast_table): emission spectrum vs the
+  !--- intensity scaling U for a fixed reference field shape J_ref.  Built once
+  !--- from the stellar radiation field; per cell an O(us) log-log interpolation
+  !--- replaces the O(0.1 s) exact SEDust solve.  Approximate when the local
+  !--- spectral SHAPE departs from J_ref (e.g. hardened fields near a star).
+  type(dust_emis_table_t)    :: emtab
+  logical                    :: table_built = .false.
+  real(kind=wp)              :: Jref_bol = 0.0_wp     ! bolometric integral of J_ref (SI) for U scaling
   real(kind=wp), allocatable :: cell_Lemit(:)        ! per-cell emitted (=absorbed) L [erg/s]
   real(kind=wp), allocatable :: cell_pdf(:,:)        ! (nl_mc, ncell) emission energy fraction per bin
   real(kind=wp), allocatable :: cell_cdfw(:,:)       ! (nl_mc, ncell) cumulative of cell_pdf (wavelength sampling)
@@ -117,7 +127,12 @@ contains
 
   allocate(Jcgs(nl_mc), Jsi(nl_mc), Jsed(nl_sed), lamI_sed(nl_sed), lamI_mc(nl_mc), emis(nl_mc))
 
-  if (mpar%p_rank == 0) write(*,'(a,i0,a)') 'computing dust emission for ~', nmine, ' cells/rank ...'
+  !--- fast path: build the emission table once from the current (stellar)
+  !--- field, then interpolate per cell instead of solving exactly.
+  if (par%dust_fast_table .and. .not. table_built) call build_dust_table(grid)
+
+  if (mpar%p_rank == 0) write(*,'(a,i0,a,a)') 'computing dust emission for ~', nmine, ' cells/rank ', &
+     merge('(table interp)', '(exact solve) ', par%dust_fast_table)
 
   !--- distribute cells across MPI ranks (round-robin on the linear index).
   do ic = mpar%p_rank+1, ncell_tot, mpar%nproc
@@ -144,9 +159,18 @@ contains
      if (Labs <= 0.0_wp) cycle
 
      !--- SEDust emission spectrum (shape): resample J onto the SEDust grid,
-     !--- solve, resample lamI back onto the MoCafe grid.
+     !--- then either interpolate the table at this cell's intensity scaling U
+     !--- (fast) or solve exactly.  Resample lamI back onto the MoCafe grid.
      call resample_to_sed(sed_wave, Jsi, lam_sed, Jsed)
-     call dust_emission(dmodel, Jsed, lamI_sed)
+     if (par%dust_fast_table .and. table_built) then
+        block
+          real(kind=wp) :: Ucell
+          Ucell = sum(Jsed(:))/max(Jref_bol, tinest)
+          call dust_emission_interp(emtab, max(Ucell, tinest), lamI_sed)
+        end block
+     else
+        call dust_emission(dmodel, Jsed, lamI_sed)
+     endif
      call resample_from_sed(lam_sed, lamI_sed, sed_wave, lamI_mc)
 
      !--- emission energy fraction per MoCafe bin: j_lam ~ lamI/lam, energy ~ j_lam*dlam.
@@ -206,6 +230,89 @@ contains
 
   deallocate(Jcgs, Jsi, Jsed, lamI_sed, lamI_mc, emis)
   end subroutine compute_dustemis
+
+  !---------------------------------------------------------------
+  !--- build the emission table (fast path): reference field shape J_ref =
+  !--- the mean physical J over illuminated cells, and a log-spaced intensity
+  !--- grid U bracketing the per-cell heating range.  All ranks build the same
+  !--- table (identical inputs) so per-cell interpolation is purely local.
+  subroutine build_dust_table(grid)
+  use mpi
+  use sed_mod,    only : sed_nlam, sed_wave, sed_dwave
+  use jtally_mod, only : jt_sum
+  implicit none
+  type(grid_type), intent(in) :: grid
+  real(kind=wp), allocatable :: Jsi(:), Jsed(:), Jref_sed(:), Jsum(:), Ugrid(:)
+  real(kind=wp) :: jnorm, vol, dist2, Ucell, Umin, Umax, dlnU
+  integer :: nl_mc, i, j, k, ic, il, ierr, ncnt, iu
+
+  nl_mc = sed_nlam
+  vol   = grid%dx*grid%dy*grid%dz
+  dist2 = par%distance2cm**2
+  jnorm = 1.0e3_wp/(fourpi*vol*dist2)          ! -> SI directly (incl. cgs->SI 1e3)
+  allocate(Jsi(nl_mc), Jsed(nl_sed), Jref_sed(nl_sed), Jsum(nl_sed))
+
+  !--- pass 1: accumulate the mean physical field shape on the SEDust grid.
+  Jsum(:) = 0.0_wp;  ncnt = 0
+  do ic = mpar%p_rank+1, ncell_tot, mpar%nproc
+     k = (ic-1)/(grid%nx*grid%ny) + 1
+     j = mod((ic-1)/grid%nx, grid%ny) + 1
+     i = mod(ic-1, grid%nx) + 1
+     if (grid%rhokap(i,j,k) <= 0.0_wp) cycle
+     if (all(jt_sum(:,i,j,k) <= 0.0_wp)) cycle
+     do il = 1, nl_mc
+        Jsi(il) = jt_sum(il,i,j,k)*jnorm/sed_dwave(il)
+     enddo
+     call resample_to_sed(sed_wave, Jsi, lam_sed, Jsed)
+     Jsum(:) = Jsum(:) + Jsed(:)
+     ncnt = ncnt + 1
+  enddo
+  call MPI_ALLREDUCE(MPI_IN_PLACE, Jsum, nl_sed, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+  call MPI_ALLREDUCE(MPI_IN_PLACE, ncnt, 1,      MPI_INTEGER,          MPI_SUM, MPI_COMM_WORLD, ierr)
+  if (ncnt == 0) then
+     deallocate(Jsi, Jsed, Jref_sed, Jsum);  return
+  endif
+  Jref_sed(:) = Jsum(:)/dble(ncnt)
+  Jref_bol    = sum(Jref_sed)
+
+  !--- pass 2: per-cell intensity scaling U = bolometric(J_cell)/bolometric(J_ref).
+  Umin = hugest;  Umax = tinest
+  do ic = mpar%p_rank+1, ncell_tot, mpar%nproc
+     k = (ic-1)/(grid%nx*grid%ny) + 1
+     j = mod((ic-1)/grid%nx, grid%ny) + 1
+     i = mod(ic-1, grid%nx) + 1
+     if (grid%rhokap(i,j,k) <= 0.0_wp) cycle
+     if (all(jt_sum(:,i,j,k) <= 0.0_wp)) cycle
+     do il = 1, nl_mc
+        Jsi(il) = jt_sum(il,i,j,k)*jnorm/sed_dwave(il)
+     enddo
+     call resample_to_sed(sed_wave, Jsi, lam_sed, Jsed)
+     Ucell = sum(Jsed)/max(Jref_bol, tinest)
+     if (Ucell > 0.0_wp) then
+        Umin = min(Umin, Ucell);  Umax = max(Umax, Ucell)
+     endif
+  enddo
+  call MPI_ALLREDUCE(MPI_IN_PLACE, Umin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
+  call MPI_ALLREDUCE(MPI_IN_PLACE, Umax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+  if (.not. (Umax > Umin)) then
+     Umin = 0.5_wp;  Umax = 2.0_wp
+  endif
+
+  !--- log-spaced U grid, padded 1.5x each side so all cells interpolate.
+  allocate(Ugrid(par%dust_nU))
+  Umin = Umin/1.5_wp;  Umax = Umax*1.5_wp
+  dlnU = log(Umax/Umin)/dble(par%dust_nU-1)
+  do iu = 1, par%dust_nU
+     Ugrid(iu) = Umin*exp(dble(iu-1)*dlnU)
+  enddo
+
+  call dust_build_table(dmodel, Jref_sed, Ugrid, emtab)
+  table_built = .true.
+  if (mpar%p_rank == 0) then
+     write(*,'(a,i0,a,2es11.3)') 'dust emission table built: NU=', par%dust_nU, '  U range ', Umin, Umax
+  endif
+  deallocate(Jsi, Jsed, Jref_sed, Jsum, Ugrid)
+  end subroutine build_dust_table
 
   !---------------------------------------------------------------
   !--- generate a dust-emission photon (Lucy iteration): pick an emitting cell

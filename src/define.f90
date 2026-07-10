@@ -229,6 +229,13 @@ public
      integer            :: dust_niter       = 1
      real(kind=wp)      :: dust_no_photons  = 1.0e6_wp
      real(kind=wp)      :: dust_tol         = 1.0e-3_wp
+     !--- fast emission-table path (Stage 3 follow-up #3): interpolate the
+     !--- emission spectrum in the field-intensity scaling U over a fixed
+     !--- reference shape, instead of an exact SEDust solve per cell.  Much
+     !--- faster on large grids; approximate where the local spectral shape
+     !--- departs from the reference (hardened fields near sources).
+     logical            :: dust_fast_table  = .false.
+     integer            :: dust_nU          = 40
      logical       :: use_ag_list   = .false.
      real(kind=wp) :: albedo_list(MAX_SCAN) = nan64
      real(kind=wp) :: hgg_list(MAX_SCAN)    = nan64
