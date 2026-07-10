@@ -221,7 +221,11 @@ Restrictions: no Stokes, no `(a,g)`/`tau` scans, internal sources only.
 
 Writes `J_lambda(λ,x,y,z)`, the wavelength-integrated `J_bol`, and an
 absorbed-energy check (`EABS_A` pathlength tally vs `EABS_B` event counter).
-Memory ≈ `nλ × ncell × 8` bytes per MPI rank.  Plain Cartesian grid only.
+Memory ≈ `nλ × ncell × 8` bytes per MPI rank.  Works on the **Cartesian grid
+and the AMR octree** (per-leaf tally); the whole dust-emission suite (SED
+mode, `J_λ`, Lucy, single-Teq, table, B&W, MRW) runs identically on both.
+On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are per-leaf arrays plus a
+`LeafXYZ` table of leaf centers.  Not supported on the clumpy medium.
 
 ### 3. Dust emission — Mode 1 (Lucy 1999 + SEDust)
 

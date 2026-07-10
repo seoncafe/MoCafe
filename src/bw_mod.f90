@@ -13,7 +13,9 @@ module bw_mod
 !--- C_ext*(1-albedo) from the SED extinction table (par%kext_file); PAH /
 !--- stochastic-heating features are NOT captured (that is Mode 1, Lucy+SEDust).
   use define
-  use utility, only : time_stamp
+  use utility,      only : time_stamp
+  use cellinfo_mod, only : ncell_total, cell_rhokap, cell_volume, cell_center, &
+                           cell_id_of_photon, car_ijk
   use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo, sed_cext, sed_cext_ref
   implicit none
   private
@@ -27,7 +29,8 @@ module bw_mod
   real(kind=wp), allocatable :: cell_A(:)      ! (ncell) absorbed power (rank-local) [erg/s]
   real(kind=wp), allocatable :: cell_T(:)      ! (ncell) current dust temperature [K]
   integer :: nx=0, ny=0, nz=0, ncell_tot=0
-  real(kind=wp) :: cellfac = 0.0_wp            ! Vcode*distance2cm^2/Cext_ref (N_H = rhokap*cellfac)
+  real(kind=wp) :: bw_d2c = 0.0_wp             ! distance2cm^2/Cext_ref (N_H = rhokap*Vcode*bw_d2c)
+  type(grid_type), pointer :: bw_grid => null()
 
   real(kind=wp), parameter :: hc2_cgs = 1.1910429723971884e-5_wp  ! 2 h c^2 [erg cm^2 / s]
   real(kind=wp), parameter :: hck_cgs = 1.4387768775039337_wp     ! h c / k_B [cm K]
@@ -45,8 +48,8 @@ contains
   NT = par%sed_NT
   Tlo = par%sed_Tlo;  Thi = par%sed_Thi
   nx = grid%nx;  ny = grid%ny;  nz = grid%nz
-  ncell_tot = nx*ny*nz
-  cellfac = grid%dx*grid%dy*grid%dz * par%distance2cm**2 / sed_cext_ref
+  ncell_tot = ncell_total(grid)
+  bw_d2c = par%distance2cm**2 / sed_cext_ref
 
   allocate(kabs(nl), Tgrid(NT), kappB(NT), cdf_emit(nl, NT))
   allocate(cell_A(ncell_tot), cell_T(ncell_tot))
@@ -110,11 +113,11 @@ contains
   integer :: ic, it, lo, hi, mid, il
   real(kind=wp) :: N_H, target_kappB, u, cost, sint, phi
 
-  ic = (photon%kcell-1)*nx*ny + (photon%jcell-1)*nx + photon%icell
+  ic = cell_id_of_photon(photon, grid)
   cell_A(ic) = cell_A(ic) + photon%Lpacket
 
   !--- equilibrium temperature: 4 pi N_H kappB(T) = absorbed power.
-  N_H = grid%rhokap(photon%icell,photon%jcell,photon%kcell)*cellfac
+  N_H = cell_rhokap(grid,ic)*cell_volume(grid,ic)*bw_d2c
   if (N_H <= 0.0_wp) then
      it = 1
   else
@@ -186,10 +189,7 @@ contains
   integer :: ic, i, j, k, it, lo, hi, mid
   real(kind=wp) :: N_H, target_kappB
   do ic = 1, ncell_tot
-     k = (ic-1)/(nx*ny) + 1
-     j = mod((ic-1)/nx, ny) + 1
-     i = mod(ic-1, nx) + 1
-     N_H = grid%rhokap(i,j,k)*cellfac
+     N_H = cell_rhokap(grid,ic)*cell_volume(grid,ic)*bw_d2c
      if (N_H <= 0.0_wp .or. cell_A(ic) <= 0.0_wp) then
         cell_T(ic) = Tgrid(1);  cycle
      endif
@@ -272,27 +272,44 @@ contains
   type(grid_type), intent(in) :: grid
   type(io_file_type) :: file
   character(len=192) :: filename
-  real(kind=wp), allocatable :: Tmap(:,:,:), Amap(:,:,:)
+  real(kind=wp), allocatable :: Tmap(:,:,:), Amap(:,:,:), Tleaf(:), Aleaf(:), leafxyz(:,:)
+  real(kind=wp) :: cx, cy, cz
   integer :: ic, i, j, k, status
   if (mpar%p_rank /= 0) return
-  allocate(Tmap(nx,ny,nz), Amap(nx,ny,nz))
-  do ic = 1, ncell_tot
-     k = (ic-1)/(nx*ny) + 1;  j = mod((ic-1)/nx, ny) + 1;  i = mod(ic-1, nx) + 1
-     Tmap(i,j,k) = cell_T(ic);  Amap(i,j,k) = cell_A(ic)
-  enddo
   status = 0
   filename = trim(get_base_name(par%out_file))//'_bwdust'//trim(io_file_extension(par%file_format))
   call io_open_new(file, trim(filename), status)
-  call io_append_image(file, Tmap, status, bitpix=-64)
-  call io_put_keyword(file,'EXTNAME','Tdust','equilibrium dust temperature [K] (B&W 2001)',status)
-  call io_append_image(file, Amap, status, bitpix=-64)
-  call io_put_keyword(file,'EXTNAME','Labs','per-cell absorbed = emitted power [erg/s]',status)
+  if (trim(par%grid_type) == 'amr') then
+     allocate(Tleaf(ncell_tot), Aleaf(ncell_tot), leafxyz(ncell_tot,3))
+     do ic = 1, ncell_tot
+        Tleaf(ic) = cell_T(ic);  Aleaf(ic) = cell_A(ic)
+        call cell_center(grid, ic, cx, cy, cz)
+        leafxyz(ic,1) = cx;  leafxyz(ic,2) = cy;  leafxyz(ic,3) = cz
+     enddo
+     call io_append_image(file, Tleaf, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Tdust','equilibrium dust temperature [K] per leaf (B&W 2001)',status)
+     call io_append_image(file, Aleaf, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Labs','per-leaf absorbed = emitted power [erg/s]',status)
+     call io_append_image(file, leafxyz, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','LeafXYZ','leaf center x,y,z (code units)',status)
+  else
+     allocate(Tmap(nx,ny,nz), Amap(nx,ny,nz))
+     do ic = 1, ncell_tot
+        call car_ijk(grid, ic, i, j, k)
+        Tmap(i,j,k) = cell_T(ic);  Amap(i,j,k) = cell_A(ic)
+     enddo
+     call io_append_image(file, Tmap, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Tdust','equilibrium dust temperature [K] (B&W 2001)',status)
+     call io_append_image(file, Amap, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Labs','per-cell absorbed = emitted power [erg/s]',status)
+  endif
   call io_put_keyword(file,'TOT_LUM', par%luminosity, 'input stellar luminosity',status)
   call io_put_keyword(file,'L_ABS',   sum(cell_A),    'total absorbed power',status)
   call io_close(file, status)
   write(*,'(2a)') 'B&W dust temperature/absorption written to: ', trim(filename)
   write(*,'(a,es14.6,a,f8.4)') 'total absorbed L = ', sum(cell_A), '  (fraction ', sum(cell_A)/par%luminosity, ')'
-  deallocate(Tmap, Amap)
+  if (allocated(Tmap))  deallocate(Tmap, Amap)
+  if (allocated(Tleaf)) deallocate(Tleaf, Aleaf, leafxyz)
   end subroutine bw_write
 
 end module bw_mod

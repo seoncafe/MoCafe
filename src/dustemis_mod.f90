@@ -20,6 +20,8 @@ module dustemis_mod
 !--- absorbed power (radiative equilibrium), which is exact by construction and
 !--- sidesteps the SEDust absolute-normalization convention.
   use define
+  use cellinfo_mod, only : ncell_total, cell_rhokap, cell_volume, cell_center, &
+                           cell_random_position, cell_center_photon, car_ijk
   use dust_lib, only : dust_model_t, dust_emis_table_t, &
                        build_astrodust, build_dl07, build_zubko, &
                        dust_emission, dust_emission_single_teq, &
@@ -89,7 +91,7 @@ contains
 
   nl_sed = dust_nlam(dmodel)
   lam_sed = dust_lambda(dmodel)          ! allocatable assignment
-  ncell_tot = grid%nx*grid%ny*grid%nz
+  ncell_tot = ncell_total(grid)
 
   if (mpar%p_rank == 0) then
      write(*,'(a)')      '--- Dust thermal emission (SEDust, Mode 1 Lucy, non-iterative) ---'
@@ -108,13 +110,12 @@ contains
   implicit none
   type(grid_type), intent(in) :: grid
   real(kind=wp), allocatable :: Jcgs(:), Jsi(:), Jsed(:), lamI_sed(:), lamI_mc(:), emis(:)
-  real(kind=wp) :: vol, dist2, jnorm, Labs, esum, lam_mean, csum, cell_Teq_true
-  integer :: nl_mc, i, j, k, ic, il, ierr, ndone, nmine
+  real(kind=wp) :: vol, dist2, jnorm, Labs, esum, lam_mean, csum, cell_Teq_true, rhk
+  integer :: nl_mc, ic, il, ierr, ndone, nmine
 
   nl_mc = sed_nlam
   ndone = 0
   nmine = (ncell_tot - mpar%p_rank + mpar%nproc - 1)/mpar%nproc
-  vol   = grid%dx*grid%dy*grid%dz
   dist2 = par%distance2cm**2
 
   if (.not. allocated(cell_Lemit)) allocate(cell_Lemit(ncell_tot))
@@ -140,23 +141,21 @@ contains
      ndone = ndone + 1
      if (mpar%p_rank == 0 .and. nmine >= 500 .and. mod(ndone, nmine/5) == 0) &
         write(*,'(a,i0,a,i0,a)') '   dust emission: rank0 ', ndone, '/', nmine, ' cells'
-     k = (ic-1)/(grid%nx*grid%ny) + 1
-     j = mod((ic-1)/grid%nx, grid%ny) + 1
-     i = mod(ic-1, grid%nx) + 1
-     if (grid%rhokap(i,j,k) <= 0.0_wp) cycle
-     if (all(jt_sum(:,i,j,k) <= 0.0_wp)) cycle
+     rhk = cell_rhokap(grid, ic)
+     if (rhk <= 0.0_wp) cycle
+     if (all(jt_sum(:,ic) <= 0.0_wp)) cycle
+     vol = cell_volume(grid, ic)
 
      !--- physical mean intensity in this cell (SI units for SEDust).
      !--- jt_sum already carries Lpacket [erg/s], so no E_p factor.
      jnorm = 1.0_wp/(fourpi*vol*dist2)
      do il = 1, nl_mc
-        Jcgs(il) = jt_sum(il,i,j,k)*jnorm/sed_dwave(il)     ! erg/s/cm^2/sr/um
+        Jcgs(il) = jt_sum(il,ic)*jnorm/sed_dwave(il)        ! erg/s/cm^2/sr/um
      enddo
      Jsi(:) = Jcgs(:)*1.0e3_wp                              ! -> W/m^2/sr/m
 
      !--- absorbed power in this cell [erg/s] (radiative equilibrium => emitted).
-     Labs = grid%rhokap(i,j,k) * &
-            sum(jt_sum(:,i,j,k)*sed_sext(:)*(1.0_wp - sed_albedo(:)))
+     Labs = rhk * sum(jt_sum(:,ic)*sed_sext(:)*(1.0_wp - sed_albedo(:)))
      if (Labs <= 0.0_wp) cycle
 
      !--- SEDust emission spectrum (shape): resample J onto the SEDust grid,
@@ -259,25 +258,21 @@ contains
   implicit none
   type(grid_type), intent(in) :: grid
   real(kind=wp), allocatable :: Jsi(:), Jsed(:), Jref_sed(:), Jsum(:), Ugrid(:)
-  real(kind=wp) :: jnorm, vol, dist2, Ucell, Umin, Umax, dlnU
-  integer :: nl_mc, i, j, k, ic, il, ierr, ncnt, iu
+  real(kind=wp) :: jnorm, dist2, Ucell, Umin, Umax, dlnU
+  integer :: nl_mc, ic, il, ierr, ncnt, iu
 
   nl_mc = sed_nlam
-  vol   = grid%dx*grid%dy*grid%dz
   dist2 = par%distance2cm**2
-  jnorm = 1.0e3_wp/(fourpi*vol*dist2)          ! -> SI directly (incl. cgs->SI 1e3)
   allocate(Jsi(nl_mc), Jsed(nl_sed), Jref_sed(nl_sed), Jsum(nl_sed))
 
   !--- pass 1: accumulate the mean physical field shape on the SEDust grid.
   Jsum(:) = 0.0_wp;  ncnt = 0
   do ic = mpar%p_rank+1, ncell_tot, mpar%nproc
-     k = (ic-1)/(grid%nx*grid%ny) + 1
-     j = mod((ic-1)/grid%nx, grid%ny) + 1
-     i = mod(ic-1, grid%nx) + 1
-     if (grid%rhokap(i,j,k) <= 0.0_wp) cycle
-     if (all(jt_sum(:,i,j,k) <= 0.0_wp)) cycle
+     if (cell_rhokap(grid,ic) <= 0.0_wp) cycle
+     if (all(jt_sum(:,ic) <= 0.0_wp)) cycle
+     jnorm = 1.0e3_wp/(fourpi*cell_volume(grid,ic)*dist2)   ! -> SI (incl. cgs->SI 1e3)
      do il = 1, nl_mc
-        Jsi(il) = jt_sum(il,i,j,k)*jnorm/sed_dwave(il)
+        Jsi(il) = jt_sum(il,ic)*jnorm/sed_dwave(il)
      enddo
      call resample_to_sed(sed_wave, Jsi, lam_sed, Jsed)
      Jsum(:) = Jsum(:) + Jsed(:)
@@ -294,13 +289,11 @@ contains
   !--- pass 2: per-cell intensity scaling U = bolometric(J_cell)/bolometric(J_ref).
   Umin = hugest;  Umax = tinest
   do ic = mpar%p_rank+1, ncell_tot, mpar%nproc
-     k = (ic-1)/(grid%nx*grid%ny) + 1
-     j = mod((ic-1)/grid%nx, grid%ny) + 1
-     i = mod(ic-1, grid%nx) + 1
-     if (grid%rhokap(i,j,k) <= 0.0_wp) cycle
-     if (all(jt_sum(:,i,j,k) <= 0.0_wp)) cycle
+     if (cell_rhokap(grid,ic) <= 0.0_wp) cycle
+     if (all(jt_sum(:,ic) <= 0.0_wp)) cycle
+     jnorm = 1.0e3_wp/(fourpi*cell_volume(grid,ic)*dist2)
      do il = 1, nl_mc
-        Jsi(il) = jt_sum(il,i,j,k)*jnorm/sed_dwave(il)
+        Jsi(il) = jt_sum(il,ic)*jnorm/sed_dwave(il)
      enddo
      call resample_to_sed(sed_wave, Jsi, lam_sed, Jsed)
      Ucell = sum(Jsed)/max(Jref_bol, tinest)
@@ -343,7 +336,7 @@ contains
   type(photon_type), intent(out) :: photon
   real(kind=wp),     intent(in)  :: Lpacket
   real(kind=wp) :: u, cost, sint, phi
-  integer :: ic, i, j, k, lo, hi, mid, il
+  integer :: ic, lo, hi, mid, il
 
   !--- select cell by binary search on the (normalized) cumulative luminosity.
   u = rand_number()
@@ -357,15 +350,9 @@ contains
      endif
   enddo
   ic = lo
-  k = (ic-1)/(grid%nx*grid%ny) + 1
-  j = mod((ic-1)/grid%nx, grid%ny) + 1
-  i = mod(ic-1, grid%nx) + 1
 
-  !--- uniform position within the cell.
-  photon%x = grid%xface(i) + grid%dx*rand_number()
-  photon%y = grid%yface(j) + grid%dy*rand_number()
-  photon%z = grid%zface(k) + grid%dz*rand_number()
-  photon%icell = i;  photon%jcell = j;  photon%kcell = k
+  !--- uniform position within the cell (sets photon cell/leaf index).
+  call cell_random_position(grid, ic, photon)
 
   !--- wavelength from the cell emission CDF (binary search).
   u = rand_number()
@@ -416,9 +403,10 @@ contains
   type(photon_type)  :: p
   real(kind=wp), allocatable :: sed_emergent(:,:), sed_intrinsic(:)
   real(kind=wp), allocatable :: dust_image(:,:,:)     ! (nxim,nyim,nl) surface brightness, observer 1
-  real(kind=wp), allocatable :: Tmap(:,:,:), Lmap(:,:,:)
-  real(kind=wp) :: tau, r2, atten, wcell, vdet(3), r
+  real(kind=wp), allocatable :: Tcube(:,:,:), Lcube(:,:,:), Tleaf(:), Lleaf(:), leafxyz(:,:)
+  real(kind=wp) :: tau, r2, atten, wcell, vdet(3), r, cx, cy, cz
   integer :: nl_mc, ic, i, j, k, il, kobs, ierr, status, ix, iy
+  logical :: is_amr
 
   nl_mc = sed_nlam
   allocate(sed_emergent(nl_mc, par%nobs), sed_intrinsic(nl_mc))
@@ -439,13 +427,7 @@ contains
   !--- (observer 1) is a physical surface brightness [erg/s/cm^2/sr per bin].
   do ic = mpar%p_rank+1, ncell_tot, mpar%nproc
      if (cell_Lemit(ic) <= 0.0_wp) cycle
-     k = (ic-1)/(grid%nx*grid%ny) + 1
-     j = mod((ic-1)/grid%nx, grid%ny) + 1
-     i = mod(ic-1, grid%nx) + 1
-     p%x = (grid%xface(i)+grid%xface(i+1))*0.5_wp
-     p%y = (grid%yface(j)+grid%yface(j+1))*0.5_wp
-     p%z = (grid%zface(k)+grid%zface(k+1))*0.5_wp
-     p%icell = i;  p%jcell = j;  p%kcell = k
+     call cell_center_photon(grid, ic, p)
      do kobs = 1, par%nobs
         p%kx = observer(kobs)%x - p%x
         p%ky = observer(kobs)%y - p%y
@@ -485,16 +467,6 @@ contains
      return
   endif
 
-  !--- per-cell T and L maps (3-D).
-  allocate(Tmap(grid%nx,grid%ny,grid%nz), Lmap(grid%nx,grid%ny,grid%nz))
-  do ic = 1, ncell_tot
-     k = (ic-1)/(grid%nx*grid%ny) + 1
-     j = mod((ic-1)/grid%nx, grid%ny) + 1
-     i = mod(ic-1, grid%nx) + 1
-     Tmap(i,j,k) = cell_Teq(ic)
-     Lmap(i,j,k) = cell_Lemit(ic)
-  enddo
-
   status = 0
   filename = trim(get_base_name(par%out_file))//'_dustsed'//trim(io_file_extension(par%file_format))
   call io_open_new(file, trim(filename), status)
@@ -510,10 +482,32 @@ contains
   call io_put_keyword(file,'EXTNAME','Wavelength','bin centers [um]',status)
   call io_append_image(file, sed_dwave, status, bitpix=-64)
   call io_put_keyword(file,'EXTNAME','Dwavelength','bin widths [um]',status)
-  call io_append_image(file, Tmap, status, bitpix=-64)
-  call io_put_keyword(file,'EXTNAME','Tdust','per-cell dust colour temperature [K] (Wien, diagnostic)',status)
-  call io_append_image(file, Lmap, status, bitpix=-64)
-  call io_put_keyword(file,'EXTNAME','Ldust','per-cell emitted luminosity [erg/s]',status)
+  !--- per-cell T and L maps: Cartesian cube (nx,ny,nz) or per-leaf arrays (AMR).
+  is_amr = trim(par%grid_type) == 'amr'
+  if (is_amr) then
+     allocate(Tleaf(ncell_tot), Lleaf(ncell_tot), leafxyz(ncell_tot,3))
+     do ic = 1, ncell_tot
+        Tleaf(ic) = cell_Teq(ic);  Lleaf(ic) = cell_Lemit(ic)
+        call cell_center(grid, ic, cx, cy, cz)
+        leafxyz(ic,1) = cx;  leafxyz(ic,2) = cy;  leafxyz(ic,3) = cz
+     enddo
+     call io_append_image(file, Tleaf, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Tdust','per-leaf dust temperature [K]',status)
+     call io_append_image(file, Lleaf, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Ldust','per-leaf emitted luminosity [erg/s]',status)
+     call io_append_image(file, leafxyz, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','LeafXYZ','leaf center x,y,z (code units)',status)
+  else
+     allocate(Tcube(grid%nx,grid%ny,grid%nz), Lcube(grid%nx,grid%ny,grid%nz))
+     do ic = 1, ncell_tot
+        call car_ijk(grid, ic, i, j, k)
+        Tcube(i,j,k) = cell_Teq(ic);  Lcube(i,j,k) = cell_Lemit(ic)
+     enddo
+     call io_append_image(file, Tcube, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Tdust','per-cell dust temperature [K]',status)
+     call io_append_image(file, Lcube, status, bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Ldust','per-cell emitted luminosity [erg/s]',status)
+  endif
   !--- pixel-resolved emergent dust-emission image (observer 1), surface
   !--- brightness [erg/s/cm^2/sr per bin]: dust emission in the observer image.
   call io_append_image(file, dust_image, status, bitpix=-64)
@@ -531,7 +525,9 @@ contains
   write(*,'(a,es14.6)') 'emergent dust L (4pi d^2 * SED): ', &
      fourpi*(par%distance*par%distance2cm)**2*sum(sed_emergent(:,1))
 
-  deallocate(sed_emergent, sed_intrinsic, Tmap, Lmap, dust_image)
+  deallocate(sed_emergent, sed_intrinsic, dust_image)
+  if (allocated(Tcube)) deallocate(Tcube, Lcube)
+  if (allocated(Tleaf)) deallocate(Tleaf, Lleaf, leafxyz)
   end subroutine write_dustemis
 
   !---------------------------------------------------------------

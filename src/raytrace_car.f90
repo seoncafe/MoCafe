@@ -131,21 +131,21 @@ contains
      idx_min = minloc([tx,ty,tz], dim=1)
 
      if (idx_min == 1) then
-        if (jt_first) call jt_edge_cell(photon0, icell, jcell, kcell, tx - d, rhokap, jt_expo)
+        if (jt_first) call jt_edge_cell(photon0, (kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell, tx - d, rhokap, jt_expo)
         tau   = tau + (tx - d) * rhokap
         d     = tx
         icell = icell + istep
         if (icell < 1 .or. icell > grid%nx) exit
         tx    = tx + delx
      else if (idx_min == 2) then
-        if (jt_first) call jt_edge_cell(photon0, icell, jcell, kcell, ty - d, rhokap, jt_expo)
+        if (jt_first) call jt_edge_cell(photon0, (kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell, ty - d, rhokap, jt_expo)
         tau   = tau + (ty - d) * rhokap
         d     = ty
         jcell = jcell + jstep
         if (jcell < 1 .or. jcell > grid%ny) exit
         ty = ty + dely
      else
-        if (jt_first) call jt_edge_cell(photon0, icell, jcell, kcell, tz - d, rhokap, jt_expo)
+        if (jt_first) call jt_edge_cell(photon0, (kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell, tz - d, rhokap, jt_expo)
         tau   = tau + (tz - d) * rhokap
         d     = tz
         kcell = kcell + kstep
@@ -162,11 +162,11 @@ contains
   !--- wgt * Int exp(-tau_lambda) dl over the cell (exact expectation of the
   !--- unscattered pathlength; see jtally_mod).  Updates the running
   !--- cell-entry attenuation expo = exp(-s_ext*tau).
-  subroutine jt_edge_cell(photon0, i, j, k, seg, rhokap, expo)
+  subroutine jt_edge_cell(photon0, cid, seg, rhokap, expo)
   use define
   implicit none
   type(photon_type), intent(in)    :: photon0
-  integer,           intent(in)    :: i, j, k
+  integer,           intent(in)    :: cid            ! linear cell id
   real(kind=wp),     intent(in)    :: seg, rhokap
   real(kind=wp),     intent(inout) :: expo
   real(kind=wp) :: alpha, expo_out
@@ -174,10 +174,10 @@ contains
   alpha = rhokap * photon0%s_ext
   if (alpha*seg > 0.0_wp) then
      expo_out = expo * exp(-alpha*seg)
-     jt_sum(photon0%il,i,j,k) = jt_sum(photon0%il,i,j,k) + photon0%wgt*photon0%Lpacket*(expo - expo_out)/alpha
+     jt_sum(photon0%il,cid) = jt_sum(photon0%il,cid) + photon0%wgt*photon0%Lpacket*(expo - expo_out)/alpha
      expo = expo_out
   else
-     jt_sum(photon0%il,i,j,k) = jt_sum(photon0%il,i,j,k) + photon0%wgt*photon0%Lpacket*expo*seg
+     jt_sum(photon0%il,cid) = jt_sum(photon0%il,cid) + photon0%wgt*photon0%Lpacket*expo*seg
   endif
   end subroutine jt_edge_cell
 
@@ -333,15 +333,15 @@ contains
               d_overshoot = (tau - tau_in)/rhokap
               d  = d - d_overshoot
            endif
-           if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
+           if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
+                         jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
-        if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
+        if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
+                      jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
         icell = icell + istep
         if (icell < 1 .or. icell > grid%nx) then
            photon%inside = .false.
@@ -356,15 +356,15 @@ contains
               d_overshoot = (tau - tau_in)/rhokap
               d  = d - d_overshoot
            endif
-           if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
+           if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
+                         jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
-        if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
+        if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
+                      jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
         jcell = jcell + jstep
         if (jcell < 1 .or. jcell > grid%ny) then
            photon%inside = .false.
@@ -379,15 +379,15 @@ contains
               d_overshoot = (tau - tau_in)/rhokap
               d  = d - d_overshoot
            endif
-           if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
+           if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
+                         jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
-        if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
+        if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
+                      jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
         kcell = kcell + kstep
         if (kcell < 1 .or. kcell > grid%nz) then
            photon%inside = .false.

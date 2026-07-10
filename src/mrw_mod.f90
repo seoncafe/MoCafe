@@ -12,8 +12,10 @@ module mrw_mod
 !--- Cartesian grid only; used in the Lucy energy passes (par%use_mrw).  The
 !--- opacity is taken at the photon wavelength (rho*kappa*s_ext).
   use define
-  use random,     only : rand_number
-  use jtally_mod, only : jt_on, jt_sum
+  use random,       only : rand_number
+  use jtally_mod,   only : jt_on, jt_sum
+  use cellinfo_mod, only : cell_id_of_photon, cell_rhokap
+  use octree_mod,   only : amr_grid, amr_find_leaf
   implicit none
   private
   public :: setup_mrw, mrw_try_step, mrw_on
@@ -58,11 +60,16 @@ contains
   type(photon_type), intent(inout) :: photon
   type(grid_type),   intent(in)    :: grid
   real(kind=wp) :: asca, aabs, R0, dx0, dx1, dy0, dy1, dz0, dz1
-  real(kind=wp) :: xi, y, ct, deposit, ux, uy, uz, cost, sint, phi, alb, rhk
+  real(kind=wp) :: xi, y, ct, deposit, ux, uy, uz, cost, sint, phi, alb, rhk, h
+  integer :: cid, icell
+  logical :: is_amr
 
   stepped = .false.
   if (.not. mrw_on) return
-  rhk = grid%rhokap(photon%icell,photon%jcell,photon%kcell)*photon%s_ext
+  is_amr = trim(par%grid_type) == 'amr'
+  cid = cell_id_of_photon(photon, grid)
+  if (cid <= 0) return
+  rhk = cell_rhokap(grid, cid)*photon%s_ext
   if (rhk <= 0.0_wp) return
   !--- split into scattering and absorption opacity.  MRW models the diffusion
   !--- of the SCATTERING random walk; absorption decays the weight along the
@@ -73,10 +80,17 @@ contains
   aabs = rhk*(1.0_wp - alb)
 
   !--- R0 = distance to the nearest cell wall.
-  dx0 = photon%x - grid%xface(photon%icell);  dx1 = grid%xface(photon%icell+1) - photon%x
-  dy0 = photon%y - grid%yface(photon%jcell);  dy1 = grid%yface(photon%jcell+1) - photon%y
-  dz0 = photon%z - grid%zface(photon%kcell);  dz1 = grid%zface(photon%kcell+1) - photon%z
-  R0  = min(dx0, dx1, dy0, dy1, dz0, dz1)
+  if (is_amr) then
+     icell = amr_grid%icell_of_leaf(cid)
+     h  = amr_grid%ch(icell)
+     R0 = h - max(abs(photon%x-amr_grid%cx(icell)), abs(photon%y-amr_grid%cy(icell)), &
+                  abs(photon%z-amr_grid%cz(icell)))
+  else
+     dx0 = photon%x - grid%xface(photon%icell);  dx1 = grid%xface(photon%icell+1) - photon%x
+     dy0 = photon%y - grid%yface(photon%jcell);  dy1 = grid%yface(photon%jcell+1) - photon%y
+     dz0 = photon%z - grid%zface(photon%kcell);  dz1 = grid%zface(photon%kcell+1) - photon%z
+     R0  = min(dx0, dx1, dy0, dy1, dz0, dz1)
+  endif
   if (R0 <= 0.0_wp) return
   if (asca*R0 <= mrw_gamma) return           ! not scattering-thick: normal walk
 
@@ -108,8 +122,7 @@ contains
   else
      deposit = photon%wgt*photon%Lpacket*ct
   endif
-  if (jt_on) jt_sum(photon%il,photon%icell,photon%jcell,photon%kcell) = &
-       jt_sum(photon%il,photon%icell,photon%jcell,photon%kcell) + deposit
+  if (jt_on) jt_sum(photon%il,cid) = jt_sum(photon%il,cid) + deposit
   photon%wgt = photon%wgt * exp(-aabs*ct)
 
   !--- move the photon to a random point on the sphere of radius R0 and give it
@@ -119,9 +132,14 @@ contains
   photon%x = photon%x + R0*ux
   photon%y = photon%y + R0*uy
   photon%z = photon%z + R0*uz
-  photon%icell = min(max(floor((photon%x-grid%xmin)/grid%dx)+1, 1), grid%nx)
-  photon%jcell = min(max(floor((photon%y-grid%ymin)/grid%dy)+1, 1), grid%ny)
-  photon%kcell = min(max(floor((photon%z-grid%zmin)/grid%dz)+1, 1), grid%nz)
+  if (is_amr) then
+     photon%icell_amr = amr_find_leaf(photon%x, photon%y, photon%z)
+     if (photon%icell_amr <= 0) then;  photon%inside = .false.;  stepped = .true.;  return;  endif
+  else
+     photon%icell = min(max(floor((photon%x-grid%xmin)/grid%dx)+1, 1), grid%nx)
+     photon%jcell = min(max(floor((photon%y-grid%ymin)/grid%dy)+1, 1), grid%ny)
+     photon%kcell = min(max(floor((photon%z-grid%zmin)/grid%dz)+1, 1), grid%nz)
+  endif
   cost = 2.0_wp*rand_number()-1.0_wp;  sint = sqrt(1.0_wp-cost*cost);  phi = twopi*rand_number()
   photon%kx = sint*cos(phi);  photon%ky = sint*sin(phi);  photon%kz = cost
   photon%nscatt = photon%nscatt + 1

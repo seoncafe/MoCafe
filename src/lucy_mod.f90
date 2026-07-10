@@ -27,7 +27,7 @@ contains
   implicit none
   type(grid_type), intent(inout) :: grid
   type(photon_type) :: photon
-  real(kind=wp), allocatable :: jt_star(:,:,:,:)
+  real(kind=wp), allocatable :: jt_star(:,:)
   real(kind=wp) :: eabs_star, Lstar_packet, Ldust_packet, Lprev, drel
   integer(kind=int64) :: n_star, n_dust, ip
   integer :: iter, ierr
@@ -37,13 +37,13 @@ contains
   n_dust = int(par%dust_no_photons, int64)
 
   !--- stellar energy pass (once): tally J_star.
-  jt_sum(:,:,:,:) = 0.0_wp;  jt_eabs = 0.0_wp
+  jt_sum(:,:) = 0.0_wp;  jt_eabs = 0.0_wp
   do ip = mpar%p_rank+1, n_star, mpar%nproc
      call gen_photon(grid, photon)        ! Lpacket = luminosity/nphotons
      call transport(photon, grid)
   enddo
   call jtally_reduce()                     ! jt_sum, jt_eabs now full (all ranks)
-  allocate(jt_star(size(jt_sum,1), size(jt_sum,2), size(jt_sum,3), size(jt_sum,4)))
+  allocate(jt_star(size(jt_sum,1), size(jt_sum,2)))
   jt_star   = jt_sum
   eabs_star = jt_eabs
 
@@ -57,7 +57,7 @@ contains
      Ldust_packet = Labs_total/dble(n_dust)
 
      !--- dust-photon energy pass: tally the dust contribution alone.
-     jt_sum(:,:,:,:) = 0.0_wp;  jt_eabs = 0.0_wp
+     jt_sum(:,:) = 0.0_wp;  jt_eabs = 0.0_wp
      do ip = mpar%p_rank+1, n_dust, mpar%nproc
         call gen_dust_photon(grid, photon, Ldust_packet)
         call transport(photon, grid)

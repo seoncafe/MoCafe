@@ -16,6 +16,7 @@ module raytrace_amr_mod
 ! no refinement gaps, so amr_next_leaf alone suffices for the transport walk.
 !---------------------------------------------------------------------------
   use octree_mod
+  use jtally_mod, only : jt_on, jt_first, jt_sum
   implicit none
   private
 
@@ -37,6 +38,11 @@ contains
     integer  :: il, il_new, icell, iface
     real(wp) :: x, y, z, kx, ky, kz
     real(wp) :: tau, t_exit, d_step, rhokap
+    !--- Lucy pathlength J tally for unforced flights (nscatt > 0); the forced
+    !--- first flight is tallied analytically in raytrace_to_edge_amr.
+    logical  :: do_tally
+
+    do_tally = jt_on .and. photon%nscatt > 0
 
     x  = photon%x;    y  = photon%y;    z  = photon%z
     kx = photon%kx;   ky = photon%ky;   kz = photon%kz
@@ -62,6 +68,7 @@ contains
         else
           d_step = t_exit
         end if
+        if (do_tally) jt_sum(photon%il,il) = jt_sum(photon%il,il) + photon%wgt*photon%Lpacket*d_step
         x = x + d_step * kx
         y = y + d_step * ky
         z = z + d_step * kz
@@ -69,6 +76,7 @@ contains
         exit
       end if
 
+      if (do_tally) jt_sum(photon%il,il) = jt_sum(photon%il,il) + photon%wgt*photon%Lpacket*t_exit
       tau = tau + t_exit * rhokap
       x = x + t_exit * kx
       y = y + t_exit * ky
@@ -119,10 +127,13 @@ contains
 
     integer  :: il, il_new, icell, iface
     real(wp) :: x, y, z, kx, ky, kz, t_exit, rhokap
+    !--- analytic first-flight J tally (jt_first): running exp(-s*tau).
+    real(wp) :: jt_expo, alpha, expo_out
 
     x  = photon0%x;    y  = photon0%y;    z  = photon0%z
     kx = photon0%kx;   ky = photon0%ky;   kz = photon0%kz
     il = photon0%icell_amr
+    jt_expo = 1.0_wp
 
     tau = 0.0_wp
     if (il <= 0) then
@@ -134,6 +145,16 @@ contains
       icell  = amr_grid%icell_of_leaf(il)
       call amr_cell_exit(icell, x, y, z, kx, ky, kz, t_exit, iface)
       rhokap = amr_grid%rhokap(il)
+      if (jt_first) then
+        alpha = rhokap*photon0%s_ext
+        if (alpha*t_exit > 0.0_wp) then
+          expo_out = jt_expo*exp(-alpha*t_exit)
+          jt_sum(photon0%il,il) = jt_sum(photon0%il,il) + photon0%wgt*photon0%Lpacket*(jt_expo-expo_out)/alpha
+          jt_expo = expo_out
+        else
+          jt_sum(photon0%il,il) = jt_sum(photon0%il,il) + photon0%wgt*photon0%Lpacket*jt_expo*t_exit
+        end if
+      end if
       tau = tau + t_exit * rhokap
       if (tau >= tau_huge) return
 

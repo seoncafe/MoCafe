@@ -162,9 +162,9 @@ contains
         if (mpar%p_rank == 0) write(*,'(a)') 'ERROR: par%save_jlam requires par%use_sed = .true.'
         call MPI_FINALIZE(ierr);  stop
      endif
-     if (trim(par%grid_type) /= 'car' .or. par%xy_periodic) then
+     if (.not. (trim(par%grid_type) == 'car' .or. trim(par%grid_type) == 'amr') .or. par%xy_periodic) then
         if (mpar%p_rank == 0) write(*,'(a)') &
-           'ERROR: par%save_jlam supports only the plain Cartesian grid (no clump/amr/xy_periodic yet).'
+           'ERROR: par%save_jlam supports the Cartesian and AMR grids only (no clump / xy_periodic).'
         call MPI_FINALIZE(ierr);  stop
      endif
   endif

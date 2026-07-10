@@ -98,11 +98,36 @@ contains
   !--- seg from (x0,y0,z0) in direction (kx,ky,kz), on the Cartesian grid
   !--- (Amanatides & Woo cell walk, capped at the segment length).
   function raytrace_tau_segment(x0, y0, z0, kx, ky, kz, seg, grid) result(tau)
+  use octree_mod, only : amr_grid, amr_find_leaf, amr_cell_exit, amr_next_leaf
   implicit none
   real(kind=wp), intent(in) :: x0, y0, z0, kx, ky, kz, seg
   type(grid_type), intent(in) :: grid
   real(kind=wp) :: tau, xp, yp, zp, d, tnext, tx, ty, tz, delx, dely, delz, step
   integer :: icell, jcell, kcell, istep, jstep, kstep, idx
+
+  !--- AMR: walk the octree from (x0,y0,z0) accumulating rhokap*step, capped at
+  !--- the segment length seg (event -> interior observer).
+  if (trim(par%grid_type) == 'amr') then
+     block
+       integer  :: il, ilcell, iface, il_new
+       real(kind=wp) :: t_exit
+       tau = 0.0_wp;  xp = x0;  yp = y0;  zp = z0;  d = 0.0_wp
+       il = amr_find_leaf(xp, yp, zp)
+       do while (il > 0)
+          ilcell = amr_grid%icell_of_leaf(il)
+          call amr_cell_exit(ilcell, xp, yp, zp, kx, ky, kz, t_exit, iface)
+          step = min(d+t_exit, seg) - d
+          if (step > 0.0_wp) tau = tau + step*amr_grid%rhokap(il)
+          if (d+t_exit >= seg) exit
+          d = d + t_exit
+          xp = xp + t_exit*kx;  yp = yp + t_exit*ky;  zp = zp + t_exit*kz
+          il_new = amr_next_leaf(ilcell, iface, xp, yp, zp)
+          if (il_new <= 0) exit
+          il = il_new
+       enddo
+     end block
+     return
+  endif
 
   tau = 0.0_wp
   xp = x0;  yp = y0;  zp = z0
