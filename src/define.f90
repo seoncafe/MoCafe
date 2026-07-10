@@ -211,6 +211,10 @@ public
      !--- par%luminosity must be the physical stellar luminosity in erg/s for
      !--- absolute dust temperatures.  Writes '<base>_dustsed.<ext>'.
      logical            :: use_dustemis     = .false.
+     !--- dust emission method: 'lucy' = Lucy 1999 + SEDust (equilibrium +
+     !--- stochastic + PAH; iterable); 'bw01' = Bjorkman & Wood 2001 immediate
+     !--- reemission (approximate, equilibrium mixture-mean opacity, no PAH).
+     character(len=8)   :: dust_emission_method = 'lucy'
      character(len=16)  :: dust_model_sed   = 'astrodust'
      !--- SEDust optics/size-distribution paths, resolved relative to
      !--- par%sed_workdir (build_astrodust is called from there so that

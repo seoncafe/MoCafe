@@ -166,18 +166,32 @@ contains
      endif
   endif
 
-  !--- Stage 3: dust thermal emission needs the J tally.
+  !--- Stage 3/4: dust thermal emission.
   if (par%use_dustemis) then
-     if (.not. (par%use_sed .and. par%save_jlam)) then
-        if (mpar%p_rank == 0) write(*,'(a)') &
-           'ERROR: par%use_dustemis requires par%use_sed = .true. and par%save_jlam = .true.'
+     if (.not. par%use_sed) then
+        if (mpar%p_rank == 0) write(*,'(a)') 'ERROR: par%use_dustemis requires par%use_sed = .true.'
         call MPI_FINALIZE(ierr);  stop
      endif
-     if (len_trim(par%sed_qtable) == 0 .or. len_trim(par%sed_sizedist) == 0) then
-        if (mpar%p_rank == 0) write(*,'(a)') &
-           'ERROR: par%use_dustemis requires par%sed_qtable and par%sed_sizedist (SEDust optics/size-dist paths).'
+     select case (trim(par%dust_emission_method))
+     case ('lucy')
+        if (.not. par%save_jlam) then
+           if (mpar%p_rank == 0) write(*,'(a)') &
+              'ERROR: dust_emission_method=''lucy'' requires par%save_jlam = .true.'
+           call MPI_FINALIZE(ierr);  stop
+        endif
+        if (len_trim(par%sed_qtable) == 0 .or. len_trim(par%sed_sizedist) == 0) then
+           if (mpar%p_rank == 0) write(*,'(a)') &
+              'ERROR: dust_emission_method=''lucy'' requires par%sed_qtable and par%sed_sizedist.'
+           call MPI_FINALIZE(ierr);  stop
+        endif
+     case ('bw01')
+        !--- Bjorkman & Wood needs only the mixture opacity (par%kext_file).
+     case default
+        if (mpar%p_rank == 0) write(*,'(3a)') &
+           'ERROR: par%dust_emission_method = ''', trim(par%dust_emission_method), &
+           ''' (use ''lucy'' or ''bw01'').'
         call MPI_FINALIZE(ierr);  stop
-     endif
+     end select
      if (par%luminosity <= 1.0_wp .and. mpar%p_rank == 0) write(*,'(a)') &
         'WARNING: par%luminosity <= 1; set it to the physical stellar luminosity [erg/s] for absolute dust temperatures.'
   endif

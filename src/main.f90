@@ -12,6 +12,7 @@
   use jtally_mod,   only : jtally_setup, jtally_reduce, jtally_write, jt_on
   use dustemis_mod, only : setup_dustemis, compute_dustemis, write_dustemis
   use lucy_mod,     only : run_lucy_iteration
+  use bw_mod,       only : setup_bw, run_bw, bw_finalize, bw_Tmap, bw_write
   use utility
   use mpi
 
@@ -19,6 +20,7 @@
   implicit none
   type(grid_type)   :: grid
   real(kind=wp)     :: dtime
+  logical           :: use_bw
 
   !--- for MPI
   integer :: ierr
@@ -39,28 +41,40 @@
   end select
   call observer_create()
   if (par%sightline_tau) call make_sightline_tau(grid)
+  use_bw = par%use_dustemis .and. trim(par%dust_emission_method) == 'bw01'
   if (par%save_jlam)     call jtally_setup(grid)
-  if (par%use_dustemis)  call setup_dustemis(grid)
+  if (par%use_dustemis .and. .not. use_bw) call setup_dustemis(grid)
+  if (use_bw)            call setup_bw(grid)
 
   !--- Dust emission (Stage 3, Mode 1 Lucy): energy iterations first, which
   !--- tally J_lambda and converge the per-cell emission (dust self-absorption
   !--- if par%dust_niter > 1).  Leaves jt_sum = converged total J and turns the
   !--- tally off so the subsequent imaging pass does not overwrite it.
-  if (par%use_dustemis) then
+  if (par%use_dustemis .and. .not. use_bw) then
      call time_stamp(dtime)
      if (mpar%p_rank == 0) write(6,'(a,f8.3,a)') '---> Lucy energy iterations...  @ ', dtime/60.0_wp, ' mins'
      call run_lucy_iteration(grid)
   endif
 
-  !--- Run Main Calculation (stellar imaging pass; peel on)
+  !--- Run Main Calculation.  Bjorkman & Wood (Mode 2) replaces the standard
+  !--- imaging pass with its own scatter/absorb/reemit transport; otherwise the
+  !--- normal stellar imaging pass runs (peel on).
   call time_stamp(dtime)
   if (mpar%p_rank == 0) write(6,'(a,f8.3,a)') '---> Now starting simulation...  @ ', dtime/60.0_wp, ' mins'
-  call run_simulation(grid)
+  if (use_bw) then
+     call run_bw(grid)
+  else
+     call run_simulation(grid)
+  endif
 
   !--- Final Output
   if (mpar%p_rank == 0) write(6,'(a)') 'Now Gathering Results...'
   call output_reduce(grid)
-  if (par%use_dustemis) then
+  if (use_bw) then
+     call bw_finalize()
+     call bw_Tmap(grid)
+     call bw_write(grid)
+  else if (par%use_dustemis) then
      !--- emission already computed/converged inside run_lucy_iteration.
      call write_dustemis(grid)
      if (par%save_jlam) call jtally_write(grid)   ! converged total J

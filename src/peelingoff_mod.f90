@@ -198,6 +198,42 @@ subroutine peeling_scattered_photon_nostokes_sed(photon,grid)
   enddo
 end subroutine peeling_scattered_photon_nostokes_sed
 !--------------------------------------------------
+subroutine peeling_reemit_sed(photon,grid)
+  implicit none
+  !--- Isotropic-emission peel (Bjorkman & Wood immediate reemission): the
+  !--- re-emitted packet radiates isotropically, so the observer contribution
+  !--- is (1/4pi) exp(-s_ext*tau)/r^2 * wgt, accumulated into scatt_sed at the
+  !--- packet's (new) wavelength bin.
+  type(photon_type), intent(in) :: photon
+  type(grid_type),   intent(in) :: grid
+  type(photon_type) :: pobs
+  real(kind=wp) :: r2,r,vdet(3),wgt,tau
+  integer :: ix,iy,i,k
+
+  if (.not. peel_enabled) return
+  do k=1, par%nobs
+     pobs = photon
+     pobs%kx = (observer(k)%x-photon%x)
+     pobs%ky = (observer(k)%y-photon%y)
+     pobs%kz = (observer(k)%z-photon%z)
+     r2      = pobs%kx*pobs%kx + pobs%ky*pobs%ky + pobs%kz*pobs%kz
+     r       = sqrt(r2)
+     pobs%kx = pobs%kx/r;  pobs%ky = pobs%ky/r;  pobs%kz = pobs%kz/r
+     do i=1,3
+        vdet(i) = observer(k)%rmatrix(i,1) * pobs%kx + &
+                  observer(k)%rmatrix(i,2) * pobs%ky + &
+                  observer(k)%rmatrix(i,3) * pobs%kz
+     enddo
+     ix = floor(atan2(-vdet(1),vdet(3))*rad2deg/observer(k)%dxim+observer(k)%nxim/2.0_wp) + 1
+     iy = floor(atan2(-vdet(2),vdet(3))*rad2deg/observer(k)%dyim+observer(k)%nyim/2.0_wp) + 1
+     if (ix >= 1 .and. ix <= observer(k)%nxim .and. iy >= 1 .and. iy <= observer(k)%nyim) then
+        call raytrace_to_edge(pobs,grid,tau)
+        wgt = photon%wgt/(fourpi*r2) * exp(-photon%s_ext*tau)
+        observer(k)%scatt_sed(ix,iy,photon%il) = observer(k)%scatt_sed(ix,iy,photon%il) + wgt
+     endif
+  enddo
+end subroutine peeling_reemit_sed
+!--------------------------------------------------
 subroutine peeling_scattered_photon_nostokes_scan(photon,grid)
   implicit none
   !--- (albedo, asymmetry-factor) scan peel-off.  Mirrors
