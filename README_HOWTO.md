@@ -7,6 +7,15 @@ analysis tools.  All physics conventions (rotation angles, image geometry,
 output normalization) are in `docs/MoCafe_Geometry.pdf` and
 `docs/output_definitions.pdf`.
 
+**v2.00** adds panchromatic **dust thermal emission**: a multi-wavelength
+(SED) transport mode, a per-cell mean-intensity tally, and two dust-emission
+methods — Lucy (1999) coupled to the **SEDust** grain library (equilibrium +
+stochastically heated grains + PAHs) and Bjorkman & Wood (2001) immediate
+reemission.  It also adds multiple stellar populations, an all-sky interior
+observer (the Milky-Way case), and a Modified Random Walk for very optically
+thick regions.  See **[Dust Thermal Emission (v2.00)](#dust-thermal-emission-v200)**.
+The full design and validation record is in `MoCafe_v2.00_PLAN.md`.
+
 ## How to Compile and Run
 
 ### Prerequisites
@@ -154,6 +163,173 @@ See `docs/MoCafe_Geometry.pdf` for the angle conventions.
 | `save_direc0` | `.false.` | Also write the unattenuated direct image `Direct0` |
 | `output_normalization` | `'luminosity'` | Output normalization |
 | `sightline_tau` | `.false.` | Also write a per-pixel sight-line optical-depth map |
+
+---
+
+## Dust Thermal Emission (v2.00)
+
+MoCafe v2.00 transports photons over a wavelength grid, absorbs starlight in
+the dust, and re-emits the absorbed energy as thermal dust emission.  A run
+proceeds: **SED transport** (panchromatic scattering) → **J_λ tally** (per-cell
+mean intensity) → **dust emission** (Lucy+SEDust or Bjorkman & Wood) →
+observer SED images.
+
+Turn it on with `par%use_sed = .true.`; add `par%save_jlam` and
+`par%use_dustemis` for the emission.  All of it is **opt-in** — a plain
+monochromatic scattering run is unchanged.
+
+### The SEDust grain library (vendored)
+
+The Lucy emission engine is the **SEDust** library, vendored self-contained
+under `sedust/`.  Build it once (Intel):
+
+```bash
+cd sedust/sed && ./build_lib.sh          # -> sedust/sed/lib/libsedust.a
+sedust/populate_data.sh                   # copy the ~55 MB optics tables
+```
+
+The MoCafe `Makefile` links `sedust/sed/lib/libsedust.a` automatically
+(variable `SEDUST_LIBDIR`).  The bulky optics data is not in git; the populate
+script copies it from the canonical SEDust tree.
+
+### 1. Multi-wavelength (SED) mode
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `use_sed` | `.false.` | Enable panchromatic transport |
+| `nlambda` | 128 | Number of log-spaced wavelength bins |
+| `lambda_min`, `lambda_max` | 0.0912, 2000 | Wavelength range [µm] |
+| `lambda_ref` | 0.55 | Reference wavelength [µm]; `taumax`/`tauhomo` and the grid opacity are defined here |
+| `kext_file` | `''` | Table of `λ, albedo, ⟨cos⟩, C_ext/H` (e.g. `data/kext_astrodust_MW.dat`, from SEDust `calc_kext_*.x`) |
+| `source_spectrum` | `''` | Two-column source spectrum `λ[µm], L_λ` (single source) |
+| `tstar` | -999 | Planck source temperature [K] (single source), if no `source_spectrum` |
+| `luminosity` | 1.0 | **Physical** stellar luminosity [erg/s] — required for absolute dust temperatures |
+
+Wavelength-dependent extinction is applied as a per-photon grey rescaling
+`s_ext = C_ext(λ)/C_ext(λ_ref)`, so the grid stores the reference-wavelength
+opacity and all three raytracers are shared with the mono path.  In SED mode
+`distance_unit` sets the physical length scale (1 code unit = 1 distance unit),
+needed for absolute intensities and temperatures.
+
+Restrictions: no Stokes, no `(a,g)`/`tau` scans, internal sources only.
+
+### 2. Per-cell mean intensity J_λ
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `save_jlam` | `.false.` | Tally `J_λ(x,y,z)` (Lucy 1999 pathlength estimator); write `<base>_jlam` |
+
+Writes `J_lambda(λ,x,y,z)`, the wavelength-integrated `J_bol`, and an
+absorbed-energy check (`EABS_A` pathlength tally vs `EABS_B` event counter).
+Memory ≈ `nλ × ncell × 8` bytes per MPI rank.  Plain Cartesian grid only.
+
+### 3. Dust emission — Mode 1 (Lucy 1999 + SEDust)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `use_dustemis` | `.false.` | Compute dust emission (requires `use_sed`) |
+| `dust_emission_method` | `'lucy'` | `'lucy'` (SEDust) or `'bw01'` (Bjorkman & Wood) |
+| `dust_model_sed` | `'astrodust'` | SEDust model (`astrodust`; DL07/Zubko available in the library) |
+| `sed_qtable`, `sed_sizedist` | (vendored) | SEDust optics / size-distribution paths (relative to `sed_workdir`) |
+| `sed_workdir` | `.../sedust/sed` | Directory SEDust reads its `../data/...` tables from |
+| `sed_NT`, `sed_Tlo`, `sed_Thi` | 200, 2.7, 5000 | Grain temperature grid |
+| `dust_niter` | 1 | Lucy iterations for dust self-absorption (1 = non-iterative) |
+| `dust_no_photons` | 1e6 | Dust-emission photons per iteration |
+| `dust_tol` | 1e-3 | Convergence on the total emitted luminosity |
+
+`'lucy'` requires `save_jlam`.  The per-cell emission spectrum comes from
+SEDust (equilibrium + stochastically heated grains + PAH features); the
+per-cell luminosity is set to the locally absorbed power, so energy is
+conserved exactly.  With `dust_niter > 1` the re-emitted photons are
+transported so dust self-absorption heats other cells (needed at high τ_IR).
+Writes `<base>_dustsed` (emergent + intrinsic SED, a pixel-resolved
+`DustEmis_image(x,y,λ)`, and per-cell `Tdust`/`Ldust` maps).
+
+**Emission-solver speed options** (exact solve is ~0.1 s/cell):
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `dust_single_teq` | `.false.` | One mixture equilibrium T per cell — fastest (~55× vs full stochastic); true `Teq`; **no PAH/stochastic features** |
+| `dust_fast_table` | `.false.` | Interpolate emission in the field intensity U over a fixed reference shape; ~1 % SED-shape error; keeps stochastic/PAH |
+| `dust_nU` | 40 | U-grid size for the table path |
+
+### 4. Dust emission — Mode 2 (Bjorkman & Wood 2001)
+
+Set `dust_emission_method = 'bw01'`.  Approximate, equilibrium, mixture
+mean-opacity, **no iteration**: fixed-energy packets scatter and
+absorb+immediately-reemit, each absorption raising the local temperature and
+resampling the wavelength from the temperature-correction spectrum.  Needs
+only the `kext_file` (no SEDust).  No PAH/stochastic features.  Writes
+`<base>_bwdust` (equilibrium `Tdust` and absorbed-power maps); the emergent
+dust emission lands in the observer `Scattered` SED image.
+
+### 5. Multiple stellar populations
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `nsource` | 1 | Number of stellar components (>1 activates multi-source) |
+| `src_geometry(i)` | `'point'` | Per-source geometry: `point`/`uniform`/`gaussian`/`exponential` |
+| `src_tstar(i)` | -999 | Per-source Planck temperature [K] |
+| `src_spectrum(i)` | `''` | Per-source spectrum file (overrides `src_tstar`) |
+| `src_lum(i)` | -999 | Per-source luminosity [erg/s] (equal split if unset) |
+| `src_x/y/z(i)` | 0 | Per-source position (`point`) |
+| `src_zscale(i)` | -999 | Per-source scale height (`gaussian`/`exponential`) |
+
+Sources are sampled in proportion to their luminosity; `luminosity` becomes
+`Σ src_lum`.  Example: a hot young disk + a cool old bulge (`examples/galaxy/`).
+
+### 6. All-sky interior observer (Milky Way)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `allsky` | `.false.` | Observer sits **inside** the medium; bin every event by sky direction |
+| `allsky_x/y/z` | 0 | Interior observer position (code units) |
+| `allsky_nlon`, `allsky_nlat` | 360, 180 | Equirectangular map size |
+
+Writes `<base>_allsky`, an equirectangular `(lon, lat, λ)` surface-brightness
+cube — the diffuse Galactic light and FIR cirrus as seen from inside the disk
+(`examples/milkyway/`).
+
+### 7. Modified Random Walk (high optical depth)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `use_mrw` | `.false.` | Diffusion step in scattering-thick cells (Min 2009; Robitaille 2010) |
+| `mrw_gamma` | 2.0 | Trigger threshold on the nearest-wall scattering optical depth |
+
+Used in the Lucy energy passes.  The Lucy transport also applies Russian
+roulette so high-albedo, high-τ clouds do not diffuse forever.  MRW is
+correct in absorbing dust (it triggers rarely there); its speedup is large
+only when individual cells are very thick (τ_cell ≫ 1) and near-pure-scattering.
+
+### Minimal example
+
+```fortran
+&parameters
+ par%no_photons  = 2.0e6
+ par%use_sed     = .true.
+ par%save_jlam   = .true.
+ par%use_dustemis     = .true.
+ par%dust_single_teq  = .true.      ! fast equilibrium solve
+ par%luminosity  = 3.828e33         ! erg/s
+ par%nlambda     = 100
+ par%lambda_min  = 0.0912
+ par%lambda_max  = 2000.0
+ par%kext_file   = 'data/kext_astrodust_MW.dat'
+ par%tstar       = 1.0e4
+ par%taumax      = 5.0
+ par%source_geometry = 'point'
+ par%distance_unit   = 'pc'
+ par%rmax = 1.0
+ par%nx = 33
+ par%ny = 33
+ par%nz = 33
+ par%distance = 1.0e5
+/
+```
+
+See `examples/dustemis/`, `examples/multipop/`, `examples/galaxy/`,
+`examples/milkyway/`, and the SEDust/mode benchmarks in `examples/benchmarks/`.
 
 ---
 
@@ -384,6 +560,16 @@ file_format='hdf5'  →  _obs.h5,        _obs_tau.h5,        _stokes.h5
 file_format='fits'  →  _obs.fits.gz,   _obs_tau.fits.gz,   _stokes.fits.gz
 ```
 
+The dust-emission modes (v2.00) add derived files with the same extension:
+
+| Suffix | Written when | Contents |
+|--------|--------------|----------|
+| `_obs` | always | observer images; in SED mode `Scattered`/`Direct` become `(x,y,λ)` cubes plus the `Wavelength`/`Cext`/`Albedo`/`Hgg`/`Source_lum` tables |
+| `_jlam` | `save_jlam` | `J_lambda(λ,x,y,z)`, `J_bol`, energy-conservation keywords |
+| `_dustsed` | `use_dustemis` (`lucy`) | emergent + intrinsic dust SED, `DustEmis_image(x,y,λ)`, `Tdust`/`Ldust` maps |
+| `_bwdust` | `dust_emission_method='bw01'` | equilibrium `Tdust` + absorbed-power maps |
+| `_allsky` | `allsky` | equirectangular `(lon,lat,λ)` all-sky surface-brightness cube |
+
 HDF5 mirrors the FITS HDU layout (each image HDU → a group named after
 `EXTNAME` with a `data` dataset; FITS keywords → group attributes), in the same
 section order.  Convert between them with:
@@ -404,6 +590,11 @@ python python/mocafe_io.py convert out_obs.h5 out_obs.fits.gz
 | `examples/amr_sphere/` | AMR octree sphere vs. the Cartesian reference |
 | `examples/amr_tng/` | Illustris-TNG cutout → converter → MoCafe AMR |
 | `examples/amr_ramses/` | RAMSES → converter → MoCafe AMR (template) |
+| `examples/dustemis/` | Dust thermal emission: Lucy+SEDust, iteration, single-Teq, table, B&W, MRW |
+| `examples/multipop/` | Two stellar populations (hot young + cool old) |
+| `examples/galaxy/` | External galaxy SED (disk + bulge, edge-on/face-on) |
+| `examples/milkyway/` | All-sky map from an interior observer |
+| `examples/benchmarks/` | Camps 2015 SHG dust-emission benchmark + Mode 1/2 τ-sweep |
 
 Each directory's `run.sh` shows the typical invocation
 (`mpirun -np $(nproc) ../../MoCafe.x <input>.in`).
