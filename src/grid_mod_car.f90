@@ -126,9 +126,15 @@ contains
   !---- Density Setup
   if (mpar%h_rank == 0) then
      if (len_trim(par%density_file) == 0) then
-        !--- Note distance unit = 1 when no physical distance unit is provied. (2017-06-27)
-        par%distance_unit  = ''
-        par%distance2cm    = 1.0_wp
+        !--- Note distance unit = 1 when no physical distance unit is provided. (2017-06-27)
+        !--- SED/dust-emission mode needs a physical length scale for absolute
+        !--- J_lambda and dust temperatures, so it keeps the user's distance_unit
+        !--- (1 code unit = 1 distance_unit); the legacy scattering path stays
+        !--- unit-agnostic (forced to 1) to preserve its output normalization.
+        if (.not. par%use_sed) then
+           par%distance_unit  = ''
+           par%distance2cm    = 1.0_wp
+        endif
         grid%rhokap(:,:,:) = 1.0_wp
      else
         call read_3D(trim(par%density_file),grid%rhokap,reduce_factor=par%reduce_factor,centering=par%centering)

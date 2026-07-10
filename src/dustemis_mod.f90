@@ -292,23 +292,28 @@ contains
   character(len=192) :: filename
   type(photon_type)  :: p
   real(kind=wp), allocatable :: sed_emergent(:,:), sed_intrinsic(:)
+  real(kind=wp), allocatable :: dust_image(:,:,:)     ! (nxim,nyim,nl) surface brightness, observer 1
   real(kind=wp), allocatable :: Tmap(:,:,:), Lmap(:,:,:)
-  real(kind=wp) :: tau, r2, atten, wcell
-  integer :: nl_mc, ic, i, j, k, il, kobs, ierr, status
+  real(kind=wp) :: tau, r2, atten, wcell, vdet(3), r
+  integer :: nl_mc, ic, i, j, k, il, kobs, ierr, status, ix, iy
 
   nl_mc = sed_nlam
   allocate(sed_emergent(nl_mc, par%nobs), sed_intrinsic(nl_mc))
-  sed_emergent(:,:) = 0.0_wp
-  sed_intrinsic(:)  = 0.0_wp
+  allocate(dust_image(par%nxim, par%nyim, nl_mc))
+  sed_emergent(:,:)   = 0.0_wp
+  sed_intrinsic(:)    = 0.0_wp
+  dust_image(:,:,:)   = 0.0_wp
 
   !--- intrinsic (whole-grid) dust SED: sum of cell emission, no attenuation.
   do ic = 1, ncell_tot
      if (cell_Lemit(ic) > 0.0_wp) sed_intrinsic(:) = sed_intrinsic(:) + cell_Lemit(ic)*cell_pdf(:,ic)
   enddo
 
-  !--- emergent SED: attenuate each cell's emission to each observer.
-  !--- distribute cells across ranks; raytrace at the reference wavelength and
-  !--- scale the optical depth per bin by s_ext (grey-rescaling, as in transport).
+  !--- emergent SED and a pixel-resolved dust-emission image: attenuate each
+  !--- cell's isotropic emission to each observer (deterministic, no MC noise;
+  !--- IR scattering is negligible).  Distribute cells across ranks; raytrace
+  !--- at the reference wavelength and scale tau per bin by s_ext.  The image
+  !--- (observer 1) is a physical surface brightness [erg/s/cm^2/sr per bin].
   do ic = mpar%p_rank+1, ncell_tot, mpar%nproc
      if (cell_Lemit(ic) <= 0.0_wp) cycle
      k = (ic-1)/(grid%nx*grid%ny) + 1
@@ -323,19 +328,37 @@ contains
         p%ky = observer(kobs)%y - p%y
         p%kz = observer(kobs)%z - p%z
         r2   = p%kx**2 + p%ky**2 + p%kz**2
-        p%kx = p%kx/sqrt(r2);  p%ky = p%ky/sqrt(r2);  p%kz = p%kz/sqrt(r2)
+        r    = sqrt(r2)
+        p%kx = p%kx/r;  p%ky = p%ky/r;  p%kz = p%kz/r
         call raytrace_to_edge(p, grid, tau)
         wcell = cell_Lemit(ic)/(fourpi*r2*par%distance2cm**2)
         do il = 1, nl_mc
            atten = exp(-sed_sext(il)*tau)
            sed_emergent(il,kobs) = sed_emergent(il,kobs) + wcell*cell_pdf(il,ic)*atten
         enddo
+        !--- pixel-resolved image for observer 1 only.
+        if (kobs == 1) then
+           vdet(1) = observer(1)%rmatrix(1,1)*p%kx + observer(1)%rmatrix(1,2)*p%ky + observer(1)%rmatrix(1,3)*p%kz
+           vdet(2) = observer(1)%rmatrix(2,1)*p%kx + observer(1)%rmatrix(2,2)*p%ky + observer(1)%rmatrix(2,3)*p%kz
+           vdet(3) = observer(1)%rmatrix(3,1)*p%kx + observer(1)%rmatrix(3,2)*p%ky + observer(1)%rmatrix(3,3)*p%kz
+           ix = floor(atan2(-vdet(1),vdet(3))*rad2deg/observer(1)%dxim+observer(1)%nxim/2.0_wp) + 1
+           iy = floor(atan2(-vdet(2),vdet(3))*rad2deg/observer(1)%dyim+observer(1)%nyim/2.0_wp) + 1
+           if (ix >= 1 .and. ix <= observer(1)%nxim .and. iy >= 1 .and. iy <= observer(1)%nyim) then
+              do il = 1, nl_mc
+                 dust_image(ix,iy,il) = dust_image(ix,iy,il) + &
+                    wcell*cell_pdf(il,ic)*exp(-sed_sext(il)*tau)/observer(1)%steradian_pix
+              enddo
+           endif
+        endif
      enddo
   enddo
   call MPI_ALLREDUCE(MPI_IN_PLACE, sed_emergent, nl_mc*par%nobs, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+  do il = 1, nl_mc
+     call MPI_ALLREDUCE(MPI_IN_PLACE, dust_image(:,:,il), par%nxim*par%nyim, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+  enddo
 
   if (mpar%p_rank /= 0) then
-     deallocate(sed_emergent, sed_intrinsic)
+     deallocate(sed_emergent, sed_intrinsic, dust_image)
      return
   endif
 
@@ -368,10 +391,24 @@ contains
   call io_put_keyword(file,'EXTNAME','Tdust','per-cell dust colour temperature [K] (Wien, diagnostic)',status)
   call io_append_image(file, Lmap, status, bitpix=-64)
   call io_put_keyword(file,'EXTNAME','Ldust','per-cell emitted luminosity [erg/s]',status)
+  !--- pixel-resolved emergent dust-emission image (observer 1), surface
+  !--- brightness [erg/s/cm^2/sr per bin]: dust emission in the observer image.
+  call io_append_image(file, dust_image, status, bitpix=-64)
+  call io_put_keyword(file,'EXTNAME','DustEmis_image','emergent dust emission SB (x,y,lambda), observer 1',status)
+  call io_put_keyword(file,'SB_UNIT','erg/s/cm^2/sr/bin','surface-brightness unit',status)
   call io_close(file, status)
   write(*,'(2a)') 'dust SED written to: ', trim(filename)
 
-  deallocate(sed_emergent, sed_intrinsic, Tmap, Lmap)
+  !--- energy-conservation report: the emergent bolometric dust luminosity
+  !--- (4 pi dist_cm^2 * integral of the emergent SED over the sky, estimated
+  !--- from observer 1 as isotropic) should approach the stellar energy
+  !--- absorbed in the FIRST generation.  Print the intrinsic and emergent
+  !--- bolometric sums for a quick check.
+  write(*,'(a,es14.6)') 'intrinsic dust L (sum cells)   : ', sum(sed_intrinsic)
+  write(*,'(a,es14.6)') 'emergent dust L (4pi d^2 * SED): ', &
+     fourpi*(par%distance*par%distance2cm)**2*sum(sed_emergent(:,1))
+
+  deallocate(sed_emergent, sed_intrinsic, Tmap, Lmap, dust_image)
   end subroutine write_dustemis
 
   !---------------------------------------------------------------
