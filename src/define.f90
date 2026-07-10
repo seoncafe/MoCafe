@@ -275,6 +275,11 @@ public
      real(kind=wp)      :: allsky_x      = 0.0_wp   ! interior observer position (code units)
      real(kind=wp)      :: allsky_y      = 0.0_wp
      real(kind=wp)      :: allsky_z      = 0.0_wp
+     !--- Modified Random Walk (Stage 8) for very optically thick cells; used
+     !--- in the Lucy energy passes.  mrw_gamma is the trigger threshold on
+     !--- R0*rho*kappa (nearest-wall optical depth); ~2 is typical.
+     logical            :: use_mrw       = .false.
+     real(kind=wp)      :: mrw_gamma     = 2.0_wp
      logical       :: use_ag_list   = .false.
      real(kind=wp) :: albedo_list(MAX_SCAN) = nan64
      real(kind=wp) :: hgg_list(MAX_SCAN)    = nan64

@@ -105,6 +105,7 @@ OBJS	= \
 	sources_mod.o \
 	allsky_mod.o \
 	jtally_mod.o \
+	mrw_mod.o \
 	raytrace_car.o \
 	raytrace_clump.o \
 	raytrace_amr.o \

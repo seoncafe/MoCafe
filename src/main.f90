@@ -14,6 +14,7 @@
   use lucy_mod,     only : run_lucy_iteration
   use bw_mod,       only : setup_bw, run_bw, bw_finalize, bw_Tmap, bw_write
   use allsky_mod,   only : setup_allsky, allsky_reduce, allsky_write, allsky_on
+  use mrw_mod,      only : setup_mrw
   use utility
   use mpi
 
@@ -47,6 +48,7 @@
   if (par%use_dustemis .and. .not. use_bw) call setup_dustemis(grid)
   if (use_bw)            call setup_bw(grid)
   if (par%allsky)        call setup_allsky()
+  if (par%use_mrw)       call setup_mrw()
 
   !--- Dust emission (Stage 3, Mode 1 Lucy): energy iterations first, which
   !--- tally J_lambda and converge the per-cell emission (dust self-absorption

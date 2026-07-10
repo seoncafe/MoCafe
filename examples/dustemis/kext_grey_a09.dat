@@ -1,0 +1,4 @@
+# grey high-albedo test dust: albedo=0.9, C_ext const
+#   lambda      albedo      <cos>      C_ext/H
+ 1.0000E-003   0.9   0.0  1.0000000E-021
+ 1.0000E+004   0.9   0.0  1.0000000E-021

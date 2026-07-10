@@ -14,6 +14,7 @@ module lucy_mod
   use dustemis_mod, only : gen_dust_photon, compute_dustemis, Labs_total, dustemis_ready
   use jtally_mod,   only : jt_on, jt_first, jt_sum, jt_eabs, jtally_reduce
   use peelingoff_mod, only : peel_enabled
+  use mrw_mod,      only : mrw_on, mrw_try_step
   use random,       only : rand_number
   use mpi
   implicit none
@@ -97,8 +98,28 @@ contains
   type(photon_type), intent(inout) :: photon
   type(grid_type),   intent(inout) :: grid
   real(kind=wp) :: tau, tau0, wgt1
+  real(kind=wp), parameter :: RR_CUT = 1.0e-4_wp   ! Russian-roulette weight cutoff
+  real(kind=wp), parameter :: RR_SURV = 0.1_wp     ! survival probability
+  integer(kind=int64) :: nstep
+  integer(kind=int64), parameter :: NSTEP_MAX = 100000000_int64
 
+  nstep = 0
   do while (photon%inside)
+     nstep = nstep + 1
+     if (nstep > NSTEP_MAX) exit          ! safety cap against pathological walks
+     !--- Modified Random Walk: in a very optically thick cell take one big
+     !--- diffusion step instead of the normal free path (deposits into the J
+     !--- tally and moves the photon to the inscribed-sphere surface).
+     if (mrw_on .and. photon%nscatt > 0) then
+        if (mrw_try_step(photon, grid)) then
+           !--- Russian roulette after the (absorption-decayed) MRW weight.
+           if (photon%wgt < RR_CUT) then
+              if (rand_number() > RR_SURV) exit
+              photon%wgt = photon%wgt/RR_SURV
+           endif
+           cycle
+        endif
+     endif
      if (photon%nscatt == 0) then
         jt_first = jt_on
         call raytrace_to_edge(photon, grid, tau0)
@@ -115,7 +136,15 @@ contains
         tau = -log(rand_number())
      endif
      call raytrace_to_tau(photon, grid, tau/photon%s_ext)
-     if (photon%inside) call scattering(photon, grid)
+     if (photon%inside) then
+        call scattering(photon, grid)
+        !--- Russian roulette: unbiasedly terminate low-weight photons so
+        !--- high-albedo, high-tau clouds do not diffuse forever.
+        if (photon%wgt < RR_CUT) then
+           if (rand_number() > RR_SURV) exit
+           photon%wgt = photon%wgt/RR_SURV
+        endif
+     endif
   enddo
   end subroutine transport
 
