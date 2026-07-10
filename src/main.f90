@@ -9,7 +9,8 @@
   use sightline_tau_mod
   use output_sum
   use peelingoff_mod
-  use jtally_mod, only : jtally_setup, jtally_reduce, jtally_write
+  use jtally_mod,   only : jtally_setup, jtally_reduce, jtally_write
+  use dustemis_mod, only : setup_dustemis, compute_dustemis, write_dustemis
   use utility
   use mpi
 
@@ -38,6 +39,7 @@
   call observer_create()
   if (par%sightline_tau) call make_sightline_tau(grid)
   if (par%save_jlam)     call jtally_setup(grid)
+  if (par%use_dustemis)  call setup_dustemis(grid)
 
   !--- Run Main Calculation
   call time_stamp(dtime)
@@ -49,6 +51,12 @@
   call output_reduce(grid)
   if (par%save_jlam) then
      call jtally_reduce()
+     !--- dust emission (Stage 3) uses the RAW jt_sum, so compute it before
+     !--- jtally_write converts jt_sum in place to J_lambda.
+     if (par%use_dustemis) then
+        call compute_dustemis(grid)
+        call write_dustemis(grid)
+     endif
      call jtally_write(grid)
   endif
 

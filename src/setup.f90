@@ -166,6 +166,22 @@ contains
      endif
   endif
 
+  !--- Stage 3: dust thermal emission needs the J tally.
+  if (par%use_dustemis) then
+     if (.not. (par%use_sed .and. par%save_jlam)) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%use_dustemis requires par%use_sed = .true. and par%save_jlam = .true.'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     if (len_trim(par%sed_qtable) == 0 .or. len_trim(par%sed_sizedist) == 0) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%use_dustemis requires par%sed_qtable and par%sed_sizedist (SEDust optics/size-dist paths).'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     if (par%luminosity <= 1.0_wp .and. mpar%p_rank == 0) write(*,'(a)') &
+        'WARNING: par%luminosity <= 1; set it to the physical stellar luminosity [erg/s] for absolute dust temperatures.'
+  endif
+
   !--- Scan modes: (a,g) -- Seon 2010, PKAS, 25, 177; tau (polychromatic) -- Jonsson
   !--- 2006, MNRAS, 372, 2.  The two compose into scatt(x,y,a,g,tau).
   if (par%use_ag_list .or. par%use_tau_list) then

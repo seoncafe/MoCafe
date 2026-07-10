@@ -202,6 +202,22 @@ public
      !--- pathlength estimator); writes '<base>_jlam.<ext>'.  Requires
      !--- use_sed and the plain Cartesian grid.
      logical            :: save_jlam       = .false.
+     !--- Stage 3: dust thermal emission via the SEDust library (Mode 1, Lucy
+     !--- 1999; non-iterative first version).  Requires use_sed + save_jlam.
+     !--- par%luminosity must be the physical stellar luminosity in erg/s for
+     !--- absolute dust temperatures.  Writes '<base>_dustsed.<ext>'.
+     logical            :: use_dustemis     = .false.
+     character(len=16)  :: dust_model_sed   = 'astrodust'
+     !--- SEDust optics/size-distribution paths, resolved relative to
+     !--- par%sed_workdir (build_astrodust is called from there so that
+     !--- SEDust's own '../data/dielectric/...' relative reads resolve too).
+     character(len=256) :: sed_qtable       = '../tmatrix/output/q_astrodust_P0.20_Fe0.00_1.400.dat'
+     character(len=256) :: sed_sizedist     = '../data/release/size_distribution.dat'
+     !--- vendored SEDust sed/ directory (self-contained under the MoCafe tree).
+     character(len=256) :: sed_workdir      = '/home/kiseon/MoCafe/new/MoCafe_v2.00/sedust/sed'
+     integer            :: sed_NT           = 200
+     real(kind=wp)      :: sed_Tlo          = 2.7_wp
+     real(kind=wp)      :: sed_Thi          = 5.0e3_wp
      logical       :: use_ag_list   = .false.
      real(kind=wp) :: albedo_list(MAX_SCAN) = nan64
      real(kind=wp) :: hgg_list(MAX_SCAN)    = nan64

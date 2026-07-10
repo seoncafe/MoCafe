@@ -49,11 +49,18 @@ contains
   !---------------------------------------------------------------
   subroutine jtally_reduce()
   use mpi
-  use memory_mod, only : reduce_mem
   implicit none
-  integer :: ierr
+  integer :: ierr, k
+  !--- ALLREDUCE (not reduce-to-0) so every rank holds the full tally: the
+  !--- dust-emission stage (dustemis_mod) distributes cells across all ranks
+  !--- and reads jt_sum locally.  Reduce one wavelength slab at a time to keep
+  !--- each MPI count within a 32-bit int for large (nlam x ncell) grids.
   if (.not. jt_on) return
-  call reduce_mem(jt_sum)
+  do k = 1, size(jt_sum, 4)
+     !--- jt_sum(:,:,:,k) is contiguous (leading dims full), so no copy.
+     call MPI_ALLREDUCE(MPI_IN_PLACE, jt_sum(:,:,:,k), int(size(jt_sum(:,:,:,k))), &
+                        MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+  enddo
   call MPI_ALLREDUCE(MPI_IN_PLACE, jt_eabs, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   end subroutine jtally_reduce
 

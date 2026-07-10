@@ -31,6 +31,14 @@ FLAGS		= -cpp -DMPI
 DEBUG		= 0
 HDF5		= 1
 
+# Vendored SEDust dust-emission library (Stage 3).  Self-contained Intel build
+# under sedust/; rebuild with  cd sedust/sed && ./build_lib.sh.  The SEDust
+# module named 'mathlib' is vendored as 'sed_mathlib' to avoid clashing with
+# MoCafe's own mathlib module.
+SEDUST_LIBDIR	?= sedust/sed/lib
+FLAGS		+= -I$(SEDUST_LIBDIR)
+SEDUST_LIB	= $(SEDUST_LIBDIR)/libsedust.a
+
 # HDF5 installation prefix (set when HDF5=1). Override on command line if needed:
 #   make HDF5=1 HDF5_PREFIX=/usr/local/hdf5
 HDF5_PREFIX	?= /data/opt/hdf5_intel
@@ -68,7 +76,7 @@ ifeq ($(DEBUG), 1)
    endif
 endif
 
-LDFLAGS = $(extra) $(FFLAGS) -lcfitsio -L/usr/local/lib $(HDF5_LIBS)
+LDFLAGS = $(extra) $(FFLAGS) -lcfitsio -L/usr/local/lib $(HDF5_LIBS) $(SEDUST_LIB) -qopenmp
 #*********************************************************************
 .SUFFIXES: .f .f90 .o
 
@@ -109,6 +117,7 @@ OBJS	= \
 	run_simulation_mod.o \
 	sightline_tau_mod.o \
 	scattering_car.o \
+	dustemis_mod.o \
 	setup.o \
 	output_sum_car.o
 
