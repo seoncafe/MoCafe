@@ -22,7 +22,8 @@ module dustemis_mod
   use define
   use dust_lib, only : dust_model_t, dust_emis_table_t, &
                        build_astrodust, build_dl07, build_zubko, &
-                       dust_emission, dust_build_table, dust_emission_interp, &
+                       dust_emission, dust_emission_single_teq, &
+                       dust_build_table, dust_emission_interp, &
                        dust_nlam, dust_lambda
   implicit none
   private
@@ -107,7 +108,7 @@ contains
   implicit none
   type(grid_type), intent(in) :: grid
   real(kind=wp), allocatable :: Jcgs(:), Jsi(:), Jsed(:), lamI_sed(:), lamI_mc(:), emis(:)
-  real(kind=wp) :: vol, dist2, jnorm, Labs, esum, lam_mean, csum
+  real(kind=wp) :: vol, dist2, jnorm, Labs, esum, lam_mean, csum, cell_Teq_true
   integer :: nl_mc, i, j, k, ic, il, ierr, ndone, nmine
 
   nl_mc = sed_nlam
@@ -168,8 +169,18 @@ contains
           Ucell = sum(Jsed(:))/max(Jref_bol, tinest)
           call dust_emission_interp(emtab, max(Ucell, tinest), lamI_sed)
         end block
+     else if (par%dust_single_teq) then
+        !--- fast equilibrium-only path (SEDust single mixture Teq): more
+        !--- accurate than the B&W mixture-mean and gives the true Teq, but no
+        !--- stochastic-heating / PAH features.
+        block
+          real(kind=wp) :: Teq
+          call dust_emission_single_teq(dmodel, Jsed, lamI_sed, Teq)
+          cell_Teq_true = Teq
+        end block
      else
         call dust_emission(dmodel, Jsed, lamI_sed)
+        cell_Teq_true = -1.0_wp
      endif
      call resample_from_sed(lam_sed, lamI_sed, sed_wave, lamI_mc)
 
@@ -182,9 +193,14 @@ contains
 
      cell_Lemit(ic)  = Labs
      cell_pdf(:,ic)  = emis(:)/esum
-     !--- diagnostic "colour temperature": energy-weighted mean wavelength -> Wien.
-     lam_mean        = sum(sed_wave(:)*cell_pdf(:,ic))
-     cell_Teq(ic)    = 2897.77_wp/max(lam_mean, 1.0e-30_wp)   ! Wien [K], lam in um
+     if (cell_Teq_true > 0.0_wp) then
+        !--- true equilibrium temperature from the single-Teq solver.
+        cell_Teq(ic) = cell_Teq_true
+     else
+        !--- diagnostic "colour temperature": energy-weighted mean wavelength -> Wien.
+        lam_mean     = sum(sed_wave(:)*cell_pdf(:,ic))
+        cell_Teq(ic) = 2897.77_wp/max(lam_mean, 1.0e-30_wp)   ! Wien [K], lam in um
+     endif
   enddo
 
   !--- combine partial per-cell results across ranks.

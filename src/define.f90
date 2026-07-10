@@ -240,6 +240,11 @@ public
      !--- departs from the reference (hardened fields near sources).
      logical            :: dust_fast_table  = .false.
      integer            :: dust_nU          = 40
+     !--- single-temperature (equilibrium-only) SEDust solve: one mixture
+     !--- equilibrium T per cell (dust_emission_single_teq).  Faster than the
+     !--- full stochastic solve and gives the true Teq, but drops PAH /
+     !--- stochastic-heating features.  More accurate than the B&W mixture mean.
+     logical            :: dust_single_teq  = .false.
      logical       :: use_ag_list   = .false.
      real(kind=wp) :: albedo_list(MAX_SCAN) = nan64
      real(kind=wp) :: hgg_list(MAX_SCAN)    = nan64
