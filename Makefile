@@ -118,6 +118,7 @@ OBJS	= \
 	sightline_tau_mod.o \
 	scattering_car.o \
 	dustemis_mod.o \
+	lucy_mod.o \
 	setup.o \
 	output_sum_car.o
 

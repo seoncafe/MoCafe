@@ -63,7 +63,7 @@ subroutine scatter_dust_nostokes_sed(photon,grid)
   par%nscatt_tot = par%nscatt_tot + 1
   !--- independent absorbed-energy counter (energy-conservation check of the
   !--- J_lambda tally): energy absorbed at this event = wgt*(1-albedo).
-  if (jt_on) jt_eabs = jt_eabs + photon%wgt*(1.0_wp - photon%albedo)
+  if (jt_on) jt_eabs = jt_eabs + photon%wgt*photon%Lpacket*(1.0_wp - photon%albedo)
   photon%wgt     = photon%wgt * photon%albedo
   call peeling_scattered_photon(photon,grid)
 

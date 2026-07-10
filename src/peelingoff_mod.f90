@@ -4,6 +4,10 @@ module peelingoff_mod
   use mathlib
   use memory_mod
   use scan_mod
+  !--- Lucy energy iterations transport photons for the J_lambda tally only,
+  !--- with no observer contribution.  peel_enabled = .false. turns the SED
+  !--- peel routines into no-ops during those passes (restored for imaging).
+  logical :: peel_enabled = .true.
   !--- Peel-off integrates optical depth to the observer via the
   !--- raytrace_to_edge procedure pointer (bound in setup_procedure):
   !--- raytrace_to_edge_car for the Cartesian grid, raytrace_to_edge_clump for
@@ -115,6 +119,7 @@ subroutine peeling_direct_photon_nostokes_sed(photon,grid)
   integer :: ix,iy
   integer :: i, k
 
+  if (.not. peel_enabled) return
   do k=1, par%nobs
      pobs = photon
      pobs%kx = (observer(k)%x-photon%x)
@@ -161,6 +166,7 @@ subroutine peeling_scattered_photon_nostokes_sed(photon,grid)
   real(kind=wp) :: cosa,wgt,peel,tau
   integer       :: ix,iy,i,k
 
+  if (.not. peel_enabled) return
   do k=1, par%nobs
      pobs    = photon
      pobs%kx = (observer(k)%x-photon%x)

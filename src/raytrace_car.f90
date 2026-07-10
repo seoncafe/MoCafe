@@ -174,10 +174,10 @@ contains
   alpha = rhokap * photon0%s_ext
   if (alpha*seg > 0.0_wp) then
      expo_out = expo * exp(-alpha*seg)
-     jt_sum(photon0%il,i,j,k) = jt_sum(photon0%il,i,j,k) + photon0%wgt*(expo - expo_out)/alpha
+     jt_sum(photon0%il,i,j,k) = jt_sum(photon0%il,i,j,k) + photon0%wgt*photon0%Lpacket*(expo - expo_out)/alpha
      expo = expo_out
   else
-     jt_sum(photon0%il,i,j,k) = jt_sum(photon0%il,i,j,k) + photon0%wgt*expo*seg
+     jt_sum(photon0%il,i,j,k) = jt_sum(photon0%il,i,j,k) + photon0%wgt*photon0%Lpacket*expo*seg
   endif
   end subroutine jt_edge_cell
 
@@ -334,14 +334,14 @@ contains
               d  = d - d_overshoot
            endif
            if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
+                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
         if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
+                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
         icell = icell + istep
         if (icell < 1 .or. icell > grid%nx) then
            photon%inside = .false.
@@ -357,14 +357,14 @@ contains
               d  = d - d_overshoot
            endif
            if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
+                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
         if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
+                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
         jcell = jcell + jstep
         if (jcell < 1 .or. jcell > grid%ny) then
            photon%inside = .false.
@@ -380,14 +380,14 @@ contains
               d  = d - d_overshoot
            endif
            if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
+                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
         if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
-                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
+                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*photon%Lpacket*(d - dold)
         kcell = kcell + kstep
         if (kcell < 1 .or. kcell > grid%nz) then
            photon%inside = .false.

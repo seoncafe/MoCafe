@@ -24,15 +24,19 @@ module dustemis_mod
                        dust_emission, dust_nlam, dust_lambda
   implicit none
   private
-  public :: setup_dustemis, compute_dustemis, write_dustemis
+  public :: setup_dustemis, compute_dustemis, write_dustemis, gen_dust_photon
+  public :: Labs_total, dustemis_ready
 
   type(dust_model_t)         :: dmodel
   integer                    :: nl_sed = 0            ! SEDust wavelength grid length
   real(kind=wp), allocatable :: lam_sed(:)           ! SEDust lambda grid [um]
   real(kind=wp), allocatable :: cell_Lemit(:)        ! per-cell emitted (=absorbed) L [erg/s]
   real(kind=wp), allocatable :: cell_pdf(:,:)        ! (nl_mc, ncell) emission energy fraction per bin
+  real(kind=wp), allocatable :: cell_cdfw(:,:)       ! (nl_mc, ncell) cumulative of cell_pdf (wavelength sampling)
   real(kind=wp), allocatable :: cell_Teq(:)          ! per-cell luminosity-weighted equilibrium-ish T [K] (diagnostic)
+  real(kind=wp), allocatable :: cell_Lcdf(:)         ! (ncell) cumulative of cell_Lemit (cell sampling), normalized
   real(kind=wp) :: Labs_total = 0.0_wp               ! total absorbed L over the grid [erg/s]
+  logical       :: dustemis_ready = .false.          ! .true. once a nonzero emission field exists
   integer :: ncell_tot = 0
 
 contains
@@ -93,19 +97,20 @@ contains
   implicit none
   type(grid_type), intent(in) :: grid
   real(kind=wp), allocatable :: Jcgs(:), Jsi(:), Jsed(:), lamI_sed(:), lamI_mc(:), emis(:)
-  real(kind=wp) :: E_p, vol, dist2, jnorm, Labs, esum, lam_mean
+  real(kind=wp) :: vol, dist2, jnorm, Labs, esum, lam_mean, csum
   integer :: nl_mc, i, j, k, ic, il, ierr, ndone, nmine
 
   nl_mc = sed_nlam
   ndone = 0
   nmine = (ncell_tot - mpar%p_rank + mpar%nproc - 1)/mpar%nproc
-  E_p   = par%luminosity/dble(par%nphotons)
   vol   = grid%dx*grid%dy*grid%dz
   dist2 = par%distance2cm**2
 
   if (.not. allocated(cell_Lemit)) allocate(cell_Lemit(ncell_tot))
   if (.not. allocated(cell_pdf))   allocate(cell_pdf(nl_mc, ncell_tot))
+  if (.not. allocated(cell_cdfw))  allocate(cell_cdfw(nl_mc, ncell_tot))
   if (.not. allocated(cell_Teq))   allocate(cell_Teq(ncell_tot))
+  if (.not. allocated(cell_Lcdf))  allocate(cell_Lcdf(ncell_tot))
   cell_Lemit(:)  = 0.0_wp
   cell_pdf(:,:)  = 0.0_wp
   cell_Teq(:)    = 0.0_wp
@@ -126,14 +131,15 @@ contains
      if (all(jt_sum(:,i,j,k) <= 0.0_wp)) cycle
 
      !--- physical mean intensity in this cell (SI units for SEDust).
-     jnorm = E_p/(fourpi*vol*dist2)
+     !--- jt_sum already carries Lpacket [erg/s], so no E_p factor.
+     jnorm = 1.0_wp/(fourpi*vol*dist2)
      do il = 1, nl_mc
         Jcgs(il) = jt_sum(il,i,j,k)*jnorm/sed_dwave(il)     ! erg/s/cm^2/sr/um
      enddo
      Jsi(:) = Jcgs(:)*1.0e3_wp                              ! -> W/m^2/sr/m
 
      !--- absorbed power in this cell [erg/s] (radiative equilibrium => emitted).
-     Labs = E_p*grid%rhokap(i,j,k) * &
+     Labs = grid%rhokap(i,j,k) * &
             sum(jt_sum(:,i,j,k)*sed_sext(:)*(1.0_wp - sed_albedo(:)))
      if (Labs <= 0.0_wp) cycle
 
@@ -163,14 +169,112 @@ contains
   call MPI_ALLREDUCE(MPI_IN_PLACE, cell_Teq,   ncell_tot,       MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   Labs_total = sum(cell_Lemit)
 
+  !--- build sampling tables for dust-emission photons (Lucy iteration):
+  !--- cell selection CDF (prob. proportional to cell_Lemit) and per-cell
+  !--- wavelength CDF (from cell_pdf).  Identical on every rank (inputs are
+  !--- ALLREDUCEd), so all ranks sample from the same distributions.
+  csum = 0.0_wp
+  do ic = 1, ncell_tot
+     csum         = csum + cell_Lemit(ic)
+     cell_Lcdf(ic) = csum
+  enddo
+  if (csum > 0.0_wp) then
+     cell_Lcdf(:) = cell_Lcdf(:)/csum
+     dustemis_ready = .true.
+  else
+     dustemis_ready = .false.
+  endif
+  do ic = 1, ncell_tot
+     if (cell_Lemit(ic) > 0.0_wp) then
+        esum = 0.0_wp
+        do il = 1, nl_mc
+           esum = esum + cell_pdf(il,ic)
+           cell_cdfw(il,ic) = esum
+        enddo
+     endif
+  enddo
+
   if (mpar%p_rank == 0) then
-     write(*,'(a,es14.6)') 'total absorbed = emitted L : ', Labs_total
-     write(*,'(a,es14.6)') 'input stellar luminosity   : ', par%luminosity
-     write(*,'(a,f10.5)')  'reprocessed fraction       : ', Labs_total/par%luminosity
+     !--- Labs_total = SUM over cells of absorbed=emitted power.  With dust
+     !--- self-absorption it counts each re-absorption, so it can exceed the
+     !--- stellar luminosity; the EMERGENT dust luminosity (write_dustemis)
+     !--- stays <= stellar (energy conservation).
+     write(*,'(a,es14.6)') 'total cell emission (absorbed) L : ', Labs_total
+     write(*,'(a,es14.6)') 'input stellar luminosity         : ', par%luminosity
+     write(*,'(a,f10.5)')  'L_emit/L_star (>1 w/ self-abs)   : ', Labs_total/par%luminosity
   endif
 
   deallocate(Jcgs, Jsi, Jsed, lamI_sed, lamI_mc, emis)
   end subroutine compute_dustemis
+
+  !---------------------------------------------------------------
+  !--- generate a dust-emission photon (Lucy iteration): pick an emitting cell
+  !--- with probability proportional to its luminosity, a uniform position in
+  !--- the cell, an isotropic direction, and a wavelength from the cell's
+  !--- emission spectrum.  Sets photon%Lpacket so the pass injects L_dust_total.
+  subroutine gen_dust_photon(grid, photon, Lpacket)
+  use random,  only : rand_number
+  use sed_mod, only : sed_wave, sed_sext, sed_albedo, sed_hgg
+  implicit none
+  type(grid_type),   intent(in)  :: grid
+  type(photon_type), intent(out) :: photon
+  real(kind=wp),     intent(in)  :: Lpacket
+  real(kind=wp) :: u, cost, sint, phi
+  integer :: ic, i, j, k, lo, hi, mid, il
+
+  !--- select cell by binary search on the (normalized) cumulative luminosity.
+  u = rand_number()
+  lo = 1;  hi = ncell_tot
+  do while (lo < hi)
+     mid = (lo+hi)/2
+     if (u <= cell_Lcdf(mid)) then
+        hi = mid
+     else
+        lo = mid+1
+     endif
+  enddo
+  ic = lo
+  k = (ic-1)/(grid%nx*grid%ny) + 1
+  j = mod((ic-1)/grid%nx, grid%ny) + 1
+  i = mod(ic-1, grid%nx) + 1
+
+  !--- uniform position within the cell.
+  photon%x = grid%xface(i) + grid%dx*rand_number()
+  photon%y = grid%yface(j) + grid%dy*rand_number()
+  photon%z = grid%zface(k) + grid%dz*rand_number()
+  photon%icell = i;  photon%jcell = j;  photon%kcell = k
+
+  !--- wavelength from the cell emission CDF (binary search).
+  u = rand_number()
+  lo = 1;  hi = size(cell_cdfw,1)
+  do while (lo < hi)
+     mid = (lo+hi)/2
+     if (u <= cell_cdfw(mid,ic)) then
+        hi = mid
+     else
+        lo = mid+1
+     endif
+  enddo
+  il = lo
+  photon%il     = il
+  photon%lambda = sed_wave(il)
+  photon%s_ext  = sed_sext(il)
+  photon%albedo = sed_albedo(il)
+  photon%hgg    = sed_hgg(il)
+
+  !--- isotropic emission direction.
+  cost = 2.0_wp*rand_number() - 1.0_wp
+  sint = sqrt(1.0_wp - cost*cost)
+  phi  = twopi*rand_number()
+  photon%kx = sint*cos(phi)
+  photon%ky = sint*sin(phi)
+  photon%kz = cost
+
+  photon%nscatt  = 0
+  photon%inside  = .true.
+  photon%wgt     = 1.0_wp
+  photon%Lpacket = Lpacket
+  end subroutine gen_dust_photon
 
   !---------------------------------------------------------------
   !--- emergent dust thermal SED: raytrace each emitting cell to each

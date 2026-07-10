@@ -9,8 +9,9 @@
   use sightline_tau_mod
   use output_sum
   use peelingoff_mod
-  use jtally_mod,   only : jtally_setup, jtally_reduce, jtally_write
+  use jtally_mod,   only : jtally_setup, jtally_reduce, jtally_write, jt_on
   use dustemis_mod, only : setup_dustemis, compute_dustemis, write_dustemis
+  use lucy_mod,     only : run_lucy_iteration
   use utility
   use mpi
 
@@ -41,7 +42,17 @@
   if (par%save_jlam)     call jtally_setup(grid)
   if (par%use_dustemis)  call setup_dustemis(grid)
 
-  !--- Run Main Calculation
+  !--- Dust emission (Stage 3, Mode 1 Lucy): energy iterations first, which
+  !--- tally J_lambda and converge the per-cell emission (dust self-absorption
+  !--- if par%dust_niter > 1).  Leaves jt_sum = converged total J and turns the
+  !--- tally off so the subsequent imaging pass does not overwrite it.
+  if (par%use_dustemis) then
+     call time_stamp(dtime)
+     if (mpar%p_rank == 0) write(6,'(a,f8.3,a)') '---> Lucy energy iterations...  @ ', dtime/60.0_wp, ' mins'
+     call run_lucy_iteration(grid)
+  endif
+
+  !--- Run Main Calculation (stellar imaging pass; peel on)
   call time_stamp(dtime)
   if (mpar%p_rank == 0) write(6,'(a,f8.3,a)') '---> Now starting simulation...  @ ', dtime/60.0_wp, ' mins'
   call run_simulation(grid)
@@ -49,14 +60,12 @@
   !--- Final Output
   if (mpar%p_rank == 0) write(6,'(a)') 'Now Gathering Results...'
   call output_reduce(grid)
-  if (par%save_jlam) then
+  if (par%use_dustemis) then
+     !--- emission already computed/converged inside run_lucy_iteration.
+     call write_dustemis(grid)
+     if (par%save_jlam) call jtally_write(grid)   ! converged total J
+  else if (par%save_jlam) then
      call jtally_reduce()
-     !--- dust emission (Stage 3) uses the RAW jt_sum, so compute it before
-     !--- jtally_write converts jt_sum in place to J_lambda.
-     if (par%use_dustemis) then
-        call compute_dustemis(grid)
-        call write_dustemis(grid)
-     endif
      call jtally_write(grid)
   endif
 

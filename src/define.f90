@@ -99,6 +99,10 @@ public
      integer       :: il     = 0
      real(kind=wp) :: lambda = 0.0_wp
      real(kind=wp) :: s_ext  = 1.0_wp
+     !--- physical luminosity carried by the packet [erg/s], used by the
+     !--- energy (J_lambda) tally so stellar and dust-emission photons with
+     !--- different per-packet energies combine correctly (1.0 in mono mode).
+     real(kind=wp) :: Lpacket = 1.0_wp
      ! Stokes parameters
      real(kind=wp) :: I,Q,U,V
   end type photon_type
@@ -218,6 +222,13 @@ public
      integer            :: sed_NT           = 200
      real(kind=wp)      :: sed_Tlo          = 2.7_wp
      real(kind=wp)      :: sed_Thi          = 5.0e3_wp
+     !--- Lucy iteration for dust self-absorption (Stage 3 follow-up #1).
+     !--- dust_niter = max iterations (1 = non-iterative); dust_nphotons =
+     !--- dust-emission photons per iteration; dust_tol = relative-change
+     !--- convergence on the total emitted (=absorbed) luminosity.
+     integer            :: dust_niter       = 1
+     real(kind=wp)      :: dust_no_photons  = 1.0e6_wp
+     real(kind=wp)      :: dust_tol         = 1.0e-3_wp
      logical       :: use_ag_list   = .false.
      real(kind=wp) :: albedo_list(MAX_SCAN) = nan64
      real(kind=wp) :: hgg_list(MAX_SCAN)    = nan64

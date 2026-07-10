@@ -80,18 +80,19 @@ contains
   type(io_file_type) :: file
   character(len=192) :: filename
   real(kind=wp), allocatable :: jbol(:,:,:)
-  real(kind=wp) :: E_p, vol, fac, eabs_A, eabs_B
+  real(kind=wp) :: vol, fac, eabs_A, eabs_B
   integer :: status, il, i, j, k
 
-  if (.not. jt_on .or. mpar%p_rank /= 0) return
+  !--- rank 0 writes; jt_sum must be allocated (the Lucy driver disables jt_on
+  !--- after convergence but leaves the converged tally in jt_sum).
+  if (mpar%p_rank /= 0 .or. .not. associated(jt_sum)) return
 
-  E_p = par%luminosity/dble(par%nphotons)
   vol = grid%dx*grid%dy*grid%dz
 
-  !--- energy-conservation check:
+  !--- energy-conservation check (jt_sum carries Lpacket, so no E_p factor):
   !--- A = absorbed luminosity from the J tally
-  !---   = E_p * Sum_{il,cell} jt_sum * rhokap(cell) * s_ext(il) * (1-albedo(il))
-  !--- B = E_p * Sum wgt*(1-albedo) over scattering events (independent).
+  !---   = Sum_{il,cell} jt_sum * rhokap(cell) * s_ext(il) * (1-albedo(il))
+  !--- B = Sum Lpacket*wgt*(1-albedo) over absorption events (independent).
   eabs_A = 0.0_wp
   do k = 1, grid%nz
   do j = 1, grid%ny
@@ -103,15 +104,14 @@ contains
   enddo
   enddo
   enddo
-  eabs_A = eabs_A * E_p
-  eabs_B = jt_eabs * E_p
+  eabs_B = jt_eabs
   write(*,'(a)')        '--- J_lambda tally: energy conservation check ---'
   write(*,'(a,es14.6)') 'absorbed L (pathlength tally, A): ', eabs_A
   write(*,'(a,es14.6)') 'absorbed L (event counter,    B): ', eabs_B
   if (eabs_B > 0.0_wp) write(*,'(a,f10.6)') 'ratio A/B                       : ', eabs_A/eabs_B
 
-  !--- convert Sum(wgt*dl) -> J_lambda.
-  fac = E_p / (fourpi*vol*par%distance2cm**2)
+  !--- convert Sum(Lpacket*wgt*dl) -> J_lambda [erg/s/cm^2/sr/um].
+  fac = 1.0_wp / (fourpi*vol*par%distance2cm**2)
   do il = 1, sed_nlam
      jt_sum(il,:,:,:) = jt_sum(il,:,:,:) * (fac/sed_dwave(il))
   enddo

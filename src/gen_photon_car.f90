@@ -116,6 +116,10 @@ contains
      photon%s_ext  = sed_sext(photon%il)
      photon%albedo = sed_albedo(photon%il)
      photon%hgg    = sed_hgg(photon%il)
+     !--- physical energy carried by a stellar packet [erg/s].  The Lucy
+     !--- driver overrides this per energy pass (star_Lpacket); this default
+     !--- covers the standalone save_jlam path (one stellar pass).
+     photon%Lpacket = par%luminosity/dble(par%nphotons)
   endif
 
   !--- clump medium: determine the birth clump (0 = vacuum) so the forced
