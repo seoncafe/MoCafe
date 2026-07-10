@@ -101,6 +101,7 @@ OBJS	= \
 	octree_mod.o \
 	read_generic_amr.o \
 	mathlib.o \
+	healpix.o \
 	sed_mod.o \
 	sources_mod.o \
 	cellinfo_mod.o \

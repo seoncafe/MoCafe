@@ -16,8 +16,7 @@
  par%source_zscale   = 0.3
 
  par%allsky          = .true.
- par%allsky_nlon     = 180
- par%allsky_nlat     = 90
+ par%allsky_nside    = 32
  par%allsky_x        = 0.6
  par%allsky_y        = 0.0
  par%allsky_z        = 0.0

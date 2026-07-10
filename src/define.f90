@@ -265,13 +265,12 @@ public
      real(kind=wp)      :: src_z(MAX_SRC)          = 0.0_wp
      real(kind=wp)      :: src_zscale(MAX_SRC)     = -999.0_wp
      real(kind=wp)      :: src_rscale(MAX_SRC)     = -999.0_wp
-     !--- all-sky interior observer (Stage 7, Milky-Way case).  When
-     !--- par%allsky = .true. the observer sits at par%obsx/y/z INSIDE the grid
-     !--- and each event peels toward it, binned by sky direction into an
-     !--- (allsky_nlon x allsky_nlat x nlambda) equirectangular cube.
+     !--- HEALPix all-sky interior observer (Milky-Way case).  When
+     !--- par%allsky = .true. the observer sits at par%allsky_x/y/z INSIDE the
+     !--- grid and each event peels toward it, binned into the HEALPix pixel
+     !--- (RING scheme, npix = 12*allsky_nside^2) of the incoming sky direction.
      logical            :: allsky        = .false.
-     integer            :: allsky_nlon   = 360
-     integer            :: allsky_nlat   = 180
+     integer            :: allsky_nside  = 64       ! HEALPix nside (power of 2)
      real(kind=wp)      :: allsky_x      = 0.0_wp   ! interior observer position (code units)
      real(kind=wp)      :: allsky_y      = 0.0_wp
      real(kind=wp)      :: allsky_z      = 0.0_wp

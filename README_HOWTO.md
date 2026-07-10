@@ -282,17 +282,23 @@ dust emission lands in the observer `Scattered` SED image.
 Sources are sampled in proportion to their luminosity; `luminosity` becomes
 `Σ src_lum`.  Example: a hot young disk + a cool old bulge (`examples/galaxy/`).
 
-### 6. All-sky interior observer (Milky Way)
+### 6. HEALPix all-sky interior observer (Milky Way)
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `allsky` | `.false.` | Observer sits **inside** the medium; bin every event by sky direction |
 | `allsky_x/y/z` | 0 | Interior observer position (code units) |
-| `allsky_nlon`, `allsky_nlat` | 360, 180 | Equirectangular map size |
+| `allsky_nside` | 64 | HEALPix resolution (power of 2); `npix = 12·nside²` |
 
-Writes `<base>_allsky`, an equirectangular `(lon, lat, λ)` surface-brightness
-cube — the diffuse Galactic light and FIR cirrus as seen from inside the disk
-(`examples/milkyway/`).
+Writes `<base>_allsky`, a **HEALPix** `(npix, λ)` surface-brightness map (RING
+scheme, equal-area pixels) — the diffuse Galactic light and FIR cirrus as seen
+from inside the disk.  The file carries the standard HEALPix keywords
+(`PIXTYPE`, `ORDERING='RING'`, `NSIDE`, `NPIX`, `OMEGAPIX`) plus a `PixelDir`
+table of pixel-center unit vectors, so it reads directly with `healpy`
+(1-based RING here maps to 0-based `healpy` with no offset — pixel *j* is at
+array index *j*−1).  Works on **both the Cartesian grid and the AMR octree**
+(the event→observer optical depth uses the matching segment ray trace).  See
+`examples/milkyway/mw_allsky.in` and `examples/milkyway/plot_healpix.py`.
 
 ### 7. Modified Random Walk (high optical depth)
 
@@ -578,7 +584,7 @@ The dust-emission modes (v2.00) add derived files with the same extension:
 | `_jlam` | `save_jlam` | `J_lambda(λ,x,y,z)`, `J_bol`, energy-conservation keywords |
 | `_dustsed` | `use_dustemis` (`lucy`) | emergent + intrinsic dust SED, `DustEmis_image(x,y,λ)`, `Tdust`/`Ldust` maps |
 | `_bwdust` | `dust_emission_method='bw01'` | equilibrium `Tdust` + absorbed-power maps |
-| `_allsky` | `allsky` | equirectangular `(lon,lat,λ)` all-sky surface-brightness cube |
+| `_allsky` | `allsky` | HEALPix `(npix,λ)` all-sky surface-brightness map (RING) + `PixelDir` |
 
 HDF5 mirrors the FITS HDU layout (each image HDU → a group named after
 `EXTNAME` with a `data` dataset; FITS keywords → group attributes), in the same

@@ -441,22 +441,29 @@ Sources are sampled in proportion to their luminosity, and \pp{luminosity}
 becomes $\sum_i$\code{src\_lum(i)}.  A typical use is a hot young disk plus a
 cool old bulge (\file{examples/galaxy/}).
 
-\subsection{All-sky interior observer (Milky Way)}\label{sec:allsky}
+\subsection{HEALPix all-sky interior observer (Milky Way)}\label{sec:allsky}
 \begin{longtable}{P D X}
 \toprule
 \textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
 \midrule \endhead
 allsky             & .false. & Observer inside the medium; bin every event by sky direction\\
 allsky\_x/y/z      & 0       & Interior observer position (code units)\\
-allsky\_nlon, allsky\_nlat & 360, 180 & Equirectangular map size\\
+allsky\_nside      & 64      & HEALPix resolution (power of 2); $n_{\rm pix}=12\,n_{\rm side}^2$\\
 \bottomrule
 \end{longtable}
 Each scatter, dust-reemission, and direct event peels toward the interior
-observer and is binned by the sky direction it arrives from.  The
-event-to-observer optical depth is integrated only over the segment to the
-observer.  The output \file{<base>\_allsky} is an equirectangular
-$(\ell,b,\lambda)$ surface-brightness cube --- the diffuse Galactic light and
-far-infrared cirrus as seen from inside the disk (\file{examples/milkyway/}).
+observer and is binned into the \textbf{HEALPix} pixel (RING scheme,
+equal-area pixels) of the sky direction it arrives from, following LaRT's
+\code{observer\_heal} implementation.  The event-to-observer optical depth is
+integrated only over the segment to the observer, using the Cartesian or the
+octree segment ray trace as appropriate --- so the all-sky map works on
+\textbf{both the Cartesian grid and the AMR octree}.  The output
+\file{<base>\_allsky} is a HEALPix $(n_{\rm pix},\lambda)$ surface-brightness
+map --- the diffuse Galactic light and far-infrared cirrus as seen from inside
+the disk.  It carries the standard HEALPix keywords (\code{PIXTYPE},
+\code{ORDERING='RING'}, \code{NSIDE}, \code{NPIX}, \code{OMEGAPIX}) and a
+\code{PixelDir} table of pixel-center unit vectors, so it reads directly with
+\code{healpy} (\file{examples/milkyway/}).
 
 \subsection{Modified Random Walk (high optical depth)}\label{sec:mrw}
 \begin{longtable}{P D X}
@@ -538,7 +545,7 @@ keywords become group attributes).
 \_jlam     & save\_jlam & $J_\lambda(\lambda,x,y,z)$, $J_{\rm bol}$, energy-conservation keywords\\
 \_dustsed  & use\_dustemis ('lucy') & Emergent and intrinsic dust SED, a pixel-resolved $\code{DustEmis\_image}(x,y,\lambda)$, and per-cell $T_{\rm dust}$/$L_{\rm dust}$ maps\\
 \_bwdust   & 'bw01' & Equilibrium $T_{\rm dust}$ and absorbed-power maps\\
-\_allsky   & allsky & Equirectangular $(\ell,b,\lambda)$ all-sky surface-brightness cube\\
+\_allsky   & allsky & HEALPix $(n_{\rm pix},\lambda)$ all-sky surface-brightness map (RING) $+$ \code{PixelDir}\\
 \_obs\_tau & sightline\_tau & Sight-line optical-depth map\\
 \_stokes   & use\_stokes & Stokes $I,Q,U,V$ images\\
 \bottomrule
@@ -632,6 +639,8 @@ the running absorbed power per H nucleus.
       A70 --- Modified Random Walk.
 \item Seon, K.-I. 2010, PKAS, 25, 177 --- the $(a,g)$ single-run scan.
 \item Jonsson, P. 2006, MNRAS, 372, 2 --- the polychromatic optical-depth scan.
+\item G\'orski, K.~M.\ et al. 2005, ApJ, 622, 759 --- HEALPix pixelization
+      (all-sky interior observer).
 \item Amanatides, J. \& Woo, A. 1987, Eurographics~'87 --- fast voxel traversal.
 \end{itemize}
 
