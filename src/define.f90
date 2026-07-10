@@ -66,6 +66,9 @@ public
 ! maximum number of albedo/asymmetry-factor values in a single-run (a,g) scan
   integer, parameter :: MAX_SCAN = 32
 
+! maximum number of stellar source components (multi-population SED, Stage 6)
+  integer, parameter :: MAX_SRC = 16
+
 ! tinest = the smallest positive number
 ! eps    = the least positive number
 !          that added to 1 returns a number that is greater than 1
@@ -245,6 +248,23 @@ public
      !--- full stochastic solve and gives the true Teq, but drops PAH /
      !--- stochastic-heating features.  More accurate than the B&W mixture mean.
      logical            :: dust_single_teq  = .false.
+     !--- multiple stellar source components (Stage 6).  When par%nsource > 1,
+     !--- each component i has its own spectrum (Planck src_tstar(i) or file
+     !--- src_spectrum(i)), luminosity src_lum(i) [erg/s], geometry
+     !--- src_geometry(i) ('point'|'uniform'|'gaussian'|'exponential') and
+     !--- geometry parameters (src_x/y/z for 'point', src_zscale/src_rscale
+     !--- for disks).  Sources are sampled in proportion to src_lum; the total
+     !--- luminosity par%luminosity is set to sum(src_lum).
+     integer            :: nsource                 = 1
+     character(len=16)  :: src_geometry(MAX_SRC)   = 'point'
+     real(kind=wp)      :: src_tstar(MAX_SRC)      = -999.0_wp
+     character(len=128) :: src_spectrum(MAX_SRC)   = ''
+     real(kind=wp)      :: src_lum(MAX_SRC)        = -999.0_wp
+     real(kind=wp)      :: src_x(MAX_SRC)          = 0.0_wp
+     real(kind=wp)      :: src_y(MAX_SRC)          = 0.0_wp
+     real(kind=wp)      :: src_z(MAX_SRC)          = 0.0_wp
+     real(kind=wp)      :: src_zscale(MAX_SRC)     = -999.0_wp
+     real(kind=wp)      :: src_rscale(MAX_SRC)     = -999.0_wp
      logical       :: use_ag_list   = .false.
      real(kind=wp) :: albedo_list(MAX_SCAN) = nan64
      real(kind=wp) :: hgg_list(MAX_SCAN)    = nan64

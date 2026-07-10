@@ -6,10 +6,11 @@ contains
   use random
   use peelingoff_mod
   use external_radiation
-  use scan_mod,   only : scan_reset_photon
-  use clump_mod,  only : active_set_at_point
-  use octree_mod, only : amr_find_leaf
-  use sed_mod,    only : sample_sed_lambda, sed_wave, sed_sext, sed_albedo, sed_hgg
+  use scan_mod,    only : scan_reset_photon
+  use clump_mod,   only : active_set_at_point
+  use octree_mod,  only : amr_find_leaf
+  use sed_mod,     only : sample_sed_lambda, sed_wave, sed_sext, sed_albedo, sed_hgg
+  use sources_mod, only : use_sources, gen_source_photon
   implicit none
 
   type(grid_type),   intent(inout) :: grid
@@ -17,6 +18,14 @@ contains
 
   ! local variables
   real(kind=wp) :: sint,cost,phi,sinp,cosp,rp
+
+  !--- multi-source (Stage 6): pick a luminosity-weighted component and set
+  !--- position/direction/wavelength from it, then run the common tail
+  !--- (clump/amr birth cell, scan reset, direct peel-off).
+  if (use_sources) then
+     call gen_source_photon(grid, photon)
+     goto 900
+  endif
 
   !=== set up photon's position vector.
   select case(trim(par%source_geometry))
@@ -122,6 +131,7 @@ contains
      photon%Lpacket = par%luminosity/dble(par%nphotons)
   endif
 
+900 continue
   !--- clump medium: determine the birth clump (0 = vacuum) so the forced
   !--- first scattering and the direct peel-off see the correct starting cell.
   if (trim(par%grid_type) == 'clump') then

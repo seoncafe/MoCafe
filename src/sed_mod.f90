@@ -92,8 +92,12 @@ contains
   par%hgg       = interp_clamped(log(tb_lam), tb_cos, log(par%lambda_ref))
   par%lambda0   = par%lambda_ref
 
-  !--- source spectrum: 2-column file (lambda[um], L_lambda[arb]) or Planck(tstar).
-  if (len_trim(par%source_spectrum) > 0) then
+  !--- source spectrum.  With multiple source components (par%nsource > 1) the
+  !--- per-source spectra are set up in sources_mod, so the global single-source
+  !--- spectrum is optional here: build a flat placeholder and skip the checks.
+  if (par%nsource > 1 .and. len_trim(par%source_spectrum) == 0 .and. par%tstar <= 0.0_wp) then
+     sed_lum(:) = sed_dwave(:)
+  else if (len_trim(par%source_spectrum) > 0) then
      if (mpar%p_rank == 0) call read_spectrum_file(trim(par%source_spectrum), sp_lam, sp_lum, nsp)
      call MPI_BCAST(nsp, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
      if (mpar%p_rank /= 0) allocate(sp_lam(nsp), sp_lum(nsp))

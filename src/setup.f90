@@ -7,7 +7,8 @@ contains
   use iofile_mod, only : io_file_extension
   use scan_mod,   only : scan_setup, scan_na, scan_ng, scan_alist, scan_glist, scan_g0, &
                          scan_nt, scan_tlist, scan_s, scan_taumax_ref
-  use sed_mod,    only : setup_sed
+  use sed_mod,     only : setup_sed
+  use sources_mod, only : setup_sources
   use mpi
   implicit none
 
@@ -151,6 +152,8 @@ contains
         call MPI_FINALIZE(ierr);  stop
      endif
      call setup_sed()
+     !--- Stage 6: multiple stellar source components (activated when nsource>1).
+     if (par%nsource > 1) call setup_sources()
   endif
 
   !--- Stage 2: per-cell J_lambda tally restrictions.
