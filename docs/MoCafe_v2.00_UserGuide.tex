@@ -217,7 +217,9 @@ clump\_tau0 / \_ndust / \_nH & -1 & Per-clump opacity specification\\
 \bottomrule
 \end{longtable}
 The clumpy and AMR media are documented in \file{docs/MoCafe\_clump.pdf} and
-\file{docs/MoCafe\_amr.pdf}; the dust-emission modes run on the Cartesian grid.
+\file{docs/MoCafe\_amr.pdf}.  The full dust-emission suite runs on both the
+Cartesian grid and the AMR octree (\S\ref{sec:amremission}); the clumpy medium
+is scattering-only.
 
 \subsection{Distance unit}
 \begin{longtable}{P D X}
@@ -357,8 +359,9 @@ where $L_{\rm pk}$ is the packet luminosity [erg/s] and $d_{\rm cm}$ the
 distance-unit conversion.  The forced first-flight is tallied analytically
 (a zero-variance direct term).  A built-in energy check reports the absorbed
 luminosity from the tally against an independent event counter.  Memory is
-$\approx n_\lambda\times n_{\rm cell}\times 8$~bytes per MPI rank; the plain
-Cartesian grid only.
+$\approx n_\lambda\times n_{\rm cell}\times 8$~bytes per MPI rank
+($n_{\rm cell}=n_x n_y n_z$ on the Cartesian grid, or the number of leaves on
+the AMR octree; see \S\ref{sec:amremission}).
 
 \subsection{Mode 1: Lucy (1999) with \textsc{SEDust}}\label{sec:lucy}
 \begin{longtable}{P D X}
@@ -475,6 +478,24 @@ do not diffuse indefinitely.  MRW is exact in absorbing dust (where it triggers
 rarely); its speed-up is large only when individual cells are very thick
 ($\tau_{\rm cell}\gg 1$) and nearly pure-scattering.
 
+\subsection{Dust emission on the AMR octree}\label{sec:amremission}
+The entire dust-emission suite --- SED transport, the $J_\lambda$ tally, Mode~1
+(Lucy, including the single-$T_{\rm eq}$ and table options), Mode~2 (Bjorkman
+\& Wood), and the Modified Random Walk --- runs on the AMR octree
+(\pp{grid\_type}${}={}$\code{'amr'}) exactly as on the Cartesian grid.  A
+``cell'' is simply an octree leaf: the radiation field, absorbed power, and
+dust temperature are tallied per leaf (per-leaf code-volume and opacity), and
+MRW uses the nearest leaf-face distance for its trigger.  Set up the octree as
+usual (\pp{grid\_type}${}={}$\code{'amr'}, \pp{amr\_file}, and \pp{dust\_model}
+for the leaf opacity) and add the emission parameters above.  The derived files
+carry
+per-leaf arrays instead of Cartesian cubes: \file{<base>\_jlam},
+\file{<base>\_dustsed}, and \file{<base>\_bwdust} each add a \code{LeafXYZ}
+table of leaf-center coordinates so the per-leaf quantities can be placed in
+space.  Example: \file{examples/amr\_sphere/amr\_dustemis.in} (a uniform
+level-5 octree sphere) reproduces the energy budget and SED of the equivalent
+Cartesian sphere.
+
 \subsection{A minimal emission run}
 \begin{lstlisting}[style=nml]
 &parameters
@@ -522,8 +543,11 @@ keywords become group attributes).
 \_stokes   & use\_stokes & Stokes $I,Q,U,V$ images\\
 \bottomrule
 \end{longtable}
-Read and convert the outputs with \file{python/mocafe\_io.py}
-(\code{info}, \code{peek}, \code{convert}).
+On the AMR octree the \code{\_jlam}, \code{\_dustsed}, and \code{\_bwdust}
+images are per-leaf arrays (indexed by leaf) rather than Cartesian cubes, and
+each adds a \code{LeafXYZ} table of leaf-center coordinates.  Read and convert
+the outputs with \file{python/mocafe\_io.py} (\code{info}, \code{peek},
+\code{convert}).
 
 %=============================================================================
 \section{Worked Examples}
@@ -536,6 +560,7 @@ examples/point\_source, uniform\_source, external\_* & Cartesian grids and sourc
 examples/agtau\_list & $(a,g)$ and $\tau$ single-run scans\\
 examples/clump\_sphere, amr\_sphere, amr\_tng, amr\_ramses & Clumpy and AMR media\\
 examples/dustemis & Dust emission: Lucy$+$\textsc{SEDust}, iteration, single-$T_{\rm eq}$, table, B\&W, MRW\\
+examples/amr\_sphere & Dust emission on the AMR octree (\file{amr\_dustemis.in}; matches the Cartesian sphere)\\
 examples/multipop & Two stellar populations (hot young $+$ cool old)\\
 examples/galaxy   & External galaxy SED (disk $+$ bulge, edge-on / face-on)\\
 examples/milkyway & All-sky map from an interior observer\\
@@ -561,6 +586,10 @@ examples/benchmarks & Camps~(2015) SHG dust-emission benchmark and Mode~1/2 $\ta
       (single-$T_{\rm eq}$ Lucy and Bjorkman \& Wood) agree on both the
       absorbed fraction (to $<0.3\%$ up to $\tau_V=5$) and the dust
       temperatures.
+\item \textbf{AMR vs.\ Cartesian.}  Dust emission on a uniform level-5 octree
+      sphere reproduces the reprocessed fraction ($0.863$ at $\tau_V=5$) and
+      energy balance of the equivalent Cartesian sphere; Bjorkman \& Wood and
+      MRW on the octree conserve energy identically.
 \end{itemize}
 External three-dimensional transport benchmarks (DUSTY, Pascucci, the TRUST
 slab, and a direct Hyperion cross-check) require their published reference

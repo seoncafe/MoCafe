@@ -432,6 +432,12 @@ read from a generic AMR file produced by the converters or the builder.  Dust
 only.  Algorithm memo: `docs/MoCafe_amr.pdf`; examples in `examples/amr_sphere/`,
 `examples/amr_tng/`, `examples/amr_ramses/`.
 
+The **dust-emission suite** (SED mode, `J_λ` tally, Lucy+SEDust, single-Teq,
+table, B&W, MRW) runs on the AMR octree exactly as on the Cartesian grid — a
+"cell" is an octree leaf.  Just add the emission parameters to an AMR input;
+the `_jlam`/`_dustsed`/`_bwdust` outputs become per-leaf arrays plus a
+`LeafXYZ` table of leaf centers.  See `examples/amr_sphere/amr_dustemis.in`.
+
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `amr_type` | `'generic'` | Only `'generic'`; `'ramses'` is rejected (convert first) |
