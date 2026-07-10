@@ -1,0 +1,29 @@
+&parameters
+ !--- monochromatic cross-check of SED bin 8 (lam = 0.3137 um):
+ !--- same sphere with tau = s_ext * 1 and the bin's (albedo, g).
+ par%no_photons      = 2.0e6
+ par%albedo          = 0.53425
+ par%hgg             = 0.71728
+ par%taumax          = 1.87894
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+
+ par%distance_unit   = ''
+ par%rmax = 1.0
+ par%nx   = 64
+ par%ny   = 64
+ par%nz   = 64
+
+ par%nxim = 65
+ par%nyim = 65
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .false.
+ par%iseed    = 5678
+ par%no_print = 2.0e6
+ par%file_format = 'hdf5'
+ par%out_file = 'mono_check.h5'
+/

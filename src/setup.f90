@@ -7,6 +7,7 @@ contains
   use iofile_mod, only : io_file_extension
   use scan_mod,   only : scan_setup, scan_na, scan_ng, scan_alist, scan_glist, scan_g0, &
                          scan_nt, scan_tlist, scan_s, scan_taumax_ref
+  use sed_mod,    only : setup_sed
   use mpi
   implicit none
 
@@ -130,6 +131,39 @@ contains
   if (len_trim(par%scatt_mat_file) == 0) par%use_stokes = .false.
   if (par%use_stokes) then
      call setup_scattering_matrix(par%scatt_mat_file)
+  endif
+
+  !--- SED (multi-wavelength) mode: Stage 1 restrictions and setup.
+  if (par%use_sed) then
+     if (par%use_stokes) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%use_sed is incompatible with par%use_stokes (Henyey-Greenstein path only, Stage 1).'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     if (par%use_ag_list .or. par%use_tau_list) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%use_sed is incompatible with the (a,g)/tau scans (use_ag_list / use_tau_list).'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     if (trim(par%source_geometry(1:8)) == 'external') then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%use_sed does not yet support external illumination (Stage 1: internal sources only).'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     call setup_sed()
+  endif
+
+  !--- Stage 2: per-cell J_lambda tally restrictions.
+  if (par%save_jlam) then
+     if (.not. par%use_sed) then
+        if (mpar%p_rank == 0) write(*,'(a)') 'ERROR: par%save_jlam requires par%use_sed = .true.'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     if (trim(par%grid_type) /= 'car' .or. par%xy_periodic) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%save_jlam supports only the plain Cartesian grid (no clump/amr/xy_periodic yet).'
+        call MPI_FINALIZE(ierr);  stop
+     endif
   endif
 
   !--- Scan modes: (a,g) -- Seon 2010, PKAS, 25, 177; tau (polychromatic) -- Jonsson
@@ -359,7 +393,15 @@ contains
   endif
 
   !--- procedure pointer for scattering routine
-  if (par%use_tau_list) then
+  if (par%use_sed) then
+     !--- SED (multi-wavelength) mode: H-G no-Stokes path with per-photon
+     !--- wavelength-dependent albedo/g and s_ext-rescaled optical depths.
+     !--- External illumination is rejected in read_input (Stage 1), so the
+     !--- direct peel can be bound unconditionally here.
+     scattering               => scatter_dust_nostokes_sed
+     peeling_scattered_photon => peeling_scattered_photon_nostokes_sed
+     peeling_direct_photon    => peeling_direct_photon_nostokes_sed
+  else if (par%use_tau_list) then
      !--- polychromatic (tau) scan, optionally combined with (a,g).  H-G no-Stokes
      !--- path only; the (a,g) axes collapse to length 1 when use_ag_list = .false.
      scattering               => scatter_dust_nostokes_scan

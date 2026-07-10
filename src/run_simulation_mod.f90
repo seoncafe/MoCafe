@@ -3,7 +3,8 @@ module run_simulation_mod
   use grid_mod
   use photon_mod
   use random
-  use scan_mod, only : scan_tau_step
+  use scan_mod,   only : scan_tau_step
+  use jtally_mod, only : jt_on, jt_first
   use mpi
 contains
   subroutine run_master_slave(grid)
@@ -72,10 +73,17 @@ contains
            call gen_photon(grid,photon)
 
            do while(photon%inside)
-              !--- Find scattering location of tau
+              !--- Find scattering location of tau.  All optical depths in this
+              !--- loop are at the photon wavelength: raytrace returns/consumes
+              !--- reference-wavelength values, converted via photon%s_ext
+              !--- (s_ext = 1 in monochromatic mode; *1 and /1 are exact).
               if (photon%nscatt == 0) then
-                 !--- Force photon to scatter at optical depth tau before edge of grid
+                 !--- Force photon to scatter at optical depth tau before edge of grid.
+                 !--- (jt_first: tally the first flight analytically along this ray.)
+                 jt_first   = jt_on
                  call raytrace_to_edge(photon,grid,tau0)
+                 jt_first   = .false.
+                 tau0       = tau0 * photon%s_ext
                  wgt1       = 1.0_wp - exp(-tau0)
                  photon%wgt = photon%wgt * wgt1
                  !--- tau0 = 0 & wgt1 = 0 occurs when photons are generated at
@@ -89,7 +97,7 @@ contains
               else
                  tau = -log(rand_number())
               endif
-              call raytrace_to_tau(photon,grid,tau)
+              call raytrace_to_tau(photon,grid,tau/photon%s_ext)
 
               if (photon%inside) then
                  !--- hand the free-path optical depth of this segment to the
@@ -130,10 +138,15 @@ contains
      call gen_photon(grid,photon)
 
      do while(photon%inside)
-        !--- Find scattering location of tau
+        !--- Find scattering location of tau (photon-wavelength units; see
+        !--- run_master_slave for the s_ext convention).
         if (photon%nscatt == 0) then
-           !--- Force photon to scatter at optical depth tau before edge of grid
+           !--- Force photon to scatter at optical depth tau before edge of grid.
+           !--- (jt_first: tally the first flight analytically along this ray.)
+           jt_first   = jt_on
            call raytrace_to_edge(photon,grid,tau0)
+           jt_first   = .false.
+           tau0       = tau0 * photon%s_ext
            wgt1       = 1.0_wp - exp(-tau0)
            photon%wgt = photon%wgt * wgt1
            !--- tau0 = 0 protection (see run_master_slave for rationale).
@@ -145,7 +158,7 @@ contains
         else
            tau = -log(rand_number())
         endif
-        call raytrace_to_tau(photon,grid,tau)
+        call raytrace_to_tau(photon,grid,tau/photon%s_ext)
 
         if (photon%inside) then
            !--- hand the free-path optical depth of this segment to the

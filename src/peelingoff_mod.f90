@@ -101,6 +101,97 @@ subroutine peeling_scattered_photon_nostokes(photon,grid)
   enddo
 end subroutine peeling_scattered_photon_nostokes
 !--------------------------------------------------
+subroutine peeling_direct_photon_nostokes_sed(photon,grid)
+  implicit none
+  !--- SED (multi-wavelength) variant of peeling_direct_photon_nostokes.
+  !--- The optical depth to the observer is integrated at the reference
+  !--- wavelength and rescaled by photon%s_ext; the contribution goes to the
+  !--- photon's wavelength-bin plane of the 3-D image direc_sed(x,y,lambda).
+  type(photon_type), intent(in) :: photon
+  type(grid_type),   intent(in) :: grid
+  ! local variables
+  type(photon_type) :: pobs
+  real(kind=wp) :: r2,r,vdet(3),wgt,wgt0,tau
+  integer :: ix,iy
+  integer :: i, k
+
+  do k=1, par%nobs
+     pobs = photon
+     pobs%kx = (observer(k)%x-photon%x)
+     pobs%ky = (observer(k)%y-photon%y)
+     pobs%kz = (observer(k)%z-photon%z)
+     r2      = pobs%kx*pobs%kx + pobs%ky*pobs%ky + pobs%kz*pobs%kz
+     r       = sqrt(r2)
+     pobs%kx = pobs%kx/r
+     pobs%ky = pobs%ky/r
+     pobs%kz = pobs%kz/r
+
+     do i=1,3
+        vdet(i) = observer(k)%rmatrix(i,1) * pobs%kx + &
+                  observer(k)%rmatrix(i,2) * pobs%ky + &
+                  observer(k)%rmatrix(i,3) * pobs%kz
+     enddo
+
+     ix = floor(atan2(-vdet(1),vdet(3))*rad2deg/observer(k)%dxim+observer(k)%nxim/2.0_wp) + 1
+     iy = floor(atan2(-vdet(2),vdet(3))*rad2deg/observer(k)%dyim+observer(k)%nyim/2.0_wp) + 1
+
+     if (ix >= 1 .and. ix <= observer(k)%nxim .and. iy >= 1 .and. iy <= observer(k)%nyim) then
+        call raytrace_to_edge(pobs,grid,tau)
+        wgt0 = 1.0_wp/(fourpi*r2) * photon%wgt
+        wgt  = exp(-photon%s_ext*tau) * wgt0
+        observer(k)%direc_sed(ix,iy,photon%il) = observer(k)%direc_sed(ix,iy,photon%il) + wgt
+        if (par%save_direc0) then
+           observer(k)%direc0_sed(ix,iy,photon%il) = observer(k)%direc0_sed(ix,iy,photon%il) + wgt0
+        endif
+     endif
+  enddo
+end subroutine peeling_direct_photon_nostokes_sed
+!--------------------------------------------------
+subroutine peeling_scattered_photon_nostokes_sed(photon,grid)
+  implicit none
+  !--- SED (multi-wavelength) variant of peeling_scattered_photon_nostokes.
+  !--- HG phase function with the photon's wavelength-dependent g; observer
+  !--- optical depth rescaled by photon%s_ext; contribution accumulated in
+  !--- the wavelength-bin plane of the 3-D image scatt_sed(x,y,lambda).
+  type(photon_type), intent(in) :: photon
+  type(grid_type),   intent(in) :: grid
+  ! local variables
+  type (photon_type) :: pobs
+  real(kind=wp) :: r2,r,vdet(3)
+  real(kind=wp) :: cosa,wgt,peel,tau
+  integer       :: ix,iy,i,k
+
+  do k=1, par%nobs
+     pobs    = photon
+     pobs%kx = (observer(k)%x-photon%x)
+     pobs%ky = (observer(k)%y-photon%y)
+     pobs%kz = (observer(k)%z-photon%z)
+     r2      = pobs%kx*pobs%kx + pobs%ky*pobs%ky + pobs%kz*pobs%kz
+     r       = sqrt(r2)
+     pobs%kx = pobs%kx/r
+     pobs%ky = pobs%ky/r
+     pobs%kz = pobs%kz/r
+
+     do i=1,3
+        vdet(i) = observer(k)%rmatrix(i,1) * pobs%kx + &
+                  observer(k)%rmatrix(i,2) * pobs%ky + &
+                  observer(k)%rmatrix(i,3) * pobs%kz
+     enddo
+
+     !--- Bin the photon into TAN image
+     ix = floor(atan2(-vdet(1),vdet(3))*rad2deg/observer(k)%dxim+observer(k)%nxim/2.0_wp) + 1
+     iy = floor(atan2(-vdet(2),vdet(3))*rad2deg/observer(k)%dyim+observer(k)%nyim/2.0_wp) + 1
+
+     if (ix >= 1 .and. ix <= observer(k)%nxim .and. iy >= 1 .and. iy <= observer(k)%nyim) then
+        call raytrace_to_edge(pobs,grid,tau)
+        cosa = photon%kx*pobs%kx+photon%ky*pobs%ky+photon%kz*pobs%kz
+        peel = hg_kernel(cosa, photon%hgg)/fourpi
+        wgt  = peel/r2 * exp(-photon%s_ext*tau) * photon%wgt
+        observer(k)%scatt_sed(ix,iy,photon%il) = observer(k)%scatt_sed(ix,iy,photon%il) + wgt
+     endif
+  enddo
+end subroutine peeling_scattered_photon_nostokes_sed
+!--------------------------------------------------
 subroutine peeling_scattered_photon_nostokes_scan(photon,grid)
   implicit none
   !--- (albedo, asymmetry-factor) scan peel-off.  Mirrors

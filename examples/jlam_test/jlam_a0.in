@@ -1,0 +1,36 @@
+&parameters
+ !--- J_lambda tally validation: grey albedo=0 dust, point source in a
+ !--- uniform sphere with tau(center->edge) = 1.  Analytic:
+ !--- J = L exp(-tau r) / (16 pi^2 r^2) per unit wavelength x f_bin.
+ par%no_photons      = 1.0e5
+ par%use_sed         = .true.
+ par%save_jlam       = .true.
+ par%nlambda         = 4
+ par%lambda_min      = 0.1
+ par%lambda_max      = 10.0
+ par%lambda_ref      = 0.55
+ par%kext_file       = 'kext_grey_a0.dat'
+ par%tstar           = 1.0e4
+ par%taumax          = 1.0
+ par%source_geometry = 'point'
+ par%save_direc0     = .true.
+
+ par%distance_unit   = ''
+ par%rmax = 1.0
+ par%nx   = 65
+ par%ny   = 65
+ par%nz   = 65
+
+ par%nxim = 65
+ par%nyim = 65
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .false.
+ par%iseed    = 1234
+ par%no_print = 1.0e5
+ par%file_format = 'hdf5'
+ par%out_file = 'jlam_a0.h5'
+/

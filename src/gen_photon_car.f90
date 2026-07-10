@@ -9,6 +9,7 @@ contains
   use scan_mod,   only : scan_reset_photon
   use clump_mod,  only : active_set_at_point
   use octree_mod, only : amr_find_leaf
+  use sed_mod,    only : sample_sed_lambda, sed_wave, sed_sext, sed_albedo, sed_hgg
   implicit none
 
   type(grid_type),   intent(inout) :: grid
@@ -106,6 +107,16 @@ contains
   photon%inside = .true.
   photon%albedo = par%albedo
   photon%hgg    = par%hgg
+
+  !--- SED mode: sample the wavelength bin from the source spectrum and set
+  !--- the wavelength-dependent dust properties for this photon.
+  if (par%use_sed) then
+     photon%il     = sample_sed_lambda()
+     photon%lambda = sed_wave(photon%il)
+     photon%s_ext  = sed_sext(photon%il)
+     photon%albedo = sed_albedo(photon%il)
+     photon%hgg    = sed_hgg(photon%il)
+  endif
 
   !--- clump medium: determine the birth clump (0 = vacuum) so the forced
   !--- first scattering and the direct peel-off see the correct starting cell.

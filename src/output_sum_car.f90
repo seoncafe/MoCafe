@@ -20,12 +20,19 @@ contains
      else if (par%use_ag_list) then
         call reduce_mem(observer(k)%scatt_ag)
         call reduce_mem(observer(k)%direc)
+     else if (par%use_sed) then
+        call reduce_mem(observer(k)%scatt_sed)
+        call reduce_mem(observer(k)%direc_sed)
      else
         call reduce_mem(observer(k)%scatt)
         call reduce_mem(observer(k)%direc)
      endif
      if (par%save_direc0) then
-        call reduce_mem(observer(k)%direc0)
+        if (par%use_sed) then
+           call reduce_mem(observer(k)%direc0_sed)
+        else
+           call reduce_mem(observer(k)%direc0)
+        endif
      endif
      if (par%use_stokes) then
         call reduce_mem(observer(k)%I)
@@ -74,12 +81,19 @@ contains
      else if (par%use_ag_list) then
         observer(k)%scatt_ag = observer(k)%scatt_ag / scale_factor
         observer(k)%direc    = observer(k)%direc / scale_factor
+     else if (par%use_sed) then
+        observer(k)%scatt_sed = observer(k)%scatt_sed / scale_factor
+        observer(k)%direc_sed = observer(k)%direc_sed / scale_factor
      else
         observer(k)%scatt = observer(k)%scatt / scale_factor
         observer(k)%direc = observer(k)%direc / scale_factor
      endif
      if (par%save_direc0) then
-        observer(k)%direc0 = observer(k)%direc0 / scale_factor
+        if (par%use_sed) then
+           observer(k)%direc0_sed = observer(k)%direc0_sed / scale_factor
+        else
+           observer(k)%direc0 = observer(k)%direc0 / scale_factor
+        endif
      endif
 
      if (par%use_stokes) then

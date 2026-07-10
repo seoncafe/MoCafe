@@ -1,4 +1,5 @@
 module raytrace
+  use jtally_mod, only : jt_on, jt_first, jt_sum
 contains
 
   subroutine raytrace_to_edge_car(photon0,grid,tau)
@@ -31,6 +32,8 @@ contains
   real(kind=wp) :: tx,ty,tz,delx,dely,delz
   real(kind=wp) :: rhokap
   integer       :: idx_min
+  !--- analytic first-flight J tally (jt_first): running exp(-s*tau) at cell entry.
+  real(kind=wp) :: jt_expo
 
 !--- (xp,yp,zp) and (icell,jcell,kcell) = the photon coordinates and cell indices
   xp = photon0%x
@@ -47,6 +50,7 @@ contains
 !--- d   = cumulative path length
   tau        = 0.0_wp
   d          = 0.0_wp
+  jt_expo    = 1.0_wp
 
   if (kx > 0.0_wp) then
      ! icell = nx+1 & xface(nx+1) = xp & kx > 0.0
@@ -127,18 +131,21 @@ contains
      idx_min = minloc([tx,ty,tz], dim=1)
 
      if (idx_min == 1) then
+        if (jt_first) call jt_edge_cell(photon0, icell, jcell, kcell, tx - d, rhokap, jt_expo)
         tau   = tau + (tx - d) * rhokap
         d     = tx
         icell = icell + istep
         if (icell < 1 .or. icell > grid%nx) exit
         tx    = tx + delx
      else if (idx_min == 2) then
+        if (jt_first) call jt_edge_cell(photon0, icell, jcell, kcell, ty - d, rhokap, jt_expo)
         tau   = tau + (ty - d) * rhokap
         d     = ty
         jcell = jcell + jstep
         if (jcell < 1 .or. jcell > grid%ny) exit
         ty = ty + dely
      else
+        if (jt_first) call jt_edge_cell(photon0, icell, jcell, kcell, tz - d, rhokap, jt_expo)
         tau   = tau + (tz - d) * rhokap
         d     = tz
         kcell = kcell + kstep
@@ -150,6 +157,29 @@ contains
   enddo
   return
   end subroutine raytrace_to_edge_car
+
+  !--- analytic per-cell J tally of the (forced) first flight: contribution
+  !--- wgt * Int exp(-tau_lambda) dl over the cell (exact expectation of the
+  !--- unscattered pathlength; see jtally_mod).  Updates the running
+  !--- cell-entry attenuation expo = exp(-s_ext*tau).
+  subroutine jt_edge_cell(photon0, i, j, k, seg, rhokap, expo)
+  use define
+  implicit none
+  type(photon_type), intent(in)    :: photon0
+  integer,           intent(in)    :: i, j, k
+  real(kind=wp),     intent(in)    :: seg, rhokap
+  real(kind=wp),     intent(inout) :: expo
+  real(kind=wp) :: alpha, expo_out
+
+  alpha = rhokap * photon0%s_ext
+  if (alpha*seg > 0.0_wp) then
+     expo_out = expo * exp(-alpha*seg)
+     jt_sum(photon0%il,i,j,k) = jt_sum(photon0%il,i,j,k) + photon0%wgt*(expo - expo_out)/alpha
+     expo = expo_out
+  else
+     jt_sum(photon0%il,i,j,k) = jt_sum(photon0%il,i,j,k) + photon0%wgt*expo*seg
+  endif
+  end subroutine jt_edge_cell
 
   subroutine raytrace_to_tau_car(photon,grid,tau_in)
 !--- Find the coordinates and cell indices corresponding to an input optical depth tau_in.
@@ -177,6 +207,12 @@ contains
   real(kind=wp) :: rhokap
   real(kind=wp) :: dold
   integer       :: idx_min
+  !--- pathlength J tally (Lucy estimator) for unforced flights only; the
+  !--- forced first flight (nscatt = 0) is tallied analytically in
+  !--- raytrace_to_edge_car (see jtally_mod).
+  logical       :: do_tally
+
+  do_tally = jt_on .and. photon%nscatt > 0
 
 !--- xp, yp, zp = the current photon coordinates.
   xp = photon%x
@@ -297,11 +333,15 @@ contains
               d_overshoot = (tau - tau_in)/rhokap
               d  = d - d_overshoot
            endif
+           if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
+                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
+        if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
+                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
         icell = icell + istep
         if (icell < 1 .or. icell > grid%nx) then
            photon%inside = .false.
@@ -316,11 +356,15 @@ contains
               d_overshoot = (tau - tau_in)/rhokap
               d  = d - d_overshoot
            endif
+           if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
+                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
+        if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
+                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
         jcell = jcell + jstep
         if (jcell < 1 .or. jcell > grid%ny) then
            photon%inside = .false.
@@ -335,11 +379,15 @@ contains
               d_overshoot = (tau - tau_in)/rhokap
               d  = d - d_overshoot
            endif
+           if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
+                         jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
+        if (do_tally) jt_sum(photon%il,icell,jcell,kcell) = &
+                      jt_sum(photon%il,icell,jcell,kcell) + photon%wgt*(d - dold)
         kcell = kcell + kstep
         if (kcell < 1 .or. kcell > grid%nz) then
            photon%inside = .false.

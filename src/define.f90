@@ -93,6 +93,12 @@ public
      real(kind=wp) :: wgt
      logical       :: inside
      real(kind=wp) :: albedo, hgg
+     !--- SED (multi-wavelength) mode: wavelength bin index, wavelength [um],
+     !--- and the grey-rescaling factor s_ext = C_ext(lambda)/C_ext(lambda_ref).
+     !--- s_ext = 1 in monochromatic mode (keeps the mono path bit-identical).
+     integer       :: il     = 0
+     real(kind=wp) :: lambda = 0.0_wp
+     real(kind=wp) :: s_ext  = 1.0_wp
      ! Stokes parameters
      real(kind=wp) :: I,Q,U,V
   end type photon_type
@@ -175,6 +181,27 @@ public
      !--- When use_ag_list = .true., par%hgg is the simulated g0; the scattered image
      !--- becomes a 4-D array scatt(x,y,albedo_list,hgg_list).  Empty (NaN) lists are
      !--- auto-filled with the canonical paper grids (a=0.1..1.0, g=0.0..0.9).
+     !--- SED (multi-wavelength) mode (MoCafe v2.00, Stage 1).  When
+     !--- use_sed = .true., a single run transports photons over a log-spaced
+     !--- wavelength grid [lambda_min, lambda_max] (um) with nlambda bins.
+     !--- Dust properties C_ext/albedo/g vs lambda are read from kext_file
+     !--- (e.g. SEDust calc_kext_astrodust.x output: lambda, albedo, <cos>,
+     !--- C_ext/H columns; '#' comments).  The source spectrum is either a
+     !--- 2-column file source_spectrum (lambda[um], L_lambda[arb]) or a
+     !--- Planck function with temperature tstar (K).  The grid opacity and
+     !--- par%taumax/tauhomo refer to the reference wavelength lambda_ref.
+     logical            :: use_sed         = .false.
+     integer            :: nlambda         = 128
+     real(kind=wp)      :: lambda_min      = 0.0912_wp
+     real(kind=wp)      :: lambda_max      = 2000.0_wp
+     real(kind=wp)      :: lambda_ref      = 0.55_wp
+     character(len=128) :: kext_file       = ''
+     character(len=128) :: source_spectrum = ''
+     real(kind=wp)      :: tstar           = -999.0_wp
+     !--- Stage 2: per-cell mean-intensity tally J_lambda(x,y,z) (Lucy 1999
+     !--- pathlength estimator); writes '<base>_jlam.<ext>'.  Requires
+     !--- use_sed and the plain Cartesian grid.
+     logical            :: save_jlam       = .false.
      logical       :: use_ag_list   = .false.
      real(kind=wp) :: albedo_list(MAX_SCAN) = nan64
      real(kind=wp) :: hgg_list(MAX_SCAN)    = nan64
@@ -291,6 +318,10 @@ public
      real(kind=wp), pointer :: scatt_agt(:,:,:,:,:) => null()
      !--- 3-D direct image (nxim,nyim,n_tau) used when par%use_tau_list = .true.
      real(kind=wp), pointer :: direc_t(:,:,:) => null()
+     !--- 3-D wavelength-resolved images (nxim,nyim,nlambda) used when par%use_sed = .true.
+     real(kind=wp), pointer :: scatt_sed(:,:,:)  => null()
+     real(kind=wp), pointer :: direc_sed(:,:,:)  => null()
+     real(kind=wp), pointer :: direc0_sed(:,:,:) => null()
      real(kind=wp), pointer :: direc(:,:)  => null()
      real(kind=wp), pointer :: direc0(:,:) => null()
      real(kind=wp), pointer :: I(:,:)      => null()

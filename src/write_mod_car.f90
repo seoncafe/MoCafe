@@ -4,6 +4,8 @@ module write_mod
   use utility
   use scan_mod, only : scan_na, scan_ng, scan_alist, scan_glist, scan_g0, &
                        scan_nt, scan_tlist, scan_s, scan_taumax_ref
+  use sed_mod,  only : sed_nlam, sed_wave, sed_dwave, sed_lum, sed_cext, &
+                       sed_albedo, sed_hgg, sed_cext_ref
   implicit none
   !---- this should be accesible within this module.
   character(len=128) :: fname_backup
@@ -66,6 +68,9 @@ contains
      else if (par%use_ag_list) then
         min_value     = minval(obs%scatt_ag, obs%scatt_ag > 0.0)
         min_value_tmp = minval(obs%direc,    obs%direc    > 0.0)
+     else if (par%use_sed) then
+        min_value     = minval(obs%scatt_sed, obs%scatt_sed > 0.0)
+        min_value_tmp = minval(obs%direc_sed, obs%direc_sed > 0.0)
      else
         min_value     = minval(obs%scatt, obs%scatt > 0.0)
         min_value_tmp = minval(obs%direc, obs%direc > 0.0)
@@ -97,6 +102,12 @@ contains
      call io_put_keyword(file,'EXTNAME','Scattered','J(x,y,albedo,hgg)',status)
      call write_ag_axes(file)
      call write_common_header(file,obs)
+  else if (par%use_sed) then
+     !--- 3-D wavelength-resolved scattered image: (x, y, lambda)
+     call io_append_image(file,obs%scatt_sed,status,bitpix=par%out_bitpix)
+     call io_put_keyword(file,'EXTNAME','Scattered','J(x,y,lambda) (intensity)',status)
+     call write_wave_axis_keys(file, 3)
+     call write_common_header(file,obs)
   else
      call io_append_image(file,obs%scatt,status,bitpix=par%out_bitpix)
      call io_put_keyword(file,'EXTNAME','Scattered','J(x,y) (intensity)',status)
@@ -110,6 +121,12 @@ contains
      call io_put_keyword(file,'EXTNAME','Direct','J(x,y,tau) (intensity)',status)
      call write_tau_axis_keys(file, 3)
      call write_common_header(file,obs)
+  else if (par%use_sed) then
+     !--- 3-D wavelength-resolved direct image: (x, y, lambda)
+     call io_append_image(file,obs%direc_sed,status,bitpix=par%out_bitpix)
+     call io_put_keyword(file,'EXTNAME','Direct','J(x,y,lambda) (intensity)',status)
+     call write_wave_axis_keys(file, 3)
+     call write_common_header(file,obs)
   else
      call io_append_image(file,obs%direc,status,bitpix=par%out_bitpix)
      call io_put_keyword(file,'EXTNAME','Direct','J(x,y) (intensity)',status)
@@ -117,9 +134,33 @@ contains
   endif
 
   if (par%save_direc0) then
-     call io_append_image(file,obs%direc0,status,bitpix=par%out_bitpix)
-     call io_put_keyword(file,'EXTNAME','Direct0','J(x,y) (intensity)',status)
-     call write_common_header(file,obs)
+     if (par%use_sed) then
+        call io_append_image(file,obs%direc0_sed,status,bitpix=par%out_bitpix)
+        call io_put_keyword(file,'EXTNAME','Direct0','J(x,y,lambda) (intensity)',status)
+        call write_wave_axis_keys(file, 3)
+        call write_common_header(file,obs)
+     else
+        call io_append_image(file,obs%direc0,status,bitpix=par%out_bitpix)
+        call io_put_keyword(file,'EXTNAME','Direct0','J(x,y) (intensity)',status)
+        call write_common_header(file,obs)
+     endif
+  endif
+
+  !--- SED mode: write the wavelength grid and per-bin dust/source tables as
+  !--- 1-D datasets, so the analysis side does not depend on header keywords.
+  if (par%use_sed) then
+     call io_append_image(file,sed_wave,status,bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Wavelength','bin centers [um]',status)
+     call io_append_image(file,sed_dwave,status,bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Dwavelength','bin widths [um]',status)
+     call io_append_image(file,sed_cext,status,bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Cext','C_ext/H [cm^2/H] per bin',status)
+     call io_append_image(file,sed_albedo,status,bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Albedo','dust albedo per bin',status)
+     call io_append_image(file,sed_hgg,status,bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Hgg','asymmetry factor g per bin',status)
+     call io_append_image(file,sed_lum,status,bitpix=-64)
+     call io_put_keyword(file,'EXTNAME','Source_lum','source luminosity fraction per bin',status)
   endif
 
   !--- close output file
@@ -286,5 +327,28 @@ contains
      call io_put_keyword(file, key, scan_tlist(it), 'tau (target taumax) value', status)
   enddo
   end subroutine write_tau_axis_keys
+  !-----------------------------------------------------------------
+  subroutine write_wave_axis_keys(file, naxis)
+  !--- Wavelength axis metadata on FITS/HDF5 axis `naxis` (SED mode).  The
+  !--- grid is log-spaced; CRVAL/CDELT describe it in log10(lambda/um).  The
+  !--- explicit per-bin values are stored in the 1-D 'Wavelength' dataset.
+  implicit none
+  type(io_file_type), intent(inout) :: file
+  integer, intent(in) :: naxis
+  integer          :: status
+  character(len=1) :: ax
+
+  status = 0
+  write(ax,'(i1)') naxis
+  call io_put_keyword(file,'SED_NLAM', sed_nlam,       'number of wavelength bins',      status)
+  call io_put_keyword(file,'SED_LMIN', par%lambda_min, 'min wavelength [um] (bin edge)', status)
+  call io_put_keyword(file,'SED_LMAX', par%lambda_max, 'max wavelength [um] (bin edge)', status)
+  call io_put_keyword(file,'SED_LREF', par%lambda_ref, 'reference wavelength [um]',      status)
+  call io_put_keyword(file,'SED_CREF', sed_cext_ref,   'C_ext/H at lambda_ref [cm^2/H]', status)
+  call io_put_keyword(file,'CTYPE'//ax,'WAVE-LOG',     'wavelength axis (log-spaced)',   status)
+  call io_put_keyword(file,'CRPIX'//ax, 1.0_real64,    'reference pixel (wave axis)',    status)
+  call io_put_keyword(file,'CRVAL'//ax, log10(sed_wave(1)), 'log10(lambda/um) at CRPIX', status)
+  call io_put_keyword(file,'CDELT'//ax, log10(sed_wave(2)/sed_wave(1)), 'log10 step',    status)
+  end subroutine write_wave_axis_keys
   !-----------------------------------------------------------------
 end module write_mod

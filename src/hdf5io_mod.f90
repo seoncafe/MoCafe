@@ -787,7 +787,13 @@ contains
     call h5tset_size_f(tid, slen, ierr)
     dims(1) = 1
     call attr_open_or_create(int(state%cur_group, hid_t), trim(name), tid, aid, ierr)
-    call h5awrite_f(aid, tid, trim(value), dims, ierr)
+    !--- an empty value would make h5awrite_f read 1 byte past a zero-length
+    !--- string (garbage in the file); write a single space instead.
+    if (len_trim(value) == 0) then
+       call h5awrite_f(aid, tid, ' ', dims, ierr)
+    else
+       call h5awrite_f(aid, tid, trim(value), dims, ierr)
+    endif
     call h5aclose_f(aid, ierr)
     call h5tclose_f(tid, ierr)
     if (ierr /= 0) status = HDF5_ERR_BACKEND

@@ -3,6 +3,7 @@ module observer_mod
   use utility
   use memory_mod
   use scan_mod, only : scan_na, scan_ng, scan_nt
+  use sed_mod,  only : sed_nlam
   implicit none
 contains
 
@@ -246,12 +247,20 @@ contains
         !--- 4-D scattered image: (nxim, nyim, n_albedo, n_hgg)
         call create_mem(observer(i)%scatt_ag, [par%nxim,par%nyim,scan_na,scan_ng])
         call create_mem(observer(i)%direc, [par%nxim,par%nyim])
+     else if (par%use_sed) then
+        !--- 3-D wavelength-resolved images: (nxim, nyim, nlambda)
+        call create_mem(observer(i)%scatt_sed, [par%nxim,par%nyim,sed_nlam])
+        call create_mem(observer(i)%direc_sed, [par%nxim,par%nyim,sed_nlam])
      else
         call create_mem(observer(i)%scatt, [par%nxim,par%nyim])
         call create_mem(observer(i)%direc, [par%nxim,par%nyim])
      endif
      if (par%save_direc0) then
-        call create_mem(observer(i)%direc0,[par%nxim,par%nyim])
+        if (par%use_sed) then
+           call create_mem(observer(i)%direc0_sed,[par%nxim,par%nyim,sed_nlam])
+        else
+           call create_mem(observer(i)%direc0,[par%nxim,par%nyim])
+        endif
      endif
      if (par%use_stokes) then
         call create_mem(observer(i)%I, [par%nxim,par%nyim])
@@ -285,12 +294,15 @@ contains
   call destroy_shared_mem_all()
 
   do i=1, par%nobs
-     if (associated(observer(i)%scatt))     deallocate(observer(i)%scatt)
-     if (associated(observer(i)%scatt_ag))  deallocate(observer(i)%scatt_ag)
-     if (associated(observer(i)%scatt_agt)) deallocate(observer(i)%scatt_agt)
-     if (associated(observer(i)%direc))     deallocate(observer(i)%direc)
-     if (associated(observer(i)%direc_t))   deallocate(observer(i)%direc_t)
-     if (associated(observer(i)%direc0))    deallocate(observer(i)%direc0)
+     if (associated(observer(i)%scatt))      deallocate(observer(i)%scatt)
+     if (associated(observer(i)%scatt_ag))   deallocate(observer(i)%scatt_ag)
+     if (associated(observer(i)%scatt_agt))  deallocate(observer(i)%scatt_agt)
+     if (associated(observer(i)%scatt_sed))  deallocate(observer(i)%scatt_sed)
+     if (associated(observer(i)%direc))      deallocate(observer(i)%direc)
+     if (associated(observer(i)%direc_t))    deallocate(observer(i)%direc_t)
+     if (associated(observer(i)%direc_sed))  deallocate(observer(i)%direc_sed)
+     if (associated(observer(i)%direc0))     deallocate(observer(i)%direc0)
+     if (associated(observer(i)%direc0_sed)) deallocate(observer(i)%direc0_sed)
 
      if (associated(observer(i)%I)) deallocate(observer(i)%I)
      if (associated(observer(i)%Q)) deallocate(observer(i)%Q)

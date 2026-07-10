@@ -93,6 +93,8 @@ OBJS	= \
 	octree_mod.o \
 	read_generic_amr.o \
 	mathlib.o \
+	sed_mod.o \
+	jtally_mod.o \
 	raytrace_car.o \
 	raytrace_clump.o \
 	raytrace_amr.o \

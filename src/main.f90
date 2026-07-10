@@ -9,6 +9,7 @@
   use sightline_tau_mod
   use output_sum
   use peelingoff_mod
+  use jtally_mod, only : jtally_setup, jtally_reduce, jtally_write
   use utility
   use mpi
 
@@ -36,6 +37,7 @@
   end select
   call observer_create()
   if (par%sightline_tau) call make_sightline_tau(grid)
+  if (par%save_jlam)     call jtally_setup(grid)
 
   !--- Run Main Calculation
   call time_stamp(dtime)
@@ -45,6 +47,10 @@
   !--- Final Output
   if (mpar%p_rank == 0) write(6,'(a)') 'Now Gathering Results...'
   call output_reduce(grid)
+  if (par%save_jlam) then
+     call jtally_reduce()
+     call jtally_write(grid)
+  endif
 
   call time_stamp(dtime)
   if (mpar%p_rank == 0) then

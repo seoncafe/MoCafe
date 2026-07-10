@@ -4,6 +4,7 @@ module scatter_mod
   use mathlib
   use peelingoff_mod
   use scan_mod
+  use jtally_mod, only : jt_on, jt_eabs
   public
 contains
 
@@ -45,6 +46,47 @@ contains
 
   return
 end subroutine scatter_dust_nostokes
+!=====================================
+subroutine scatter_dust_nostokes_sed(photon,grid)
+  implicit none
+  !--- SED (multi-wavelength) variant of scatter_dust_nostokes: uses the
+  !--- photon's wavelength-dependent albedo and asymmetry factor (set in
+  !--- gen_photon from the sed_mod tables) instead of the global par values.
+  type(photon_type), intent(inout) :: photon
+  type(grid_type),   intent(inout) :: grid
+
+  ! local variables
+  real(kind=wp) :: cost,sint,phi,cosp,sinp
+  real(kind=wp) :: kx1,ky1,kz1,kr
+
+  photon%nscatt  = photon%nscatt + 1
+  par%nscatt_tot = par%nscatt_tot + 1
+  !--- independent absorbed-energy counter (energy-conservation check of the
+  !--- J_lambda tally): energy absorbed at this event = wgt*(1-albedo).
+  if (jt_on) jt_eabs = jt_eabs + photon%wgt*(1.0_wp - photon%albedo)
+  photon%wgt     = photon%wgt * photon%albedo
+  call peeling_scattered_photon(photon,grid)
+
+  cost = rand_henyey_greenstein(photon%hgg)
+  sint = sqrt(1.0d0-cost**2)
+
+  !--- New phi
+  phi  = twopi * rand_number()
+  cosp = cos(phi)
+  sinp = sin(phi)
+
+  !--- New direction
+  kx1 = photon%kx
+  ky1 = photon%ky
+  kz1 = photon%kz
+  kr  = sqrt(kx1*kx1 + ky1*ky1)
+
+  photon%kx = cost*kx1 + sint*(kz1*kx1*cosp - ky1*sinp)/kr
+  photon%ky = cost*ky1 + sint*(kz1*ky1*cosp + kx1*sinp)/kr
+  photon%kz = cost*kz1 - sint*cosp*kr
+
+  return
+end subroutine scatter_dust_nostokes_sed
 !=====================================
 subroutine scatter_dust_nostokes_scan(photon,grid)
   implicit none
