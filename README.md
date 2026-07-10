@@ -61,6 +61,9 @@ Cartesian grid.
 
 - **[README_HOWTO.md](README_HOWTO.md)** — build, run, every input parameter,
   the scans, clumpy/AMR modes, the converters, and the Python tools.
+- **`docs/MoCafe_v2.00_UserGuide.pdf`** — the full v2.00 user guide (install,
+  run, complete input reference, dust-emission workflow, outputs, examples,
+  algorithms; LaTeX source `docs/MoCafe_v2.00_UserGuide.tex`).
 - `docs/MoCafe_Geometry.pdf` — observer geometry and image conventions.
 - `docs/output_definitions.pdf` — output image definitions.
 - `docs/MoCafe_agtau_scan.pdf`, `docs/MoCafe_clump.pdf`, `docs/MoCafe_amr.pdf`

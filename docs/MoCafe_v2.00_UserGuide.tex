@@ -1,0 +1,609 @@
+%% MoCafe v2.00 User Guide
+%% Author: Kwang-Il Seon (KASI)
+%% Typeset with the kiseon_memo class (loads amsmath/amssymb, hyperref,
+%% xcolor[table], graphicx, kotex; sets page geometry and the title style).
+\documentclass[english,a4paper]{kiseon_memo}
+\synctex=1
+
+%% Extra packages not already provided by kiseon_memo.
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{listings}
+\usepackage{microtype}
+
+\definecolor{codebg}{gray}{0.96}
+\definecolor{kw}{rgb}{0.10,0.30,0.65}
+\definecolor{cmt}{rgb}{0.35,0.45,0.35}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single, framerule=0pt,
+  breaklines=true, columns=fullflexible,
+  keepspaces=true, showstringspaces=false,
+  xleftmargin=6pt, xrightmargin=6pt,
+  aboveskip=6pt, belowskip=6pt,
+}
+\lstdefinestyle{nml}{
+  morekeywords={par,parameters},
+  keywordstyle=\color{kw}\bfseries,
+  commentstyle=\color{cmt}\itshape,
+  morecomment=[l]{!},
+}
+\lstdefinestyle{sh}{commentstyle=\color{cmt}\itshape, morecomment=[l]{\#}}
+
+\newcommand{\pp}[1]{\texttt{par\%#1}}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\file}[1]{\texttt{#1}}
+
+% compact parameter table column layout
+\newcolumntype{P}{>{\ttfamily\small\raggedright\arraybackslash}p{0.26\textwidth}}
+\newcolumntype{D}{>{\small\raggedright\arraybackslash}p{0.15\textwidth}}
+\newcolumntype{X}{>{\small\raggedright\arraybackslash}p{0.49\textwidth}}
+
+\begin{document}
+
+\title{MoCafe v2.00 --- A Monte-Carlo Dust Radiative-Transfer Code
+       with Scattering and Thermal Emission: User Guide}
+\author{Kwang-Il Seon (KASI)}
+\date{2026-07-11}
+\maketitle
+
+\begin{abstract}
+\noindent
+MoCafe is a parallel (Fortran~90 + MPI) Monte-Carlo dust radiative-transfer
+code.  Version~2.00 extends the scattering-only v1.20 into a panchromatic code
+that computes \emph{dust thermal emission}: it transports photon packets over a
+wavelength grid, tallies the radiation field in every cell, and re-emits the
+absorbed energy as thermal dust emission through either the Lucy~(1999) method
+coupled to the \textsc{SEDust} grain library (equilibrium and stochastically
+heated grains, including PAH features) or the Bjorkman \& Wood~(2001)
+immediate-reemission method.  It also adds multiple stellar populations, an
+all-sky interior observer (for the Milky-Way case), and a Modified Random Walk
+for very optically thick regions.  This guide covers installation, execution,
+the complete input reference, the dust-emission workflow, the output products,
+worked examples, and the underlying algorithms.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+%=============================================================================
+\section{Overview}
+%=============================================================================
+
+MoCafe follows photon packets emitted by one or more sources through a dusty
+medium.  Packets scatter off dust grains (Henyey--Greenstein phase function or
+a tabulated Mueller matrix) and, in v2.00, are absorbed and re-emitted as
+thermal radiation.  At every interaction a contribution is ``peeled off''
+toward each observer to build an image or spectral-energy distribution (SED).
+
+\paragraph{What is new in v2.00.}
+\begin{itemize}
+\item \textbf{Multi-wavelength (SED) transport} (\pp{use\_sed}): one run covers
+      the full UV-to-far-IR range on a log-spaced wavelength grid.
+\item \textbf{Per-cell mean intensity} $J_\lambda(x,y,z)$ (\pp{save\_jlam})
+      via the Lucy~(1999) pathlength estimator.
+\item \textbf{Dust thermal emission} (\pp{use\_dustemis}) in two modes:
+      \emph{Mode~1} (Lucy + \textsc{SEDust}) and \emph{Mode~2}
+      (Bjorkman \& Wood~2001).
+\item \textbf{Multiple stellar populations} (\pp{nsource}) with independent
+      spectra, luminosities, and spatial distributions.
+\item \textbf{All-sky interior observer} (\pp{allsky}) for the Milky-Way case.
+\item \textbf{Modified Random Walk} (\pp{use\_mrw}) plus Russian roulette for
+      very optically thick media.
+\end{itemize}
+Everything above is opt-in; a plain monochromatic scattering run behaves
+exactly as in v1.20.  The design and validation record is in
+\file{MoCafe\_v2.00\_PLAN.md}.
+
+\paragraph{Units.}  In scattering-only mode MoCafe is unit-agnostic and the
+image is in \code{(luminosity unit)\,cm$^{-2}$\,sr$^{-1}$}.  In SED / emission
+mode a physical length scale is required (through \pp{distance\_unit}: one grid
+length unit equals one distance unit) and the source luminosity
+(\pp{luminosity}) is in \code{erg\,s$^{-1}$}, so intensities and dust
+temperatures are absolute.
+
+%=============================================================================
+\section{Installation}
+%=============================================================================
+
+\subsection{Prerequisites}
+\begin{itemize}
+\item A Fortran~2008 MPI compiler: Intel oneAPI (\code{mpiifort} or
+      \code{mpiifx}) or GNU (\code{mpif90}).  MoCafe is MPI-only.
+\item \textbf{CFITSIO} (required).
+\item \textbf{HDF5} 1.14+ with Fortran bindings built by the same compiler
+      (optional; on by default).
+\item Python~3 with \code{numpy}, \code{astropy}, \code{h5py}
+      (and \code{scipy} for the Illustris converter) for the analysis tools.
+\end{itemize}
+
+\subsection{Building MoCafe}
+\begin{lstlisting}[style=sh]
+make                              # HDF5=1 (default) -> MoCafe.x
+make HDF5=0                       # CFITSIO only
+make HDF5_PREFIX=/usr/local/hdf5  # override HDF5 location
+make F90=mpif90                   # force a compiler
+make DEBUG=1                      # checked / traceback flags
+\end{lstlisting}
+The compiler is auto-selected \code{mpiifort $\to$ mpiifx $\to$ mpif90}.  The
+build always passes \code{-cpp -DMPI} and (by default) \code{-DHDF5}.  When you
+add a source file, append its object to \code{OBJS} in the \file{Makefile} in
+dependency order.
+
+\subsection{Building the \textsc{SEDust} library}
+The Lucy emission engine (Mode~1) links the vendored \textsc{SEDust} library,
+kept self-contained under \file{sedust/}.  Build it once and populate its
+optics tables:
+\begin{lstlisting}[style=sh]
+cd sedust/sed && ./build_lib.sh    # -> sedust/sed/lib/libsedust.a  (Intel)
+./populate_data.sh                 # copy the ~55 MB optics tables into sedust/
+\end{lstlisting}
+The MoCafe \file{Makefile} links \file{sedust/sed/lib/libsedust.a}
+automatically (variable \code{SEDUST\_LIBDIR}).  The \textsc{SEDust} module
+named \code{mathlib} is vendored as \code{sed\_mathlib} to avoid a clash with
+MoCafe's own \code{mathlib}.  The bulky optics data are not tracked in git;
+\file{populate\_data.sh} copies them from the canonical \textsc{SEDust} tree.
+Mode~2 (Bjorkman \& Wood) needs only the extinction table and not
+\textsc{SEDust}.
+
+%=============================================================================
+\section{Running MoCafe}
+%=============================================================================
+\begin{lstlisting}[style=sh]
+mpirun -np <N> ./MoCafe.x <input>.in
+\end{lstlisting}
+The single argument is a Fortran namelist file.  Every tunable quantity is a
+field of the global \code{par} structure and is set as
+\code{par\%<name> = <value>} inside a \code{\&parameters / \ldots /} block.
+Sample inputs and \file{run.sh} scripts live under \file{examples/}.
+The default of every parameter is the initializer of \code{params\_type} in
+\file{src/define.f90}.
+
+\paragraph{Reproducibility.}  A run is bit-identical when \pp{iseed} is a fixed
+non-zero value, \pp{use\_master\_slave} is \code{.false.} (equal-share), and
+the number of MPI ranks is fixed (\pp{iseed}${}=0$ seeds from the clock/PID).
+
+%=============================================================================
+\section{Input Parameter Reference}
+%=============================================================================
+Parameters are grouped below.  Types: \code{L} logical, \code{I} integer,
+\code{R} real, \code{S} string, \code{[\,]} array.
+
+\subsection{Simulation control}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+no\_photons        & 1e5   & Number of photon packets\\
+no\_print          & 1e7   & Progress-print interval (photons)\\
+iseed              & 0     & RNG seed (0 $\to$ seeded from clock/PID)\\
+use\_master\_slave & .true.& MPI mode: master--slave vs.\ equal-share\\
+num\_send\_at\_once& 10000 & Batch size (master--slave)\\
+luminosity         & 1.0   & Total source luminosity [erg/s] (SED/emission mode)\\
+\bottomrule
+\end{longtable}
+
+\subsection{Grid geometry (Cartesian)}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+nx, ny, nz         & 1,1,11 & Grid resolution\\
+xmax, ymax, zmax   & 1.0    & Half-sizes of the box (grid spans $[-\max,\max]$)\\
+rmax               & -999   & If $>0$ and not a cylinder, forces a cube of side $r_{\max}$ (sphere)\\
+nr                 & -999   & If $>1$, sets nx=ny=nz=nr\\
+geometry           & '\,'   & '', 'sphere', 'cylinder', or 'Plummer' (auto-set from source)\\
+xyz\_symmetry      & .false.& Exploit octant symmetry (disabled if any $n=1$)\\
+z\_symmetry        & .false.& Exploit reflection about $z=0$\\
+xy\_periodic       & .false.& Periodic in $x,y$\\
+\bottomrule
+\end{longtable}
+
+\subsection{Grid type and media}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+grid\_type         & 'car'  & 'car' (Cartesian), 'clump' (clumpy), 'amr' (octree)\\
+amr\_file          & '\,'   & Generic AMR octree file (FITS/HDF5/text) for 'amr'\\
+dust\_model        & 'global\_dgr' & AMR leaf opacity: 'global\_dgr', 'from\_file', 'laursen09'\\
+DGR, Z\_global, Z\_ref, f\_ion\_dust & --- & Dust-to-gas / metallicity parameters (AMR)\\
+clump\_radius      & -1     & Clump radius (clumpy medium)\\
+clump\_f\_cov / \_f\_vol / \_N\_clumps & -1 & Clump count specification\\
+clump\_tau0 / \_ndust / \_nH & -1 & Per-clump opacity specification\\
+\bottomrule
+\end{longtable}
+The clumpy and AMR media are documented in \file{docs/MoCafe\_clump.pdf} and
+\file{docs/MoCafe\_amr.pdf}; the dust-emission modes run on the Cartesian grid.
+
+\subsection{Distance unit}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+distance\_unit     & 'kpc'  & '', 'pc', 'au', 'kpc'; sets \code{distance2cm}. In SED mode one grid unit $=$ one distance unit (physical scale)\\
+\bottomrule
+\end{longtable}
+
+\subsection{Source geometry (single source)}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+source\_geometry   & 'point'& 'point', 'uniform', 'uniform\_xy', 'gaussian', 'exponential', 'external\_\{sph,cyl,rec\}'\\
+xs\_point, ys\_point, zs\_point & 0.0 & Point-source location\\
+source\_zscale     & NaN    & Scale height for 'gaussian'/'exponential'\\
+radiation\_angular\_PDF\_file & '\,' & Angular PDF for external illumination\\
+\bottomrule
+\end{longtable}
+Multiple sources are described in \S\ref{sec:multisource}.
+
+\subsection{Dust and scattering (grey / monochromatic)}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+albedo             & 0.3253 & Single-scattering albedo\\
+hgg                & 0.6761 & Henyey--Greenstein asymmetry $g$\\
+cext\_dust         & 1.61e-21 & Dust extinction per H nucleus [cm$^2$]\\
+scatt\_mat\_file   & '\,'   & Mueller-matrix table (\file{data/mueller\_*.dat}); enables Stokes\\
+use\_stokes        & .true. & Stokes polarization (auto-off without a matrix file)\\
+\bottomrule
+\end{longtable}
+In SED mode the wavelength-dependent albedo, $g$, and $C_{\rm ext}$ are read
+from \pp{kext\_file} and override these scalars (\S\ref{sec:sed}).
+
+\subsection{Optical depth and density}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+taumax             & -999  & Radial optical depth, center $\to$ edge (sets the density scale)\\
+tauhomo            & -999  & Optical depth of the volume-equivalent homogeneous medium\\
+density\_file      & '\,'  & 3-D density cube (FITS/HDF5)\\
+reduce\_factor     & 1     & Density-file down-sampling\\
+centering          & 0     & Density-file re-centering mode\\
+density\_zscale, density\_rscale, density\_powerlaw\_index & NaN & Analytic density modulations\\
+\bottomrule
+\end{longtable}
+In SED mode \pp{taumax}/\pp{tauhomo} are defined at the reference wavelength
+\pp{lambda\_ref}.
+
+\subsection{Peel-off observers}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+nxim, nyim         & 129   & Image pixels\\
+dxim, dyim         & NaN   & Pixel size [deg] (auto to cover the grid if unset)\\
+distance           & NaN   & Observer distance; renormalizes (obsx,obsy,obsz)\\
+inclination\_angle, position\_angle, phase\_angle & NaN & Observer angles [deg] (arrays)\\
+alpha, beta, gamma & NaN   & Euler angles [deg] (alternative)\\
+obsx, obsy, obsz   & NaN   & Explicit observer direction (alternative)\\
+\bottomrule
+\end{longtable}
+Up to \code{MAX\_OBSERVERS = 181} observers per run.  Angle conventions are in
+\file{docs/MoCafe\_Geometry.pdf}.
+
+\subsection{Output control}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+file\_format       & 'hdf5' & 'hdf5' or 'fits'; authoritative for the container\\
+out\_file          & '\,'   & Output base name (from the input name if empty)\\
+out\_bitpix        & -32    & FITS bitpix ($-32$ float32, $-64$ float64)\\
+save\_direc0       & .false.& Also write the unattenuated direct image\\
+sightline\_tau     & .false.& Also write a per-pixel sight-line optical-depth map\\
+\bottomrule
+\end{longtable}
+
+%=============================================================================
+\section{Dust Thermal Emission}\label{sec:emission}
+%=============================================================================
+The emission workflow is: \emph{SED transport} (panchromatic scattering) $\to$
+\emph{$J_\lambda$ tally} $\to$ \emph{dust emission} $\to$ observer SEDs.  Enable
+it with \pp{use\_sed}, and add \pp{save\_jlam} and \pp{use\_dustemis} for the
+emission.
+
+\subsection{Multi-wavelength (SED) mode}\label{sec:sed}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+use\_sed           & .false. & Enable panchromatic transport\\
+nlambda            & 128     & Number of log-spaced wavelength bins\\
+lambda\_min, lambda\_max & 0.0912, 2000 & Wavelength range [$\mu$m]\\
+lambda\_ref        & 0.55    & Reference wavelength [$\mu$m] for the grid opacity and $\tau$\\
+kext\_file         & '\,'    & Table $\lambda,\ \varpi,\ \langle\cos\rangle,\ C_{\rm ext}/{\rm H}$\\
+source\_spectrum   & '\,'    & Two-column source spectrum $\lambda,\ L_\lambda$\\
+tstar              & -999    & Planck source temperature [K] (if no spectrum file)\\
+\bottomrule
+\end{longtable}
+Wavelength-dependent extinction is applied as a per-photon grey rescaling
+\begin{equation}
+  s_{\rm ext}(\lambda) \;=\; \frac{C_{\rm ext}(\lambda)}{C_{\rm ext}(\lambda_{\rm ref})},
+\end{equation}
+so the grid stores only the reference-wavelength opacity and every optical
+depth is multiplied by $s_{\rm ext}$ (the same device as the Jonsson~2006
+$\tau$ scan).  All three ray tracers (Cartesian, clumpy, AMR) are therefore
+shared with the monochromatic path, and a run with $s_{\rm ext}=1$ is
+bit-identical to the mono code.
+
+Restrictions: SED mode is incompatible with Stokes polarization and with the
+$(a,g)$/$\tau$ single-run scans, and (in this version) supports internal
+sources only.
+
+\subsection{Per-cell mean intensity $J_\lambda$}\label{sec:jlam}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+save\_jlam         & .false. & Tally $J_\lambda$ and write \file{<base>\_jlam}\\
+\bottomrule
+\end{longtable}
+The mean intensity is accumulated with the Lucy~(1999) pathlength estimator:
+each path segment of length $d\ell$ contributes $w\,L_{\rm pk}\,d\ell$ to its
+(wavelength-bin, cell) slot, and
+\begin{equation}
+  J_\lambda(\mathrm{cell}) \;=\;
+  \frac{1}{4\pi\,V_{\rm cell}\,\Delta\lambda\,d_{\rm cm}^2}
+  \sum_{\rm paths} w\,L_{\rm pk}\,d\ell,
+\end{equation}
+where $L_{\rm pk}$ is the packet luminosity [erg/s] and $d_{\rm cm}$ the
+distance-unit conversion.  The forced first-flight is tallied analytically
+(a zero-variance direct term).  A built-in energy check reports the absorbed
+luminosity from the tally against an independent event counter.  Memory is
+$\approx n_\lambda\times n_{\rm cell}\times 8$~bytes per MPI rank; the plain
+Cartesian grid only.
+
+\subsection{Mode 1: Lucy (1999) with \textsc{SEDust}}\label{sec:lucy}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+use\_dustemis      & .false.   & Compute dust emission (requires \pp{use\_sed})\\
+dust\_emission\_method & 'lucy'& 'lucy' (\textsc{SEDust}) or 'bw01' (Bjorkman \& Wood)\\
+dust\_model\_sed   & 'astrodust' & \textsc{SEDust} model\\
+sed\_qtable, sed\_sizedist & (vendored) & \textsc{SEDust} optics / size-distribution paths\\
+sed\_workdir       & (vendored) & Directory \textsc{SEDust} reads its \code{../data/} tables from\\
+sed\_NT, sed\_Tlo, sed\_Thi & 200, 2.7, 5000 & Grain temperature grid\\
+dust\_niter        & 1         & Lucy iterations (dust self-absorption)\\
+dust\_no\_photons  & 1e6       & Dust-emission photons per iteration\\
+dust\_tol          & 1e-3      & Convergence on the total emitted luminosity\\
+\bottomrule
+\end{longtable}
+The \code{'lucy'} method requires \pp{save\_jlam}.  For each cell the local
+mean intensity $J_\lambda$ (converted to SI and resampled onto the
+\textsc{SEDust} wavelength grid) is passed to \textsc{SEDust}, which returns
+the emission spectrum from the full grain-size distribution --- equilibrium
+grains plus stochastically heated small grains and PAH features.  The
+\emph{shape} is taken from \textsc{SEDust} while the per-cell bolometric
+luminosity is set to the locally absorbed power,
+\begin{equation}
+  L_{\rm emit}(\mathrm{cell}) \;=\; L_{\rm abs}(\mathrm{cell})
+   \;=\; \rho\kappa\!\sum_\lambda
+   s_{\rm ext}(\lambda)\,[1-\varpi(\lambda)]\,
+   \Big(\textstyle\sum_{\rm paths} w\,L_{\rm pk}\,d\ell\Big)_{\lambda,\mathrm{cell}},
+\end{equation}
+so total energy is conserved by construction (radiative equilibrium).  With
+\pp{dust\_niter}${}>1$ the re-emitted photons are transported so that dust
+self-absorption heats other cells; the iteration converges when the total
+emitted luminosity stops changing (needed at high infrared optical depth).
+
+\paragraph{Emission-solver speed options.}  The exact stochastic solve costs
+$\sim 0.1$~s per cell; two faster paths are available:
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+dust\_single\_teq  & .false. & One mixture equilibrium $T$ per cell; fastest ($\sim$55$\times$); true $T_{\rm eq}$; \emph{no PAH/stochastic features}\\
+dust\_fast\_table  & .false. & Interpolate emission vs.\ field intensity $U$ over a fixed reference shape; $\sim$1\% SED-shape error; keeps stochastic/PAH\\
+dust\_nU           & 40      & $U$-grid size for the table path\\
+\bottomrule
+\end{longtable}
+
+\subsection{Mode 2: Bjorkman \& Wood (2001)}\label{sec:bw}
+Set \pp{dust\_emission\_method}${}={}$\code{'bw01'}.  This is an approximate,
+equilibrium, mixture mean-opacity method with \emph{no iteration}: fixed-energy
+packets random-walk through scatter and absorb$+$immediate-reemit events until
+they escape.  Each absorption raises the local temperature (from the running
+absorbed power) and the packet wavelength is resampled from the
+temperature-correction spectrum $\propto \kappa_{\rm abs}\,\partial
+B_\lambda/\partial T$, so the time-averaged emission equals
+$\kappa_{\rm abs}B_\lambda(T)$ without iterating.  Mode~2 needs only
+\pp{kext\_file} (not \textsc{SEDust}) and does not reproduce PAH or
+stochastic-heating features.  It writes \file{<base>\_bwdust} (equilibrium
+$T_{\rm dust}$ and absorbed-power maps); the emergent dust emission is added to
+the observer \code{Scattered} SED image.
+
+\subsection{Multiple stellar populations}\label{sec:multisource}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+nsource            & 1       & Number of stellar components ($>1$ activates multi-source)\\
+src\_geometry(i)   & 'point' & Per-source geometry: point/uniform/gaussian/exponential\\
+src\_tstar(i)      & -999    & Per-source Planck temperature [K]\\
+src\_spectrum(i)   & '\,'    & Per-source spectrum file (overrides src\_tstar)\\
+src\_lum(i)        & -999    & Per-source luminosity [erg/s] (equal split if unset)\\
+src\_x/y/z(i)      & 0       & Per-source position ('point')\\
+src\_zscale(i)     & -999    & Per-source scale height ('gaussian'/'exponential')\\
+\bottomrule
+\end{longtable}
+Sources are sampled in proportion to their luminosity, and \pp{luminosity}
+becomes $\sum_i$\code{src\_lum(i)}.  A typical use is a hot young disk plus a
+cool old bulge (\file{examples/galaxy/}).
+
+\subsection{All-sky interior observer (Milky Way)}\label{sec:allsky}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+allsky             & .false. & Observer inside the medium; bin every event by sky direction\\
+allsky\_x/y/z      & 0       & Interior observer position (code units)\\
+allsky\_nlon, allsky\_nlat & 360, 180 & Equirectangular map size\\
+\bottomrule
+\end{longtable}
+Each scatter, dust-reemission, and direct event peels toward the interior
+observer and is binned by the sky direction it arrives from.  The
+event-to-observer optical depth is integrated only over the segment to the
+observer.  The output \file{<base>\_allsky} is an equirectangular
+$(\ell,b,\lambda)$ surface-brightness cube --- the diffuse Galactic light and
+far-infrared cirrus as seen from inside the disk (\file{examples/milkyway/}).
+
+\subsection{Modified Random Walk (high optical depth)}\label{sec:mrw}
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+use\_mrw           & .false. & Diffusion step in scattering-thick cells\\
+mrw\_gamma         & 2.0     & Trigger threshold on the nearest-wall scattering optical depth\\
+\bottomrule
+\end{longtable}
+In a cell whose nearest-wall \emph{scattering} optical depth exceeds
+\pp{mrw\_gamma}, MoCafe replaces the many small steps with a single diffusion
+step to the inscribed-sphere surface (Min et al.~2009; Robitaille~2010): it
+samples the total path length inside the sphere from the diffusion
+first-passage distribution, deposits the absorption-weighted path into the
+$J_\lambda$ tally, and decays the weight by $\exp(-\alpha_{\rm abs}\,c t)$.  The
+Lucy transport also applies Russian roulette so high-albedo, high-$\tau$ clouds
+do not diffuse indefinitely.  MRW is exact in absorbing dust (where it triggers
+rarely); its speed-up is large only when individual cells are very thick
+($\tau_{\rm cell}\gg 1$) and nearly pure-scattering.
+
+\subsection{A minimal emission run}
+\begin{lstlisting}[style=nml]
+&parameters
+ par%no_photons  = 2.0e6
+ par%use_sed     = .true.
+ par%save_jlam   = .true.
+ par%use_dustemis    = .true.
+ par%dust_single_teq = .true.     ! fast equilibrium solve
+ par%luminosity  = 3.828e33       ! erg/s
+ par%nlambda     = 100
+ par%lambda_min  = 0.0912
+ par%lambda_max  = 2000.0
+ par%kext_file   = 'data/kext_astrodust_MW.dat'
+ par%tstar       = 1.0e4
+ par%taumax      = 5.0
+ par%source_geometry = 'point'
+ par%distance_unit   = 'pc'
+ par%rmax = 1.0
+ par%nx = 33
+ par%ny = 33
+ par%nz = 33
+ par%distance = 1.0e5
+/
+\end{lstlisting}
+
+%=============================================================================
+\section{Output Products}
+%=============================================================================
+\pp{file\_format} is authoritative: if \pp{out\_file}'s extension disagrees,
+MoCafe rewrites it (with a warning) so that the main file and all derived files
+share one container.  HDF5 mirrors the FITS HDU layout (each image HDU becomes
+a group named after its \code{EXTNAME} with a \code{data} dataset; FITS
+keywords become group attributes).
+
+\begin{longtable}{P D X}
+\toprule
+\textrm{Suffix} & \textrm{Written when} & \textrm{Contents}\\
+\midrule \endhead
+\_obs      & always & Observer images; in SED mode \code{Scattered}/\code{Direct} become $(x,y,\lambda)$ cubes plus the wavelength / optics tables\\
+\_jlam     & save\_jlam & $J_\lambda(\lambda,x,y,z)$, $J_{\rm bol}$, energy-conservation keywords\\
+\_dustsed  & use\_dustemis ('lucy') & Emergent and intrinsic dust SED, a pixel-resolved $\code{DustEmis\_image}(x,y,\lambda)$, and per-cell $T_{\rm dust}$/$L_{\rm dust}$ maps\\
+\_bwdust   & 'bw01' & Equilibrium $T_{\rm dust}$ and absorbed-power maps\\
+\_allsky   & allsky & Equirectangular $(\ell,b,\lambda)$ all-sky surface-brightness cube\\
+\_obs\_tau & sightline\_tau & Sight-line optical-depth map\\
+\_stokes   & use\_stokes & Stokes $I,Q,U,V$ images\\
+\bottomrule
+\end{longtable}
+Read and convert the outputs with \file{python/mocafe\_io.py}
+(\code{info}, \code{peek}, \code{convert}).
+
+%=============================================================================
+\section{Worked Examples}
+%=============================================================================
+\begin{longtable}{P X}
+\toprule
+\textrm{Directory} & \textrm{Shows}\\
+\midrule \endhead
+examples/point\_source, uniform\_source, external\_* & Cartesian grids and source geometries\\
+examples/agtau\_list & $(a,g)$ and $\tau$ single-run scans\\
+examples/clump\_sphere, amr\_sphere, amr\_tng, amr\_ramses & Clumpy and AMR media\\
+examples/dustemis & Dust emission: Lucy$+$\textsc{SEDust}, iteration, single-$T_{\rm eq}$, table, B\&W, MRW\\
+examples/multipop & Two stellar populations (hot young $+$ cool old)\\
+examples/galaxy   & External galaxy SED (disk $+$ bulge, edge-on / face-on)\\
+examples/milkyway & All-sky map from an interior observer\\
+examples/benchmarks & Camps~(2015) SHG dust-emission benchmark and Mode~1/2 $\tau$ sweep\\
+\bottomrule
+\end{longtable}
+
+%=============================================================================
+\section{Validation}
+%=============================================================================
+\begin{itemize}
+\item \textbf{Regression.}  The monochromatic scattering, the $(a,g)$/$\tau$
+      scans, and the clumpy-medium outputs remain bit-identical to v1.20
+      throughout the upgrade.
+\item \textbf{Dust-emission engine.}  Run through the vendored \textsc{SEDust}
+      library with the Zubko et al.~(2004) BARE-GR-S model, the emission
+      spectra agree with the Camps et al.~(2015) seven-code stochastic-heating
+      benchmark to a median relative difference of 2--4\% across
+      $U=10^{-2}\ldots10^{4}$, and the emission peak matches the code median to
+      within one wavelength bin.
+\item \textbf{Energy conservation.}  The intrinsic dust SED integrates to the
+      absorbed luminosity (to $10^{-5}$); the two equilibrium methods
+      (single-$T_{\rm eq}$ Lucy and Bjorkman \& Wood) agree on both the
+      absorbed fraction (to $<0.3\%$ up to $\tau_V=5$) and the dust
+      temperatures.
+\end{itemize}
+External three-dimensional transport benchmarks (DUSTY, Pascucci, the TRUST
+slab, and a direct Hyperion cross-check) require their published reference
+solutions and are added as they become available.
+
+%=============================================================================
+\section{Algorithm Notes}
+%=============================================================================
+\paragraph{Packet energy.}  Each packet carries a physical luminosity
+$L_{\rm pk}$ [erg/s]: $L_\star/N_\star$ for stellar packets and
+$L_{\rm dust}/N_{\rm dust}$ for dust-emission packets, so populations with
+different per-packet energies combine correctly in the $J_\lambda$ tally.
+
+\paragraph{Lucy iteration.}  The stellar $J_\lambda$ is tallied once and
+reused; each iteration transports fresh dust-emission photons (sampled per cell
+from the emission spectrum), adds their $J_\lambda$ to the stellar field, and
+recomputes the emission.  The total emitted luminosity obeys
+$L^{(k)}=L_{\rm abs}^\star + f\,L^{(k-1)}$ with $f$ the reabsorbed fraction, a
+geometric series converging to $L_{\rm abs}^\star/(1-f)$.
+
+\paragraph{Bjorkman \& Wood temperature.}  A cell's equilibrium temperature is
+found by inverting the monotonic
+$\kappa_B(T)=\int\!\kappa_{\rm abs}(\lambda)\,B_\lambda(T)\,d\lambda$ against
+the running absorbed power per H nucleus.
+
+%=============================================================================
+\section*{References}
+\addcontentsline{toc}{section}{References}
+%=============================================================================
+\begin{itemize}\small
+\item Lucy, L.~B. 1999, A\&A, 344, 282 --- iterative mean-intensity /
+      dust-emission estimator.
+\item Bjorkman, J.~E. \& Wood, K. 2001, ApJ, 554, 615 --- immediate reemission
+      with temperature correction.
+\item Camps, P.\ et al. 2015, A\&A, 580, A87 --- stochastic-heating
+      dust-emission benchmark.
+\item Zubko, V., Dwek, E., \& Arendt, R.~G. 2004, ApJS, 152, 211 ---
+      BARE-GR-S dust model.
+\item Min, M.\ et al. 2009, A\&A, 497, 155; Robitaille, T.~P. 2010, A\&A, 520,
+      A70 --- Modified Random Walk.
+\item Seon, K.-I. 2010, PKAS, 25, 177 --- the $(a,g)$ single-run scan.
+\item Jonsson, P. 2006, MNRAS, 372, 2 --- the polychromatic optical-depth scan.
+\item Amanatides, J. \& Woo, A. 1987, Eurographics~'87 --- fast voxel traversal.
+\end{itemize}
+
+\end{document}
