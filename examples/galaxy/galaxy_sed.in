@@ -1,0 +1,42 @@
+&parameters
+ !--- Stage 7: external galaxy SED -- exponential stellar disk (young 1e4 K)
+ !--- + bulge-like central point source (old 4000 K) in an exponential dust
+ !--- disk, viewed edge-on and face-on (two observers by inclination).
+ par%no_photons      = 4.0e6
+ par%use_sed         = .true.
+ par%save_jlam       = .true.
+ par%use_dustemis    = .true.
+ par%dust_single_teq = .true.
+ par%luminosity      = 3.828e36
+
+ par%nsource         = 2
+ par%src_geometry    = 'exponential', 'point'
+ par%src_tstar       = 1.0e4,         4.0e3
+ par%src_lum         = 3.0e36,        0.828e36
+ par%src_zscale      = 0.2,           0.0
+
+ par%nlambda         = 80
+ par%lambda_min      = 0.0912
+ par%lambda_max      = 2000.0
+ par%lambda_ref      = 0.55
+ par%kext_file       = '../../data/kext_astrodust_MW.dat'
+ par%geometry        = 'cylinder'
+ par%tauhomo         = 5.0
+ par%density_zscale  = 0.15
+ par%density_rscale  = 0.5
+
+ par%distance_unit   = 'kpc'
+ par%rmax = 1.0
+ par%nx = 32
+ par%ny = 32
+ par%nz = 32
+ par%nxim = 65
+ par%nyim = 65
+ par%inclination_angle = 90.0, 0.0
+ par%distance = 1.0e4
+ par%use_master_slave = .false.
+ par%iseed = 1234
+ par%no_print = 4.0e6
+ par%file_format = 'hdf5'
+ par%out_file = 'galaxy_sed.h5'
+/

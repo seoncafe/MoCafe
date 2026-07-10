@@ -106,6 +106,7 @@ subroutine peeling_scattered_photon_nostokes(photon,grid)
 end subroutine peeling_scattered_photon_nostokes
 !--------------------------------------------------
 subroutine peeling_direct_photon_nostokes_sed(photon,grid)
+  use allsky_mod, only : allsky_on, allsky_peel
   implicit none
   !--- SED (multi-wavelength) variant of peeling_direct_photon_nostokes.
   !--- The optical depth to the observer is integrated at the reference
@@ -120,6 +121,10 @@ subroutine peeling_direct_photon_nostokes_sed(photon,grid)
   integer :: i, k
 
   if (.not. peel_enabled) return
+  if (allsky_on) then
+     call allsky_peel(photon, grid, 'd')
+     return
+  endif
   do k=1, par%nobs
      pobs = photon
      pobs%kx = (observer(k)%x-photon%x)
@@ -153,6 +158,7 @@ subroutine peeling_direct_photon_nostokes_sed(photon,grid)
 end subroutine peeling_direct_photon_nostokes_sed
 !--------------------------------------------------
 subroutine peeling_scattered_photon_nostokes_sed(photon,grid)
+  use allsky_mod, only : allsky_on, allsky_peel
   implicit none
   !--- SED (multi-wavelength) variant of peeling_scattered_photon_nostokes.
   !--- HG phase function with the photon's wavelength-dependent g; observer
@@ -167,6 +173,10 @@ subroutine peeling_scattered_photon_nostokes_sed(photon,grid)
   integer       :: ix,iy,i,k
 
   if (.not. peel_enabled) return
+  if (allsky_on) then
+     call allsky_peel(photon, grid, 's')
+     return
+  endif
   do k=1, par%nobs
      pobs    = photon
      pobs%kx = (observer(k)%x-photon%x)
@@ -199,6 +209,7 @@ subroutine peeling_scattered_photon_nostokes_sed(photon,grid)
 end subroutine peeling_scattered_photon_nostokes_sed
 !--------------------------------------------------
 subroutine peeling_reemit_sed(photon,grid)
+  use allsky_mod, only : allsky_on, allsky_peel
   implicit none
   !--- Isotropic-emission peel (Bjorkman & Wood immediate reemission): the
   !--- re-emitted packet radiates isotropically, so the observer contribution
@@ -211,6 +222,10 @@ subroutine peeling_reemit_sed(photon,grid)
   integer :: ix,iy,i,k
 
   if (.not. peel_enabled) return
+  if (allsky_on) then
+     call allsky_peel(photon, grid, 'e')
+     return
+  endif
   do k=1, par%nobs
      pobs = photon
      pobs%kx = (observer(k)%x-photon%x)

@@ -13,6 +13,7 @@
   use dustemis_mod, only : setup_dustemis, compute_dustemis, write_dustemis
   use lucy_mod,     only : run_lucy_iteration
   use bw_mod,       only : setup_bw, run_bw, bw_finalize, bw_Tmap, bw_write
+  use allsky_mod,   only : setup_allsky, allsky_reduce, allsky_write, allsky_on
   use utility
   use mpi
 
@@ -45,6 +46,7 @@
   if (par%save_jlam)     call jtally_setup(grid)
   if (par%use_dustemis .and. .not. use_bw) call setup_dustemis(grid)
   if (use_bw)            call setup_bw(grid)
+  if (par%allsky)        call setup_allsky()
 
   !--- Dust emission (Stage 3, Mode 1 Lucy): energy iterations first, which
   !--- tally J_lambda and converge the per-cell emission (dust self-absorption
@@ -81,6 +83,10 @@
   else if (par%save_jlam) then
      call jtally_reduce()
      call jtally_write(grid)
+  endif
+  if (par%allsky) then
+     call allsky_reduce()
+     call allsky_write()
   endif
 
   call time_stamp(dtime)

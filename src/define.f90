@@ -265,6 +265,16 @@ public
      real(kind=wp)      :: src_z(MAX_SRC)          = 0.0_wp
      real(kind=wp)      :: src_zscale(MAX_SRC)     = -999.0_wp
      real(kind=wp)      :: src_rscale(MAX_SRC)     = -999.0_wp
+     !--- all-sky interior observer (Stage 7, Milky-Way case).  When
+     !--- par%allsky = .true. the observer sits at par%obsx/y/z INSIDE the grid
+     !--- and each event peels toward it, binned by sky direction into an
+     !--- (allsky_nlon x allsky_nlat x nlambda) equirectangular cube.
+     logical            :: allsky        = .false.
+     integer            :: allsky_nlon   = 360
+     integer            :: allsky_nlat   = 180
+     real(kind=wp)      :: allsky_x      = 0.0_wp   ! interior observer position (code units)
+     real(kind=wp)      :: allsky_y      = 0.0_wp
+     real(kind=wp)      :: allsky_z      = 0.0_wp
      logical       :: use_ag_list   = .false.
      real(kind=wp) :: albedo_list(MAX_SCAN) = nan64
      real(kind=wp) :: hgg_list(MAX_SCAN)    = nan64

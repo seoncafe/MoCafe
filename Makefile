@@ -103,6 +103,7 @@ OBJS	= \
 	mathlib.o \
 	sed_mod.o \
 	sources_mod.o \
+	allsky_mod.o \
 	jtally_mod.o \
 	raytrace_car.o \
 	raytrace_clump.o \
