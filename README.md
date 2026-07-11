@@ -7,7 +7,6 @@ or a tabulated Mueller matrix), and "peels off" a contribution toward each
 observer to build a FITS or HDF5 image.  **v2.00** adds panchromatic dust
 thermal emission: multi-wavelength transport, a per-cell radiation-field tally,
 and UV-to-FIR SEDs of dusty sources, external galaxies, and the Milky Way.
-Author: Kwang-il Seon (KASI).
 
 The scattered-light image is in units of `(luminosity unit) cm^-2 sr^-1`.
 
@@ -68,6 +67,10 @@ and the AMR octree (not the clumpy medium).
 - `docs/MoCafe_Geometry.pdf` — observer geometry and image conventions.
 - `docs/MoCafe_agtau_scan.pdf`, `docs/MoCafe_clump.pdf`, `docs/MoCafe_amr.pdf`
   — algorithm memos for the scans, the clumpy medium, and the AMR grid.
+
+## Author
+
+Kwang-il Seon (KASI).
 
 ---
 
