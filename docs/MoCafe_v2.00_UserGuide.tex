@@ -623,25 +623,30 @@ the \file{quickstart\_dustemis.ipynb} notebook.
 \item \textbf{Regression.}  With the emission features off, the monochromatic
       scattering, the $(a,g)$/$\tau$ scans, and the clumpy-medium outputs are
       bit-identical to a stand-alone scattering run.
-\item \textbf{Dust-emission engine.}  Run through the \textsc{SEDust}
-      library with the Zubko et al.~(2004) BARE-GR-S model, the emission
-      spectra agree with the Camps et al.~(2015) seven-code stochastic-heating
-      benchmark to a median relative difference of 2--4\% across
+\item \textbf{Dust-emission engine (cross-code).}  Run through the
+      \textsc{SEDust} library with the Zubko et al.~(2004) BARE-GR-S model, the
+      emission spectra agree with the Camps et al.~(2015) seven-code
+      stochastic-heating benchmark---which includes \textsc{SKIRT} and
+      \textsc{DIRTY}---to a median relative difference of 2--4\% across
       $U=10^{-2}\ldots10^{4}$, and the emission peak matches the code median to
       within one wavelength bin.
 \item \textbf{Energy conservation.}  The intrinsic dust SED integrates to the
-      absorbed luminosity (to $10^{-5}$); the two equilibrium methods
-      (single-$T_{\rm eq}$ Lucy and Bjorkman \& Wood) agree on both the
-      absorbed fraction (to $<0.3\%$ up to $\tau_V=5$) and the dust
-      temperatures.
+      absorbed luminosity to machine precision (the emission is normalized to
+      the locally absorbed power).  The Lucy path-length estimator and the
+      Bjorkman \& Wood immediate-reemission scheme agree on the absorbed
+      luminosity to $<2\%$ over the sweep $\tau_V=0.1\ldots20$.
 \item \textbf{AMR vs.\ Cartesian.}  Dust emission on a uniform level-5 octree
       sphere reproduces the reprocessed fraction ($0.863$ at $\tau_V=5$) and
       energy balance of the equivalent Cartesian sphere; Bjorkman \& Wood and
       MRW on the octree conserve energy identically.
 \end{itemize}
-External three-dimensional transport benchmarks (DUSTY, Pascucci, the TRUST
-slab, and a direct Hyperion cross-check) require their published reference
-solutions and are added as they become available.
+These checks are consolidated in \file{examples/benchmarks/validate.py}, which
+re-runs the energy-conservation, two-method, and SHG cross-code tests and reports
+PASS/FAIL.  External full-galaxy transport benchmarks (the TRUST slab, a direct
+\textsc{SKIRT}/\textsc{DIRTY} image cross-check) need those codes or their
+published reference solutions and are added as they become available; the
+emission engine is already cross-checked against \textsc{SKIRT} and
+\textsc{DIRTY} through the SHG benchmark above.
 
 %=============================================================================
 \section{Algorithm Notes}
