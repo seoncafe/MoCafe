@@ -1,13 +1,13 @@
 #!/bin/bash
-# Build the vendored SEDust dust-emission library for MoCafe v2.00.
+# Build the bundled SEDust dust-emission library for MoCafe v2.00.
 #
 # This is a self-contained, Intel-built copy of the SEDust `dust_lib` layer
 # (source: /home/kiseon/MoCafe/Grain/SEDust on the author's machine).  The module originally
-# named `mathlib` is vendored here as `sed_mathlib` to avoid a name clash with
+# named `mathlib` is renamed here to `sed_mathlib` to avoid a name clash with
 # MoCafe's own `mathlib` module.  Outputs sed/lib/libsedust.a and the .mod
 # files that MoCafe links against (Makefile variable SEDUST_INTEL).
 #
-# Re-run after updating the vendored sources in sed/src/.
+# Re-run after updating the bundled sources in sed/src/.
 set -e
 cd "$(dirname "$0")"                 # sed/
 FC=${FC:-ifort}

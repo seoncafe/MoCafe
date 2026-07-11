@@ -224,7 +224,7 @@ public
      !--- SEDust's own '../data/dielectric/...' relative reads resolve too).
      character(len=256) :: sed_qtable       = '../tmatrix/output/q_astrodust_P0.20_Fe0.00_1.400.dat'
      character(len=256) :: sed_sizedist     = '../data/release/size_distribution.dat'
-     !--- vendored SEDust sed/ directory (self-contained under the MoCafe tree).
+     !--- bundled SEDust sed/ directory (self-contained under the MoCafe tree).
      !--- Blank (default) = auto-resolve to <executable dir>/SEDust/sed at
      !--- run time (see read_input), so a fresh checkout works from any path.
      !--- Set an explicit absolute path here only to override that.

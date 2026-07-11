@@ -34,7 +34,7 @@ contains
   read(unit,parameters)
   close(unit)
 
-  !--- Resolve the vendored SEDust directory relative to the executable when the
+  !--- Resolve the bundled SEDust directory relative to the executable when the
   !--- user leaves par%sed_workdir blank, so a fresh checkout runs dust emission
   !--- from any working directory without editing paths.  argv(0) is the path to
   !--- MoCafe.x (e.g. '../../MoCafe.x'); take its directory and append SEDust/sed.

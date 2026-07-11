@@ -31,9 +31,9 @@ FLAGS		= -cpp -DMPI
 DEBUG		= 0
 HDF5		= 1
 
-# Vendored SEDust dust-emission library (Stage 3).  Self-contained Intel build
+# Bundled SEDust dust-emission library (Stage 3).  Self-contained Intel build
 # under SEDust/; rebuild with  cd SEDust/sed && ./build_lib.sh.  The SEDust
-# module named 'mathlib' is vendored as 'sed_mathlib' to avoid clashing with
+# module named 'mathlib' is renamed to 'sed_mathlib' to avoid clashing with
 # MoCafe's own mathlib module.
 SEDUST_LIBDIR	?= SEDust/sed/lib
 FLAGS		+= -I$(SEDUST_LIBDIR)

@@ -2,7 +2,7 @@
 
 ## 1. SHG dust-emission benchmark (Camps et al. 2015, A&A 580, A87)
 
-Validates the **emission engine** (the vendored SEDust library) against the
+Validates the **emission engine** (the bundled SEDust library) against the
 published multi-code stochastic-heating-of-grains (SHG) benchmark, using the
 same Zubko et al. (2004) BARE-GR-S dust model the benchmark defines.
 

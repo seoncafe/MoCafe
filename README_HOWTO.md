@@ -178,9 +178,9 @@ Turn it on with `par%use_sed = .true.`; add `par%save_jlam` and
 `par%use_dustemis` for the emission.  All of it is **opt-in** — a plain
 monochromatic scattering run is unchanged.
 
-### The SEDust grain library (vendored)
+### The SEDust grain library (bundled)
 
-The Lucy emission engine is the **SEDust** library, vendored self-contained
+The Lucy emission engine is the **SEDust** library, bundled self-contained
 under `SEDust/`.  Build it once (Intel):
 
 ```bash
@@ -241,7 +241,7 @@ On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are per-leaf arrays plus a
 | `use_dustemis` | `.false.` | Compute dust emission (requires `use_sed`) |
 | `dust_emission_method` | `'lucy'` | `'lucy'` (SEDust) or `'bw01'` (Bjorkman & Wood) |
 | `dust_model_sed` | `'astrodust'` | SEDust model (`astrodust`; DL07/Zubko available in the library) |
-| `sed_qtable`, `sed_sizedist` | (vendored) | SEDust optics / size-distribution paths (relative to `sed_workdir`) |
+| `sed_qtable`, `sed_sizedist` | (bundled) | SEDust optics / size-distribution paths (relative to `sed_workdir`) |
 | `sed_workdir` | `''` (auto) | Directory SEDust reads its `../data/...` tables from; blank auto-resolves to `<MoCafe.x dir>/SEDust/sed` |
 | `sed_NT`, `sed_Tlo`, `sed_Thi` | 200, 2.7, 5000 | Grain temperature grid |
 | `dust_niter` | 1 | Lucy iterations for dust self-absorption (1 = non-iterative) |

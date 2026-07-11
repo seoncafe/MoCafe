@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Overlay the vendored-SEDust dust emission on the Camps et al. (2015) SHG
+# Overlay the bundled-SEDust dust emission on the Camps et al. (2015) SHG
 # multi-code benchmark envelope for the Mathis-ISRF radiation fields.
 import numpy as np, glob, os, re
 import matplotlib; matplotlib.use('Agg')
