@@ -103,7 +103,6 @@ OBJS	= \
 	mathlib.o \
 	healpix.o \
 	sed_mod.o \
-	random_sersic.o \
 	random_bulge.o \
 	sources_mod.o \
 	cellinfo_mod.o \

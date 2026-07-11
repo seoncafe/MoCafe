@@ -11,8 +11,7 @@ module sources_mod
                       rand_zexp, rand_sech2, rand_r1exp
   use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo, sed_hgg, &
                       planck_shape, read_spectrum_file, interp_clamped
-  use random_sersic, only : rand_sersic
-  use random_bulge,  only : rand_boxy, rand_bar, rand_xbar
+  use random_bulge,  only : rand_sersic, rand_boxy, rand_bar, rand_xbar
   implicit none
   private
   public :: setup_sources, gen_source_photon, use_sources
