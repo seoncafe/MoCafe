@@ -1,0 +1,30 @@
+&parameters
+ !--- MPI scaling benchmark: SED transport + J_lambda tally on a tau_V=10
+ !--- sphere.  Photon count is overridden by the driver script; output is kept
+ !--- small so the timed section is the photon loop.
+ par%no_photons      = 4.0e6
+ par%use_sed         = .true.
+ par%save_jlam       = .true.
+ par%luminosity      = 3.828e36
+ par%nlambda         = 40
+ par%lambda_min      = 0.0912
+ par%lambda_max      = 2000.0
+ par%lambda_ref      = 0.55
+ par%kext_file       = '../../data/kext_astrodust_MW.dat'
+ par%tstar           = 1.0e4
+ par%taumax          = 10.0
+ par%source_geometry = 'point'
+ par%distance_unit   = 'pc'
+ par%rmax = 1.0
+ par%nx = 33
+ par%ny = 33
+ par%nz = 33
+ par%nxim = 33
+ par%nyim = 33
+ par%obsz = 1.0
+ par%distance = 1.0e5
+ par%use_master_slave = .false.
+ par%iseed = 11
+ par%no_print = 1.0e8
+ par%out_file = 'scale.h5'
+/

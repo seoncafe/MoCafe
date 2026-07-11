@@ -674,4 +674,4 @@ Each directory's `run.sh` shows the typical invocation
 
 ---
 
-Last updated: 2026-07-11 14:24 KST
+Last updated: 2026-07-11 15:31 KST
