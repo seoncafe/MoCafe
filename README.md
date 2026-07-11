@@ -65,11 +65,9 @@ Cartesian grid.
   run, complete input reference, dust-emission workflow, outputs, examples,
   algorithms; LaTeX source `docs/MoCafe_v2.00_UserGuide.tex`).
 - `docs/MoCafe_Geometry.pdf` — observer geometry and image conventions.
-- `docs/output_definitions.pdf` — output image definitions.
 - `docs/MoCafe_agtau_scan.pdf`, `docs/MoCafe_clump.pdf`, `docs/MoCafe_amr.pdf`
   — algorithm memos for the scans, the clumpy medium, and the AMR grid.
-- `UPGRADE_NOTES.md` — change history; `CLAUDE.md` — architecture overview.
 
 ---
 
-Last updated: 2026-07-11 09:04 KST
+Last updated: 2026-07-11 09:06 KST
