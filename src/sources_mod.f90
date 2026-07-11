@@ -17,7 +17,7 @@ module sources_mod
   logical :: use_sources = .false.
   integer :: nsrc = 0
   real(kind=wp), allocatable :: src_lum_cdf(:)          ! (nsrc) cumulative luminosity, normalized
-  real(kind=wp), allocatable :: src_pdf(:,:)            ! (nlam, nsrc) per-source spectrum alias PDF
+  real(kind=wp), allocatable :: src_pdf(:,:)            ! (nlam, nsrc) spectrum alias PDF for each source
   integer,       allocatable :: src_alias(:,:)          ! (nlam, nsrc)
   real(kind=wp), allocatable :: src_lumfrac(:,:)        ! (nlam, nsrc) luminosity fraction per bin (for output)
   real(kind=wp), allocatable :: src_Lpacket(:)          ! (nsrc) energy per packet for this source
@@ -40,7 +40,7 @@ contains
   allocate(src_lum_cdf(nsrc), src_pdf(sed_nlam,nsrc), src_alias(sed_nlam,nsrc))
   allocate(src_lumfrac(sed_nlam,nsrc), src_Lpacket(nsrc), lum(nsrc), pdf(sed_nlam))
 
-  !--- per-source luminosity (default equal split of par%luminosity if unset).
+  !--- luminosity of each source (default equal split of par%luminosity if unset).
   do is = 1, nsrc
      if (par%src_lum(is) > 0.0_wp) then
         lum(is) = par%src_lum(is)
@@ -51,7 +51,7 @@ contains
   lsum = sum(lum)
   par%luminosity = lsum          ! total luminosity is the sum of components
 
-  !--- per-source spectrum -> luminosity fraction per bin + alias table.
+  !--- spectrum of each source -> luminosity fraction per bin + alias table.
   do is = 1, nsrc
      if (len_trim(par%src_spectrum(is)) > 0) then
         if (mpar%p_rank == 0) call read_spectrum_file(trim(par%src_spectrum(is)), lam_f, lum_f, nsp)
@@ -86,7 +86,7 @@ contains
      call random_alias_setup(src_pdf(:,is), src_alias(:,is))
   enddo
 
-  !--- luminosity CDF over sources and per-source packet energy.  Each source
+  !--- luminosity CDF over sources and packet energy for each source.  Each source
   !--- emits (nphotons * lum(is)/lsum) packets, so a packet carries lsum/nphotons.
   src_lum_cdf(1) = lum(1)
   do is = 2, nsrc

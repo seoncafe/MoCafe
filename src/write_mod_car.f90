@@ -146,7 +146,7 @@ contains
      endif
   endif
 
-  !--- SED mode: write the wavelength grid and per-bin dust/source tables as
+  !--- SED mode: write the wavelength grid and dust/source tables for each bin as
   !--- 1-D datasets, so the analysis side does not depend on header keywords.
   if (par%use_sed) then
      call io_append_image(file,sed_wave,status,bitpix=-64)
@@ -331,7 +331,7 @@ contains
   subroutine write_wave_axis_keys(file, naxis)
   !--- Wavelength axis metadata on FITS/HDF5 axis `naxis` (SED mode).  The
   !--- grid is log-spaced; CRVAL/CDELT describe it in log10(lambda/um).  The
-  !--- explicit per-bin values are stored in the 1-D 'Wavelength' dataset.
+  !--- explicit values for each bin are stored in the 1-D 'Wavelength' dataset.
   implicit none
   type(io_file_type), intent(inout) :: file
   integer, intent(in) :: naxis

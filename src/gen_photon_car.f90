@@ -145,7 +145,7 @@ contains
      photon%icell_amr = amr_find_leaf(photon%x, photon%y, photon%z)
   endif
 
-  !--- reset per-photon scan accumulators (a,g and/or tau); no-op cost when off
+  !--- reset each photon's scan accumulators (a,g and/or tau); no-op cost when off
   if (par%use_ag_list .or. par%use_tau_list) call scan_reset_photon()
 
   !+++ peeled-off.

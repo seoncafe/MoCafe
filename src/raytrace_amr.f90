@@ -1,7 +1,7 @@
 module raytrace_amr_mod
 !---------------------------------------------------------------------------
 ! AMR octree raytrace for MoCafe (dust-only), ported from
-! LaRT_v2.00/raytrace_amr.f90 with all Lyman-alpha machinery stripped.
+! LaRT_v2.00/raytrace_amr.f90 with all Lyman-alpha handling stripped.
 !
 !   Positions and path lengths are in CODE UNITS; amr_grid%rhokap(il) is the
 !   grey dust opacity per code unit, so tau = rhokap*ds is dimensionless.

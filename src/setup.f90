@@ -171,7 +171,7 @@ contains
      if (par%nsource > 1) call setup_sources()
   endif
 
-  !--- Stage 2: per-cell J_lambda tally restrictions.
+  !--- Stage 2: J_lambda tally restrictions.
   if (par%save_jlam) then
      if (.not. par%use_sed) then
         if (mpar%p_rank == 0) write(*,'(a)') 'ERROR: par%save_jlam requires par%use_sed = .true.'
@@ -442,7 +442,7 @@ contains
 
   !--- procedure pointer for scattering routine
   if (par%use_sed) then
-     !--- SED (multi-wavelength) mode: H-G no-Stokes path with per-photon
+     !--- SED (multi-wavelength) mode: H-G no-Stokes path with
      !--- wavelength-dependent albedo/g and s_ext-rescaled optical depths.
      !--- External illumination is rejected in read_input (Stage 1), so the
      !--- direct peel can be bound unconditionally here.

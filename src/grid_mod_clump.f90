@@ -5,7 +5,7 @@ module grid_mod_clump
 ! A sphere of radius par%rmax holds N non-overlapping spherical dust clumps of
 ! radius par%clump_radius; the inter-clump medium is vacuum.  Approach: build
 ! the clump population (init_clumps), build the Cartesian bounding-box grid
-! (grid_create) only so the observer/output machinery runs unchanged, then
+! (grid_create) only so the observer/output code runs unchanged, then
 ! zero grid%rhokap (all opacity lives inside the clumps) and set the realized
 ! system-level dust scalars from the clump arrays.
 !

@@ -1,5 +1,5 @@
 module jtally_mod
-!--- Per-cell mean-intensity tally J_lambda(cell) for MoCafe v2.00 (Stage 2).
+!--- Mean-intensity tally J_lambda(cell) for MoCafe v2.00 (Stage 2).
 !--- Lucy (1999) pathlength estimator: every actual photon path segment
 !--- contributes wgt*dl to its (wavelength-bin, cell) slot; the mean
 !--- intensity follows as J_lambda = E_packet * Sum(wgt*dl) / (4 pi V dlam).
@@ -14,7 +14,7 @@ module jtally_mod
 !--- sample the standard exponential free path and are tallied along the
 !--- actual walked segments in raytrace_to_tau_car (unbiased).
 !---
-!--- The tally array is per-MPI-rank private and MPI_REDUCEd once at the
+!--- The tally array is private to each MPI rank and MPI_REDUCEd once at the
 !--- end of the run.  Stage 2 scope: Cartesian grid, SED mode only.
   use define
   implicit none
@@ -124,7 +124,7 @@ contains
   call io_open_new(file, trim(filename), status)
 
   if (is_amr) then
-     !--- AMR: write the per-leaf J_lambda(nlam,nleaf), J_bol, and leaf x,y,z.
+     !--- AMR: write the J_lambda(nlam,nleaf), J_bol, and leaf x,y,z.
      call io_append_image(file, jt_sum, status, bitpix=-64)
      call io_put_keyword(file,'EXTNAME','J_lambda','J(lambda,leaf) mean intensity (AMR)',status)
      call io_put_keyword(file,'J_UNIT','luminosity/dist_cm^2/um/sr','J_lambda unit',status)

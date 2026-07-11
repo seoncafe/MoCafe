@@ -8,7 +8,7 @@ output normalization) are in `docs/MoCafe_Geometry.pdf` and
 `docs/output_definitions.pdf`.
 
 **v2.00** adds panchromatic **dust thermal emission**: a multi-wavelength
-(SED) transport mode, a per-cell mean-intensity tally, and two dust-emission
+(SED) transport mode, a mean-intensity tally in each cell, and two dust-emission
 methods — Lucy (1999) coupled to the **SEDust** grain library (equilibrium +
 stochastically heated grains + PAHs) and Bjorkman & Wood (2001) immediate
 reemission.  It also adds multiple stellar populations, an all-sky interior
@@ -162,7 +162,7 @@ See `docs/MoCafe_Geometry.pdf` for the angle conventions.
 | `out_bitpix` | -32 | FITS bitpix (-32 = float32, -64 = float64) |
 | `save_direc0` | `.false.` | Also write the unattenuated direct image `Direct0` |
 | `output_normalization` | `'luminosity'` | Output normalization |
-| `sightline_tau` | `.false.` | Also write a per-pixel sight-line optical-depth map |
+| `sightline_tau` | `.false.` | Also write a sight-line optical-depth map for each pixel |
 
 ---
 
@@ -170,8 +170,8 @@ See `docs/MoCafe_Geometry.pdf` for the angle conventions.
 
 MoCafe v2.00 transports photons over a wavelength grid, absorbs starlight in
 the dust, and re-emits the absorbed energy as thermal dust emission.  A run
-proceeds: **SED transport** (panchromatic scattering) → **J_λ tally** (per-cell
-mean intensity) → **dust emission** (Lucy+SEDust or Bjorkman & Wood) →
+proceeds: **SED transport** (panchromatic scattering) → **J_λ tally** (mean intensity
+in each cell) → **dust emission** (Lucy+SEDust or Bjorkman & Wood) →
 observer SED images.
 
 Turn it on with `par%use_sed = .true.`; add `par%save_jlam` and
@@ -212,7 +212,7 @@ or set `SEDUST_SRC=/your/SEDust`, to point at your own SEDust tree.
 | `tstar` | -999 | Planck source temperature [K] (single source), if no `source_spectrum` |
 | `luminosity` | 1.0 | **Physical** stellar luminosity [erg/s] — required for absolute dust temperatures |
 
-Wavelength-dependent extinction is applied as a per-photon grey rescaling
+Wavelength-dependent extinction is applied as a grey rescaling for each photon
 `s_ext = C_ext(λ)/C_ext(λ_ref)`, so the grid stores the reference-wavelength
 opacity and all three raytracers are shared with the mono path.  In SED mode
 `distance_unit` sets the physical length scale (1 code unit = 1 distance unit),
@@ -220,7 +220,7 @@ needed for absolute intensities and temperatures.
 
 Restrictions: no Stokes, no `(a,g)`/`tau` scans, internal sources only.
 
-### 2. Per-cell mean intensity J_λ
+### 2. Mean intensity J_λ in each cell
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -229,9 +229,9 @@ Restrictions: no Stokes, no `(a,g)`/`tau` scans, internal sources only.
 Writes `J_lambda(λ,x,y,z)`, the wavelength-integrated `J_bol`, and an
 absorbed-energy check (`EABS_A` pathlength tally vs `EABS_B` event counter).
 Memory ≈ `nλ × ncell × 8` bytes per MPI rank.  Works on the **Cartesian grid
-and the AMR octree** (per-leaf tally); the whole dust-emission suite (SED
+and the AMR octree** (tally in each leaf); the whole dust-emission suite (SED
 mode, `J_λ`, Lucy, single-Teq, table, B&W, MRW) runs identically on both.
-On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are per-leaf arrays plus a
+On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are arrays indexed by leaf plus a
 `LeafXYZ` table of leaf centers.  Not supported on the clumpy medium.
 
 ### 3. Dust emission — Mode 1 (Lucy 1999 + SEDust)
@@ -248,13 +248,13 @@ On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are per-leaf arrays plus a
 | `dust_no_photons` | 1e6 | Dust-emission photons per iteration |
 | `dust_tol` | 1e-3 | Convergence on the total emitted luminosity |
 
-`'lucy'` requires `save_jlam`.  The per-cell emission spectrum comes from
+`'lucy'` requires `save_jlam`.  The emission spectrum in each cell comes from
 SEDust (equilibrium + stochastically heated grains + PAH features); the
-per-cell luminosity is set to the locally absorbed power, so energy is
+luminosity in each cell is set to the locally absorbed power, so energy is
 conserved exactly.  With `dust_niter > 1` the re-emitted photons are
 transported so dust self-absorption heats other cells (needed at high τ_IR).
 Writes `<base>_dustsed` (emergent + intrinsic SED, a pixel-resolved
-`DustEmis_image(x,y,λ)`, and per-cell `Tdust`/`Ldust` maps).
+`DustEmis_image(x,y,λ)`, and `Tdust`/`Ldust` maps for each cell).
 
 **Emission-solver speed options** (exact solve is ~0.1 s/cell):
 
@@ -279,12 +279,12 @@ dust emission lands in the observer `Scattered` SED image.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `nsource` | 1 | Number of stellar components (>1 activates multi-source) |
-| `src_geometry(i)` | `'point'` | Per-source geometry: `point`/`uniform`/`gaussian`/`exponential` |
-| `src_tstar(i)` | -999 | Per-source Planck temperature [K] |
-| `src_spectrum(i)` | `''` | Per-source spectrum file (overrides `src_tstar`) |
-| `src_lum(i)` | -999 | Per-source luminosity [erg/s] (equal split if unset) |
-| `src_x/y/z(i)` | 0 | Per-source position (`point`) |
-| `src_zscale(i)` | -999 | Per-source scale height (`gaussian`/`exponential`) |
+| `src_geometry(i)` | `'point'` | Geometry of each source: `point`/`uniform`/`gaussian`/`exponential` |
+| `src_tstar(i)` | -999 | Planck temperature of each source [K] |
+| `src_spectrum(i)` | `''` | Spectrum file of each source (overrides `src_tstar`) |
+| `src_lum(i)` | -999 | Luminosity of each source [erg/s] (equal split if unset) |
+| `src_x/y/z(i)` | 0 | Position of each source (`point`) |
+| `src_zscale(i)` | -999 | Scale height of each source (`gaussian`/`exponential`) |
 
 Sources are sampled in proportion to their luminosity; `luminosity` becomes
 `Σ src_lum`.  Example: a hot young disk + a cool old bulge (`examples/galaxy/`).
@@ -411,14 +411,14 @@ memo: `docs/MoCafe_clump.pdf`; examples in `examples/clump_sphere/`.
 | `clump_radius` | -1 | Clump radius (required) |
 | `clump_f_cov` / `clump_f_vol` / `clump_N_clumps` | -1 | Clump count — specify exactly one |
 | `clump_tau0` | -1 | Dust optical depth of one clump, center → surface (`κ = tau0/clump_radius`) |
-| `clump_ndust` / `clump_nH` | -1 | Per-clump dust / H density (`κ = n·cext_dust·distance2cm`) |
+| `clump_ndust` / `clump_nH` | -1 | Dust / H density of each clump (`κ = n·cext_dust·distance2cm`) |
 | `rmin` | 0.0 | Inner cavity radius |
 | `clump_fully_inside` | `.true.` | Require each clump entirely inside the shell |
 | `cone_opening` | 0.0 | Biconical placement half-angle [deg] (0 → full sphere) |
 | `clump_input_file` | `''` | Load a clump population instead of generating one |
 | `save_clump_info` | `.false.` | Write the generated clump table to `<base>_clumps.*` |
 
-If no per-clump opacity is given, `par%taumax` or `par%tauhomo` back-solves it.
+If no clump opacity is given, `par%taumax` or `par%tauhomo` back-solves it.
 RSA placement is reliable for volume filling factor ≲ 0.35; MoCafe aborts with
 guidance if it cannot place the requested clumps.
 
@@ -448,14 +448,14 @@ only.  Algorithm memo: `docs/MoCafe_amr.pdf`; examples in `examples/amr_sphere/`
 The **dust-emission suite** (SED mode, `J_λ` tally, Lucy+SEDust, single-Teq,
 table, B&W, MRW) runs on the AMR octree exactly as on the Cartesian grid — a
 "cell" is an octree leaf.  Just add the emission parameters to an AMR input;
-the `_jlam`/`_dustsed`/`_bwdust` outputs become per-leaf arrays plus a
+the `_jlam`/`_dustsed`/`_bwdust` outputs become arrays indexed by leaf plus a
 `LeafXYZ` table of leaf centers.  See `examples/amr_sphere/amr_dustemis.in`.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `amr_type` | `'generic'` | Only `'generic'`; `'ramses'` is rejected (convert first) |
 | `amr_file` | `''` | Generic AMR file (`.h5`, `.hdf5`, `.fits`, `.fits.gz`, `.dat`) |
-| `dust_model` | `'global_dgr'` | Per-leaf dust opacity model (below) |
+| `dust_model` | `'global_dgr'` | Dust opacity model for each leaf (below) |
 | `DGR` | 1e-2 | Dust-to-gas ratio for `global_dgr` |
 | `Z_global` | 0.0134 | Uniform metallicity for `laursen09` when no `metallicity` column |
 | `Z_ref` | 0.0134 | Reference solar metallicity |
@@ -481,7 +481,7 @@ name; an index fallback handles legacy files):
 
 ### AMR dust models
 
-| `dust_model` | Needs (columns) | Per-leaf opacity |
+| `dust_model` | Needs (columns) | Opacity of each leaf |
 |--------------|-----------------|------------------|
 | `global_dgr` | `nH` | `nH·cext_dust·DGR·distance2cm` |
 | `from_file` | `ndust` | `ndust·cext_dust·distance2cm` |
@@ -576,7 +576,7 @@ img = mf.scattered_at(a=0.5, g=0.3, tau=1.5)   # nearest scan slice
 
 `par%file_format` is authoritative.  If `par%out_file`'s extension disagrees,
 MoCafe rewrites it (and warns) so the main file and all derived files
-(peel-off Stokes split, sight-line tau, per-observer images) stay in one format.
+(peel-off Stokes split, sight-line tau, images for each observer) stay in one format.
 
 ```
 file_format='hdf5'  →  _obs.h5,        _obs_tau.h5,        _stokes.h5

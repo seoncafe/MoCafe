@@ -3,7 +3,7 @@
  !--- Clumps are placed uniformly (so the count follows the usual f_cov), but
  !--- each clump's dust opacity is scaled by a power law of its center radius,
  !--- kappa(r) ~ r^(-alpha): clumps near the center are more opaque
- !--- (exercises the radial-profile tables and per-clump opacity assignment).
+ !--- (exercises the radial-profile tables and clump opacity assignment).
  par%no_photons      = 2.0e6
  par%hgg             = 0.0
  par%albedo          = 0.5

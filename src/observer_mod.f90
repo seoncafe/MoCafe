@@ -38,7 +38,7 @@ contains
 
   !--- Fill missing alpha/beta with 0 when the other is specified.
   !--- This allows, e.g., inclination_angle alone to define multiple observers
-  !--- (gamma still gets its own auto-default inside the per-observer loop below).
+  !--- (gamma still gets its own auto-default inside the observer loop below).
   where (is_finite(par%beta)  .and. .not. is_finite(par%alpha)) par%alpha = 0.0_wp
   where (is_finite(par%alpha) .and. .not. is_finite(par%beta))  par%beta  = 0.0_wp
 

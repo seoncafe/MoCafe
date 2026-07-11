@@ -1,6 +1,6 @@
 module dustemis_mod
 !--- Dust thermal emission via the SEDust library (MoCafe v2.00, Stage 3).
-!--- Mode 1 (Lucy 1999): from the per-cell mean intensity J_lambda tallied by
+!--- Mode 1 (Lucy 1999): from the mean intensity J_lambda of each cell tallied by
 !--- jtally_mod, compute each cell's dust emission spectrum with SEDust
 !--- (equilibrium + stochastically heated grains + PAHs), then produce the
 !--- emergent dust thermal SED.
@@ -16,7 +16,7 @@ module dustemis_mod
 !--- with E_p = par%luminosity/nphotons [erg/s].  SEDust's Planck (bbody) is SI
 !--- [W m^-2 sr^-1 m^-1], so J_SI = 1.0e3 * J_cgs.  dust_emission returns
 !--- lamI_total(lambda) = lambda * (emission per H) whose SHAPE gives the
-!--- spectral PDF; the absolute per-cell luminosity is set to the locally
+!--- spectral PDF; the absolute luminosity of each cell is set to the locally
 !--- absorbed power (radiative equilibrium), which is exact by construction and
 !--- sidesteps the SEDust absolute-normalization convention.
   use define
@@ -43,10 +43,10 @@ module dustemis_mod
   type(dust_emis_table_t)    :: emtab
   logical                    :: table_built = .false.
   real(kind=wp)              :: Jref_bol = 0.0_wp     ! bolometric integral of J_ref (SI) for U scaling
-  real(kind=wp), allocatable :: cell_Lemit(:)        ! per-cell emitted (=absorbed) L [erg/s]
+  real(kind=wp), allocatable :: cell_Lemit(:)        ! emitted (=absorbed) L of each cell [erg/s]
   real(kind=wp), allocatable :: cell_pdf(:,:)        ! (nl_mc, ncell) emission energy fraction per bin
   real(kind=wp), allocatable :: cell_cdfw(:,:)       ! (nl_mc, ncell) cumulative of cell_pdf (wavelength sampling)
-  real(kind=wp), allocatable :: cell_Teq(:)          ! per-cell luminosity-weighted equilibrium-ish T [K] (diagnostic)
+  real(kind=wp), allocatable :: cell_Teq(:)          ! luminosity-weighted equilibrium-ish T of each cell [K] (diagnostic)
   real(kind=wp), allocatable :: cell_Lcdf(:)         ! (ncell) cumulative of cell_Lemit (cell sampling), normalized
   real(kind=wp) :: Labs_total = 0.0_wp               ! total absorbed L over the grid [erg/s]
   logical       :: dustemis_ready = .false.          ! .true. once a nonzero emission field exists
@@ -102,7 +102,7 @@ contains
   end subroutine setup_dustemis
 
   !---------------------------------------------------------------
-  !--- compute per-cell emission from the reduced J tally.
+  !--- compute each cell's emission from the reduced J tally.
   subroutine compute_dustemis(grid)
   use mpi
   use sed_mod,    only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo
@@ -202,15 +202,15 @@ contains
      endif
   enddo
 
-  !--- combine partial per-cell results across ranks.
+  !--- combine partial results of each cell across ranks.
   call MPI_ALLREDUCE(MPI_IN_PLACE, cell_Lemit, ncell_tot,       MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   call MPI_ALLREDUCE(MPI_IN_PLACE, cell_pdf,   nl_mc*ncell_tot, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   call MPI_ALLREDUCE(MPI_IN_PLACE, cell_Teq,   ncell_tot,       MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   Labs_total = sum(cell_Lemit)
 
   !--- build sampling tables for dust-emission photons (Lucy iteration):
-  !--- cell selection CDF (prob. proportional to cell_Lemit) and per-cell
-  !--- wavelength CDF (from cell_pdf).  Identical on every rank (inputs are
+  !--- cell selection CDF (prob. proportional to cell_Lemit) and
+  !--- each cell's wavelength CDF (from cell_pdf).  Identical on every rank (inputs are
   !--- ALLREDUCEd), so all ranks sample from the same distributions.
   csum = 0.0_wp
   do ic = 1, ncell_tot
@@ -249,8 +249,8 @@ contains
   !---------------------------------------------------------------
   !--- build the emission table (fast path): reference field shape J_ref =
   !--- the mean physical J over illuminated cells, and a log-spaced intensity
-  !--- grid U bracketing the per-cell heating range.  All ranks build the same
-  !--- table (identical inputs) so per-cell interpolation is purely local.
+  !--- grid U bracketing the heating range of each cell.  All ranks build the same
+  !--- table (identical inputs) so interpolation of each cell is purely local.
   subroutine build_dust_table(grid)
   use mpi
   use sed_mod,    only : sed_nlam, sed_wave, sed_dwave
@@ -286,7 +286,7 @@ contains
   Jref_sed(:) = Jsum(:)/dble(ncnt)
   Jref_bol    = sum(Jref_sed)
 
-  !--- pass 2: per-cell intensity scaling U = bolometric(J_cell)/bolometric(J_ref).
+  !--- pass 2: intensity scaling of each cell U = bolometric(J_cell)/bolometric(J_ref).
   Umin = hugest;  Umax = tinest
   do ic = mpar%p_rank+1, ncell_tot, mpar%nproc
      if (cell_rhokap(grid,ic) <= 0.0_wp) cycle
@@ -388,9 +388,9 @@ contains
 
   !---------------------------------------------------------------
   !--- emergent dust thermal SED: raytrace each emitting cell to each
-  !--- observer, attenuate at each wavelength, accumulate a per-observer
+  !--- observer, attenuate at each wavelength, accumulate a
   !--- 1-D emergent SED and a 3-D (x,y,lambda) image.  Also writes the
-  !--- intrinsic (unattenuated) SED and the per-cell T/L maps.
+  !--- intrinsic (unattenuated) SED and the T/L maps of each cell.
   subroutine write_dustemis(grid)
   use mpi
   use sed_mod,    only : sed_nlam, sed_wave, sed_dwave, sed_sext
@@ -482,7 +482,7 @@ contains
   call io_put_keyword(file,'EXTNAME','Wavelength','bin centers [um]',status)
   call io_append_image(file, sed_dwave, status, bitpix=-64)
   call io_put_keyword(file,'EXTNAME','Dwavelength','bin widths [um]',status)
-  !--- per-cell T and L maps: Cartesian cube (nx,ny,nz) or per-leaf arrays (AMR).
+  !--- T and L maps of each cell: Cartesian cube (nx,ny,nz) or arrays indexed by leaf (AMR).
   is_amr = trim(par%grid_type) == 'amr'
   if (is_amr) then
      allocate(Tleaf(ncell_tot), Lleaf(ncell_tot), leafxyz(ncell_tot,3))
@@ -492,9 +492,9 @@ contains
         leafxyz(ic,1) = cx;  leafxyz(ic,2) = cy;  leafxyz(ic,3) = cz
      enddo
      call io_append_image(file, Tleaf, status, bitpix=-64)
-     call io_put_keyword(file,'EXTNAME','Tdust','per-leaf dust temperature [K]',status)
+     call io_put_keyword(file,'EXTNAME','Tdust','dust temperature of each leaf [K]',status)
      call io_append_image(file, Lleaf, status, bitpix=-64)
-     call io_put_keyword(file,'EXTNAME','Ldust','per-leaf emitted luminosity [erg/s]',status)
+     call io_put_keyword(file,'EXTNAME','Ldust','emitted luminosity of each leaf [erg/s]',status)
      call io_append_image(file, leafxyz, status, bitpix=-64)
      call io_put_keyword(file,'EXTNAME','LeafXYZ','leaf center x,y,z (code units)',status)
   else
@@ -504,9 +504,9 @@ contains
         Tcube(i,j,k) = cell_Teq(ic);  Lcube(i,j,k) = cell_Lemit(ic)
      enddo
      call io_append_image(file, Tcube, status, bitpix=-64)
-     call io_put_keyword(file,'EXTNAME','Tdust','per-cell dust temperature [K]',status)
+     call io_put_keyword(file,'EXTNAME','Tdust','dust temperature of each cell [K]',status)
      call io_append_image(file, Lcube, status, bitpix=-64)
-     call io_put_keyword(file,'EXTNAME','Ldust','per-cell emitted luminosity [erg/s]',status)
+     call io_put_keyword(file,'EXTNAME','Ldust','emitted luminosity of each cell [erg/s]',status)
   endif
   !--- pixel-resolved emergent dust-emission image (observer 1), surface
   !--- brightness [erg/s/cm^2/sr per bin]: dust emission in the observer image.

@@ -104,7 +104,7 @@ public
      real(kind=wp) :: s_ext  = 1.0_wp
      !--- physical luminosity carried by the packet [erg/s], used by the
      !--- energy (J_lambda) tally so stellar and dust-emission photons with
-     !--- different per-packet energies combine correctly (1.0 in mono mode).
+     !--- different packet energies combine correctly (1.0 in mono mode).
      real(kind=wp) :: Lpacket = 1.0_wp
      ! Stokes parameters
      real(kind=wp) :: I,Q,U,V
@@ -205,7 +205,7 @@ public
      character(len=128) :: kext_file       = ''
      character(len=128) :: source_spectrum = ''
      real(kind=wp)      :: tstar           = -999.0_wp
-     !--- Stage 2: per-cell mean-intensity tally J_lambda(x,y,z) (Lucy 1999
+     !--- Stage 2: mean-intensity tally J_lambda(x,y,z) in each cell (Lucy 1999
      !--- pathlength estimator); writes '<base>_jlam.<ext>'.  Requires
      !--- use_sed and the plain Cartesian grid.
      logical            :: save_jlam       = .false.
@@ -306,7 +306,7 @@ public
      !--- AMR_CLUMPS_PLAN.md Part A.  Leaf data are read from a generic AMR
      !--- file (FITS/HDF5/text) produced by the Python builders/converters;
      !--- amr_type='ramses' is rejected (convert to 'generic' first).  The
-     !--- per-leaf dust opacity follows dust_model: 'global_dgr'
+     !--- dust opacity of each leaf follows dust_model: 'global_dgr'
      !--- (nH*cext_dust*DGR), 'from_file' (ndust column), or 'laursen09'
      !--- ((Z/Z_ref)*(nHI+f_ion*nHII), requires an xHI column).
      character(len=32)  :: amr_type   = 'generic'
@@ -321,7 +321,7 @@ public
      !--- radius par%rmax holds N non-overlapping dust clumps of radius
      !--- clump_radius; the inter-clump medium is vacuum (par%rmin carves an
      !--- inner cavity).  Clump count: one of clump_f_cov / clump_f_vol /
-     !--- clump_N_clumps.  Per-clump dust opacity kappa_c: one of clump_tau0
+     !--- clump_N_clumps.  Dust opacity of each clump kappa_c: one of clump_tau0
      !--- (dimensionless, center->surface) / clump_ndust / clump_nH; otherwise
      !--- back-solved from the system target par%taumax or par%tauhomo.
      real(kind=wp) :: clump_radius   = -1.0_wp

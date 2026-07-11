@@ -170,7 +170,7 @@ contains
   end subroutine bw_reemit
 
   !---------------------------------------------------------------
-  !--- combine the per-rank absorbed power and finalize cell temperatures.
+  !--- combine the absorbed power of each rank and finalize cell temperatures.
   subroutine bw_finalize()
   use mpi
   implicit none
@@ -182,7 +182,7 @@ contains
   end subroutine bw_finalize
 
   !---------------------------------------------------------------
-  !--- per-cell dust temperature map from the final total absorbed power.
+  !--- dust temperature map for each cell from the final total absorbed power.
   subroutine bw_Tmap(grid)
   implicit none
   type(grid_type), intent(in) :: grid
@@ -289,7 +289,7 @@ contains
      call io_append_image(file, Tleaf, status, bitpix=-64)
      call io_put_keyword(file,'EXTNAME','Tdust','equilibrium dust temperature [K] per leaf (B&W 2001)',status)
      call io_append_image(file, Aleaf, status, bitpix=-64)
-     call io_put_keyword(file,'EXTNAME','Labs','per-leaf absorbed = emitted power [erg/s]',status)
+     call io_put_keyword(file,'EXTNAME','Labs','absorbed = emitted power of each leaf [erg/s]',status)
      call io_append_image(file, leafxyz, status, bitpix=-64)
      call io_put_keyword(file,'EXTNAME','LeafXYZ','leaf center x,y,z (code units)',status)
   else
@@ -301,7 +301,7 @@ contains
      call io_append_image(file, Tmap, status, bitpix=-64)
      call io_put_keyword(file,'EXTNAME','Tdust','equilibrium dust temperature [K] (B&W 2001)',status)
      call io_append_image(file, Amap, status, bitpix=-64)
-     call io_put_keyword(file,'EXTNAME','Labs','per-cell absorbed = emitted power [erg/s]',status)
+     call io_put_keyword(file,'EXTNAME','Labs','absorbed = emitted power of each cell [erg/s]',status)
   endif
   call io_put_keyword(file,'TOT_LUM', par%luminosity, 'input stellar luminosity',status)
   call io_put_keyword(file,'L_ABS',   sum(cell_A),    'total absorbed power',status)

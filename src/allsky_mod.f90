@@ -89,7 +89,7 @@ contains
   call vec2pix(nside, -pobs%kx, -pobs%ky, -pobs%kz, ipix)
   if (ipix < 1 .or. ipix > npix) return
 
-  !--- accumulate the peel flux (same per-event quantity as the SED observer
+  !--- accumulate the peel flux (same quantity for each event as the SED observer
   !--- images); allsky_write applies the surface-brightness normalization
   !--- no_photons * steradian_pix * dist_cm^2 / luminosity (as output_normalize).
   wgt = peel/r2 * exp(-tau) * photon%wgt

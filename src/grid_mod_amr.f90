@@ -3,10 +3,10 @@ module grid_mod_amr
 ! AMR grid setup for MoCafe (dust-only, par%grid_type = 'amr').
 !
 ! Reads a generic AMR file (FITS/HDF5/text) of leaf cells, builds the octree
-! (octree_mod), computes the per-leaf grey dust opacity per par%dust_model,
+! (octree_mod), computes the grey dust opacity of each leaf according to par%dust_model,
 ! and normalizes it to the system target par%taumax (radial pole) or
 ! par%tauhomo (volume average).  A small vestigial Cartesian box grid is then
-! built (grid_create) only so the observer/output machinery runs unchanged --
+! built (grid_create) only so the observer/output code runs unchanged --
 ! the transport uses amr_grid, not grid%rhokap.  Dust-only slim of LaRT's
 ! grid_mod_amr.f90 (no frequency grid, emissivity, velocity, or Voigt); see
 ! AMR_CLUMPS_PLAN.md Part A.
@@ -80,7 +80,7 @@ contains
   call amr_build_neighbors
   call amr_alloc_phys()
 
-  !--- per-leaf grey dust opacity (h_rank=0 fills the shared array).
+  !--- grey dust opacity of each leaf (h_rank=0 fills the shared array).
   if (mpar%h_rank == 0) then
      do il = 1, nleaf
         select case (trim(par%dust_model))

@@ -93,7 +93,7 @@ contains
   par%lambda0   = par%lambda_ref
 
   !--- source spectrum.  With multiple source components (par%nsource > 1) the
-  !--- per-source spectra are set up in sources_mod, so the global single-source
+  !--- spectra for each source are set up in sources_mod, so the global single-source
   !--- spectrum is optional here: build a flat placeholder and skip the checks.
   if (par%nsource > 1 .and. len_trim(par%source_spectrum) == 0 .and. par%tstar <= 0.0_wp) then
      sed_lum(:) = sed_dwave(:)

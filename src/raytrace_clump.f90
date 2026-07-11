@@ -7,7 +7,7 @@ module raytrace_clump_mod
 ! Each clump has its own grey dust opacity cl_rhokap(icl) (extinction per unit
 ! code length).  Because the opacity is grey there is NO frequency, Voigt
 ! profile, Doppler width, or velocity -- the clump subsystem is purely
-! geometric plus a per-clump scalar opacity (LaRT's Lyman-alpha machinery is
+! geometric plus a scalar opacity for each clump (LaRT's Lyman-alpha transfer is
 ! stripped; see AMR_CLUMPS_PLAN.md Part B).
 !
 !   photon%icell_clump: 0 = in vacuum; > 0 = index of the current clump.

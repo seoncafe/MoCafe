@@ -44,7 +44,7 @@ def laursen09_ndust(nH, xHI, Z, Z_ref=0.0134, f_ion=0.01):
 
 # --------------------------------------------------------------------------
 def load_illustris_hdf5(filepath, center_kpc=None, boxsize_kpc=None):
-    """Return dict of per-cell physical-unit arrays (dust-only fields)."""
+    """Return dict of physical-unit arrays for each cell (dust-only fields)."""
     import h5py
     with h5py.File(filepath, "r") as f:
         hdr = dict(f["Header"].attrs)

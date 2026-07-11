@@ -32,7 +32,7 @@ Public API
 
 ``find_mocafe_outputs(stem)``
     Locate the related files of a MoCafe run (the main peeloff,
-    sightline tau, Stokes split, and any per-observer suffixed files).
+    sightline tau, Stokes split, and any observer-suffixed files).
 
 ``convert(src, dst)``
     Convert between formats by extension.  ``foo_obs.fits.gz`` →
@@ -109,7 +109,7 @@ def find_mocafe_file(stem: str, suffix: str = '') -> Optional[str]:
     ``stem`` may be either a bare base name or a path that already
     carries an extension; the extension is stripped if present.
     ``suffix`` is an optional insertion (``'_obs'``, ``'_obs_tau'``,
-    ``'_stokes'``, or per-observer ``'_001'``, …).  Returns ``None`` if
+    ``'_stokes'``, or observer ``'_001'``, …).  Returns ``None`` if
     no candidate exists.
     """
     base = _strip_mocafe_ext(stem)
@@ -139,7 +139,7 @@ def find_mocafe_outputs(stem: str) -> Dict[str, List[str]]:
         single = find_mocafe_file(base, suffix)
         if single is not None:
             found[key].append(single)
-        # Per-observer files, _NNN form.
+        # Files for each observer, _NNN form.
         for ext in _MOCAFE_EXTS:
             for path in sorted(glob.glob(f'{base}{suffix}_[0-9][0-9][0-9]{ext}')):
                 if path not in found[key]:

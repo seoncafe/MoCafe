@@ -18,8 +18,8 @@ module scan_mod
 ! a^k); the Wg update happens after the actual scattering cosine mu is sampled
 ! (so the peel at scattering k sees the previous k-1 actual scatters).
 !
-! MoCafe is pure MPI with a single photon in flight per rank, so the per-photon
-! accumulators below are safe as module-level state (no OpenMP-within-photon).
+! MoCafe is pure MPI with a single photon in flight per rank, so the
+! photon accumulators below are safe as module-level state (no OpenMP-within-photon).
 !------------------------------------------------------------------------------
   use define
   use utility, only : is_finite
@@ -39,12 +39,12 @@ module scan_mod
   real(kind=wp) :: scan_tlist(MAX_SCAN) = 0.0_wp   ! target taumax values
   real(kind=wp) :: scan_s(MAX_SCAN)     = 1.0_wp   ! s_t = tlist / taumax_ref
 
-  !--- per-photon accumulators (reset at each photon birth)
+  !--- accumulators for each photon (reset at each photon birth)
   real(kind=wp) :: scan_Aalb(MAX_SCAN) = 1.0_wp
   real(kind=wp) :: scan_Wg(MAX_SCAN)   = 1.0_wp
   real(kind=wp) :: scan_Wtau(MAX_SCAN) = 1.0_wp
 
-  !--- per-segment carrier: the free-path optical depth tau_k just drawn for the
+  !--- carrier for each segment: the free-path optical depth tau_k just drawn for the
   !--- segment leading to the current scattering (set by run_simulation, read by
   !--- the scan scatter routine).  Only meaningful when par%use_tau_list = .true.
   real(kind=wp) :: scan_tau_step = 0.0_wp
@@ -158,7 +158,7 @@ contains
   end subroutine scan_reset_photon
 
   !---------------------------------------------------------------------------
-  !--- Advance the per-tau weight by one free-path segment of optical depth tau
+  !--- Advance the weight for each tau by one free-path segment of optical depth tau
   !--- (drawn at the reference): Wtau(it) <- s_it * exp((1-s_it)*tau) * Wtau(it).
   !--- Jonsson 2006, eq. 31; the forced first segment uses the same factor because
   !--- the (1-e^{-tau^e}) normalization cancels (see POLYCHROMATIC_TAU_SCAN_PLAN.md).

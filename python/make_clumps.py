@@ -7,7 +7,7 @@ routine in ``src/clump_mod.f90``:
 
   * HDU 0 / group 0 : empty primary
   * HDU 2 / group 2 : binary table with columns ``X, Y, Z`` (clump centers, in
-    code units) and, when the population is non-uniform, the per-clump columns
+    code units) and, when the population is non-uniform, the columns for each clump
     ``R_CLUMP`` (radius) and ``RHOKAP`` (grey dust opacity per code length).
     Constant radius / opacity are stored in the header keywords ``CL_RAD`` /
     ``RHOKAP`` instead (MoCafe falls back to those when a column is absent).
@@ -130,7 +130,7 @@ def place_rsa(n, R, r, rmin, fully_inside, rng):
 # --------------------------------------------------------------------------
 def write_clumps(fname, xyz, radius, rhokap, args, fmt):
     """Write the clump table.  Constant radius/opacity -> header keywords only;
-    otherwise per-clump R_CLUMP / RHOKAP columns are written too."""
+    otherwise R_CLUMP / RHOKAP columns for each clump are written too."""
     n = xyz.shape[0]
     R, rmin = args.rmax, args.rmin
     f_vol = float(np.sum(radius**3) / max(R**3 - rmin**3, 1e-30))

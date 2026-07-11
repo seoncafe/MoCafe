@@ -13,7 +13,7 @@ scattered-light image
 ```
 
 Velocity and temperature are **not** used (dust only): the converter reads the
-per-cell `Density` → `nH`, `GFM_Metallicity` → `metallicity`, and
+`Density` → `nH`, `GFM_Metallicity` → `metallicity`, and
 `NeutralHydrogenAbundance` → `xHI`, and (with `--emit-ndust`) precomputes
 `ndust` via Laursen+09.  MoCafe's dust opacity then comes from
 `par%dust_model`:

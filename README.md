@@ -5,7 +5,7 @@ scattering and thermal emission**.  It follows photon packets emitted by a
 source through a dusty medium, scatters them off dust grains (Henyey–Greenstein
 or a tabulated Mueller matrix), and "peels off" a contribution toward each
 observer to build a FITS or HDF5 image.  **v2.00** adds panchromatic dust
-thermal emission: multi-wavelength transport, a per-cell radiation-field tally,
+thermal emission: multi-wavelength transport, a radiation-field tally in each cell,
 and UV-to-FIR SEDs of dusty sources, external galaxies, and the Milky Way.
 
 The scattered-light image is in units of `(luminosity unit) cm^-2 sr^-1`.
@@ -29,8 +29,8 @@ The scattered-light image is in units of `(luminosity unit) cm^-2 sr^-1`.
 - **HDF5 and FITS** output/input through a format-agnostic facade (`par%file_format`).
 - **MPI** parallelism (master–slave or equal-share), with MPI-3 shared memory
   for read-only grid/clump/octree arrays (one copy per node).
-- **Dust thermal emission (v2.00)** — panchromatic (SED) transport, a per-cell
-  `J_λ` tally, and two emission methods:
+- **Dust thermal emission (v2.00)** — panchromatic (SED) transport, a `J_λ` tally in
+  each cell, and two emission methods:
   - **Lucy (1999) + [SEDust](SEDust/)** — equilibrium + stochastically heated
     grains + PAHs; iterable for dust self-absorption; fast equilibrium
     (`dust_single_teq`) and table (`dust_fast_table`) options.

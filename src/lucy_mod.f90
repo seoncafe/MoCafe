@@ -2,7 +2,7 @@ module lucy_mod
 !--- Lucy (1999) iteration driver for dust self-absorption (MoCafe v2.00,
 !--- Stage 3 follow-up #1).  Energy-only passes (no observer peel) transport
 !--- stellar photons once and dust-emission photons each iteration; the
-!--- per-cell J_lambda tally feeds SEDust (dustemis_mod) to update the
+!--- the J_lambda tally in each cell feeds SEDust (dustemis_mod) to update the
 !--- emission, iterating until the total emitted (=absorbed) luminosity
 !--- converges.  The stellar tally is computed once and reused; each iteration
 !--- adds a fresh dust-photon tally on top.

@@ -158,7 +158,7 @@ contains
   return
   end subroutine raytrace_to_edge_car
 
-  !--- analytic per-cell J tally of the (forced) first flight: contribution
+  !--- analytic J tally in each cell of the (forced) first flight: contribution
   !--- wgt * Int exp(-tau_lambda) dl over the cell (exact expectation of the
   !--- unscattered pathlength; see jtally_mod).  Updates the running
   !--- cell-entry attenuation expo = exp(-s_ext*tau).

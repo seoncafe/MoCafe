@@ -2,18 +2,18 @@ module clump_mod
 !---------------------------------------------------------------------------
 ! Clumpy dust medium for MoCafe (par%grid_type = 'clump').
 !
-! Geometry: N_clumps spherical dust clumps of (per-clump) radius cl_radius(:)
+! Geometry: N_clumps spherical dust clumps of radius cl_radius(:)
 ! placed uniformly at random (non-overlapping via RSA) inside a sphere of
 ! radius sphere_R.  Each clump carries a grey dust opacity cl_rhokap(:)
 ! (extinction per unit code length).  Outside the clumps the medium is vacuum.
-! When all radial profiles are 'constant', every per-clump entry equals the
+! When all radial profiles are 'constant', every clump entry equals the
 ! corresponding reference scalar; otherwise the arrays are populated from
 ! radial profiles.
 !
 ! This is the dust-only slim of LaRT_v2.00/clump_mod.f90: all Lyman-alpha /
-! velocity / temperature / Voigt / frequency machinery is stripped (see
+! velocity / temperature / Voigt / frequency handling is stripped (see
 ! AMR_CLUMPS_PLAN.md Part B).  The clump subsystem is purely geometric plus a
-! per-clump scalar opacity.
+! scalar opacity of each clump.
 !
 ! Algorithms:
 !   Placement : linked-list RSA, O(N_cl) expected time for f_vol < 35%.
@@ -33,7 +33,7 @@ module clump_mod
   real(kind=wp),  save :: r_min_clump = 0.0_wp   ! inner placement radius [code units]
                                                  ! (= max(0, par%rmin); 0 -> filled sphere)
 
-  !--- Per-clump dust properties (MPI shared memory, dimension N_clumps).
+  !--- Dust properties of each clump (MPI shared memory, dimension N_clumps).
   real(kind=wp), pointer, save :: cl_radius(:)  => null()  ! clump radius [code units]
   real(kind=wp), pointer, save :: cl_radius2(:) => null()  ! cl_radius(icl)**2
   real(kind=wp), pointer, save :: cl_rhokap(:)  => null()  ! grey dust opacity per code unit
@@ -50,7 +50,7 @@ module clump_mod
   real(kind=dp), pointer, save :: cl_y(:) => null()
   real(kind=dp), pointer, save :: cl_z(:) => null()
 
-  !--- Radial-profile machinery (geometry only).
+  !--- Radial-profile handling (geometry only).
   real(kind=wp), save :: base_radius_in  = 0.0_wp     ! par%clump_radius (peak radius)
   real(kind=wp), save :: base_rhokap_in  = 0.0_wp     ! peak rhokap that shapes scale
   logical,       save :: profiles_active = .false.    ! .true. if any profile != 'constant'
@@ -545,7 +545,7 @@ contains
   end if
   if (N_clumps <= 0_int64) N_clumps = 1_int64
 
-  !--- clump dust opacity (peak value).  Per-clump direct inputs take
+  !--- clump dust opacity (peak value).  Direct inputs for each clump take
   !    priority over the system-level back-solve from par%taumax / par%tauhomo.
   shell_R2_factor = R_sphere**2 + R_sphere*r_min_clump + r_min_clump**2
   if (par%clump_tau0 > 0.0_wp) then
@@ -1206,7 +1206,7 @@ contains
   !===========================================================================
   subroutine compute_clump_scalars(tauhomo_out, taumax_out)
   !---------------------------------------------------------------------------
-  ! System-level dust optical-depth scalars from the per-clump arrays.
+  ! System-level dust optical-depth scalars from the clump arrays.
   !   tauhomo = Sum_i rhokap_i * r_i^3 / (R^2 + R*r0 + r0^2)
   !             (uniform-smear of clump opacity over the shell, traversed
   !              radially)
@@ -1428,7 +1428,7 @@ contains
   !---------------------------------------------------------------------------
   ! Read a clump population from a FITS/HDF5 file written by write_clumps_info
   ! (or the python make_clumps.py generator).  Reads X, Y, Z (mandatory) and
-  ! R_CLUMP, RHOKAP (per-clump, or via header keywords CL_RAD / RHOKAP).  A
+  ! R_CLUMP, RHOKAP (for each clump, or via header keywords CL_RAD / RHOKAP).  A
   ! DENSITY/DENS column is converted to opacity via cext_dust * distance2cm.
   ! Builds the CSR grid.  Sets clumps_from_file = .true.
   !---------------------------------------------------------------------------

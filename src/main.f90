@@ -51,7 +51,7 @@
   if (par%use_mrw)       call setup_mrw()
 
   !--- Dust emission (Stage 3, Mode 1 Lucy): energy iterations first, which
-  !--- tally J_lambda and converge the per-cell emission (dust self-absorption
+  !--- tally J_lambda and converge each cell's emission (dust self-absorption
   !--- if par%dust_niter > 1).  Leaves jt_sum = converged total J and turns the
   !--- tally off so the subsequent imaging pass does not overwrite it.
   if (par%use_dustemis .and. .not. use_bw) then
