@@ -1,0 +1,338 @@
+%% MoCafe v2.00 -- Physics and Algorithms
+%% Author: Kwang-Il Seon (KASI)
+\documentclass[english,a4paper]{kiseon_memo}
+\synctex=1
+
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{microtype}
+
+\newcommand{\kabs}{\kappa_{\mathrm{abs}}}
+\newcommand{\kext}{\kappa_{\mathrm{ext}}}
+\newcommand{\ksca}{\kappa_{\mathrm{sca}}}
+\newcommand{\Jlam}{J_\lambda}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\pp}[1]{\texttt{par\%#1}}
+
+\begin{document}
+
+\title{MoCafe v2.00 --- Physics and Algorithms}
+\author{Kwang-Il Seon (KASI)}
+\date{2026-07-11}
+\maketitle
+
+\begin{abstract}
+\noindent
+This note collects the physics and the numerical algorithms behind MoCafe, the
+Monte-Carlo dust radiative-transfer code: photon transport and the peeling-off
+estimator, panchromatic (SED) transport by grey rescaling, the Lucy~(1999)
+mean-intensity estimator, the two dust-emission solvers (Lucy$+$SEDust and
+Bjorkman \& Wood), the Modified Random Walk, the galaxy source models, and the
+random-sampling routines (alias method, exponential disk, deprojected Sersic).
+It is a companion to the user guide, which covers installation, the input
+reference, and the outputs.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+%=============================================================================
+\section{Monte-Carlo radiative transfer}
+%=============================================================================
+
+MoCafe propagates photon \emph{packets} (weighted bundles of photons) through a
+dusty medium.  A packet carries a position, a propagation direction, a weight
+$w$, a wavelength bin, and---in SED/emission mode---a physical luminosity
+$L_{\rm p}$ [erg\,s$^{-1}$].  The medium is described by an extinction
+coefficient $\kext=\ksca+\kabs$ (per unit length), a single-scattering albedo
+$a=\ksca/\kext$, and a scattering phase function.
+
+\subsection{Free path and optical depth}
+The probability that a packet travels an optical depth $\tau$ before an
+interaction is $e^{-\tau}$, so a free path is drawn as
+\begin{equation}
+  \tau = -\ln(1-\xi), \qquad \xi \in [0,1),
+\end{equation}
+and converted to a physical length by integrating $\kext$ along the ray
+(Amanatides--Woo voxel traversal on the Cartesian grid, a ray--sphere plus DDA
+walk in the clumpy medium, and an octree neighbour walk on the AMR grid).  The
+three ray tracers share one interface so scattering and peeling-off are
+grid-agnostic.
+
+\subsection{Forced first scattering and reduced weight}
+For optically thin media most packets would escape without interacting, wasting
+samples.  With \pp{use\_reduced\_wgt} the first interaction is \emph{forced}
+inside the grid.  If $\tau_0$ is the total optical depth from the birth point to
+the far edge, the first free path is drawn from the \emph{truncated}
+distribution
+\begin{equation}
+  \tau = -\ln\!\big[\,1-\xi\,(1-e^{-\tau_0})\big],
+\end{equation}
+and the packet weight is reduced by the probability that it would have interacted
+at all,
+\begin{equation}
+  w \leftarrow w\,(1-e^{-\tau_0}).
+\end{equation}
+The escaping fraction $e^{-\tau_0}$ is accounted for by the direct (unscattered)
+peel-off, so no energy is lost.  The $n_{\rm scatt}=0$ step is special-cased in
+the transport loop for this reason.
+
+\subsection{Peeling-off estimator}
+Rather than waiting for packets to reach an observer by chance, at every
+emission and scattering site MoCafe adds the \emph{expected} contribution toward
+each observer (the ``peeling-off'' or next-event estimator).  For a scattering
+at position $\mathbf r$ with incoming direction $\hat{\mathbf k}$, the
+contribution to observer $o$ in direction $\hat{\mathbf n}_o$ at distance $d_o$
+is
+\begin{equation}
+  \Delta I_o = \frac{w\,a\,\Phi(\hat{\mathbf k}\!\cdot\!\hat{\mathbf n}_o)}{4\pi}\,
+               e^{-\tau_o}\, \frac{1}{d_o^2},
+  \label{eq:peel}
+\end{equation}
+where $\Phi$ is the (normalized) phase function and $\tau_o$ is the optical depth
+from $\mathbf r$ to the observer along $\hat{\mathbf n}_o$.  For an internal
+all-sky observer (\S\ref{sec:allsky}) the same quantity is binned into the
+HEALPix pixel of the arrival direction instead of a tangent-plane image.  The
+peel is computed through the \code{raytrace\_to\_edge} procedure pointer so that
+the Cartesian, clumpy, and AMR media reuse identical scattering/peeling code.
+
+%=============================================================================
+\section{Scattering}
+%=============================================================================
+The default phase function is Henyey--Greenstein with asymmetry $g$,
+\begin{equation}
+  \Phi_{\rm HG}(\mu) = \frac{1-g^2}{2\,(1+g^2-2g\mu)^{3/2}}, \qquad \mu=\cos\theta,
+\end{equation}
+sampled analytically for the scattering angle.  When a Mueller matrix is
+supplied (\pp{scatt\_mat\_file}) the code carries the Stokes vector
+$(I,Q,U,V)$, samples $\cos\theta$ from the tabulated $S_{11}$ with an alias
+table (\S\ref{sec:alias}), and rotates/updates the Stokes vector through the
+scattering matrix.  In that case the peel-off of Eq.~\eqref{eq:peel} uses the
+matrix-weighted phase function.
+
+%=============================================================================
+\section{Panchromatic (SED) transport}\label{sec:sed}
+%=============================================================================
+
+\subsection{Grey rescaling}
+In SED mode a packet is assigned a wavelength bin $\lambda$ at birth and keeps it
+until absorption.  Instead of storing a separate opacity grid per wavelength,
+MoCafe stores the density (hence the optical-depth structure) at a single
+reference wavelength $\lambda_{\rm ref}$ and rescales per packet
+(Jonsson~2006-style),
+\begin{equation}
+  s_{\rm ext}(\lambda) = \frac{\kext(\lambda)}{\kext(\lambda_{\rm ref})},
+  \qquad
+  \tau(\lambda) = s_{\rm ext}(\lambda)\,\tau_{\rm ref}.
+\end{equation}
+The ray tracers integrate $\tau_{\rm ref}$ and multiply by the packet's
+$s_{\rm ext}$, so all three tracers are shared with the monochromatic path and
+memory does not grow with the number of wavelengths.  The wavelength-dependent
+albedo $a(\lambda)$ and asymmetry $g(\lambda)$ come from the same
+\code{kext\_file} table ($\lambda$, $a$, $\langle\cos\rangle$, $C_{\rm ext}/$H).
+
+\subsection{Wavelength sampling}
+The source spectrum $L_\lambda$ (a Planck function at \pp{tstar}, a tabulated
+\pp{source\_spectrum}, or per component in the multi-source case) is turned into
+a luminosity fraction per bin and sampled with an alias table.  Each packet
+then carries a physical luminosity $L_{\rm p}=L_{\rm tot}/N_{\rm phot}$, which
+makes the emission energy budget absolute (erg\,s$^{-1}$).
+
+%=============================================================================
+\section{Mean intensity in each cell (Lucy 1999)}\label{sec:jlam}
+%=============================================================================
+The heating of the dust is set by the mean intensity $\Jlam$ in each cell.
+MoCafe uses the Lucy~(1999) \emph{pathlength} estimator, which accumulates a
+contribution from every path segment a packet takes through a cell, not just
+from discrete interaction points:
+\begin{equation}
+  \Jlam = \frac{1}{4\pi\,V\,\Delta\lambda\,d_{\rm cm}^2}
+          \sum_{\text{segments in cell}} L_{\rm p}\, w\, \ell,
+  \label{eq:jlucy}
+\end{equation}
+where $\ell$ is the length of the segment, $V$ the cell volume, $\Delta\lambda$
+the bin width, and $d_{\rm cm}$ the length unit in cm.  Because every segment
+contributes, the estimator has far lower variance than a collision estimator,
+especially in optically thin cells.  The absorbed power in a cell follows as
+\begin{equation}
+  P_{\rm abs} = 4\pi V \int \kabs(\lambda)\,\Jlam \, d\lambda,
+\end{equation}
+and is written to the \code{\_jlam} output together with a consistency check
+(the pathlength tally \code{EABS\_A} versus an event counter \code{EABS\_B}).
+The forced-first-flight segment is added analytically.
+
+%=============================================================================
+\section{Dust thermal emission}
+%=============================================================================
+Two solvers turn the absorbed energy into an emission spectrum.  Both conserve
+energy exactly: the total emitted luminosity equals the total absorbed
+luminosity.
+
+\subsection{Mode 1: Lucy (1999) with SEDust}\label{sec:lucy}
+The radiation field $\Jlam$ from Eq.~\eqref{eq:jlucy} is handed cell-by-cell to
+the SEDust grain library, which returns the emission spectrum
+$\varepsilon_\lambda$ for the local field.  SEDust integrates over the grain-size
+distribution and, for small grains and PAHs, over the \emph{temperature
+probability distribution} $P(T)$ produced by single-photon (stochastic) heating,
+\begin{equation}
+  \varepsilon_\lambda = \int da\, \frac{dn}{da}\,\pi a^2 Q_{\rm abs}(a,\lambda)
+        \int dT\, P(a,T)\, \pi B_\lambda(T),
+\end{equation}
+plus an equilibrium term for large grains.  The emission in each cell is then
+normalized so that its integral equals the locally absorbed power, which makes
+energy conservation exact regardless of the SEDust internal normalization.  The
+emitted spectrum is resampled onto the transport grid, and the emission is
+either integrated directly (the intrinsic SED) or transported as a second batch
+of packets to form the emergent SED and the pixel-resolved emission image.
+
+\paragraph{Speed options.}  The exact stochastic solve is $\mathcal O(0.1\,$s$)$
+per cell.  \pp{dust\_single\_teq} replaces $P(T)$ by a single mixture
+equilibrium temperature (fast, no PAH/stochastic features).
+\pp{dust\_fast\_table} builds a reference emission table over the field
+intensity $U=\int\Jlam d\lambda / \int J_\lambda^{\rm ref} d\lambda$ once, then
+interpolates each cell in $U$ ($\sim$1\% SED-shape error, keeps PAH/stochastic).
+
+\paragraph{Iteration.}  With \pp{dust\_niter}$>1$ the emitted packets are
+transported so that dust self-absorption heats other cells; the field
+$\Jlam \to \Jlam^{\rm stellar}+\Jlam^{\rm dust}$ and the emission is recomputed
+until the total emitted luminosity converges to \pp{dust\_tol}.  This matters
+only at high infrared optical depth.
+
+\paragraph{Grain models.}  \pp{dust\_model\_sed} selects \code{astrodust}
+(Hensley \& Draine 2023), \code{dl07} (Draine \& Li 2007), or \code{zubko}
+(Zubko et al.\ 2004 BARE-GR-S).
+
+\subsection{Mode 2: Bjorkman \& Wood (2001)}\label{sec:bw}
+The immediate-reemission scheme uses fixed-energy packets and a mixture
+mean opacity.  When a packet is absorbed in a cell, the cell's absorbed energy
+increases, raising its equilibrium temperature $T$; the packet is re-emitted at
+once with a wavelength drawn from the \emph{temperature-correction} spectrum
+\begin{equation}
+  \frac{dP}{d\lambda} \propto \kabs(\lambda)\,
+      \frac{\partial B_\lambda(T)}{\partial T},
+\end{equation}
+which corrects the previously-emitted spectrum for the temperature increment so
+that, in steady state, the cell radiates a $\kabs B_\lambda(T)$ spectrum.  No
+iteration and no radiation-field storage are needed; the method is approximate
+(equilibrium, mixture opacity, no PAH/stochastic features) but cheap.  The
+emergent dust light lands directly in the observer \code{Scattered} SED.
+
+%=============================================================================
+\section{Modified Random Walk}\label{sec:mrw}
+%=============================================================================
+In cells that are very optically thick to \emph{scattering} a packet takes many
+tiny steps.  The Modified Random Walk (Min et al.\ 2009; Robitaille 2010)
+replaces them with a single diffusion step.  A sphere of radius $R_0$ (the
+distance to the nearest cell wall) is inscribed; the packet is moved to a random
+point on that sphere, and the physical path length travelled inside is sampled
+from the tabulated diffusion first-passage distribution $\zeta(y)$.  MoCafe
+diffuses with the \emph{scattering} opacity and decays the weight by the
+absorption along the path, $w\leftarrow w\,e^{-a_{\rm abs}\,c t}$, and applies
+Russian roulette (survival probability \code{RR\_SURV} below a cutoff
+\code{RR\_CUT}) so that high-albedo, high-$\tau$ clouds terminate.  MRW triggers
+when the nearest-wall scattering optical depth exceeds \pp{mrw\_gamma}; its
+speed-up is large only for near-pure-scattering, very thick cells.
+
+%=============================================================================
+\section{Source (galaxy) models}\label{sec:galaxy}
+%=============================================================================
+A stellar component emits packets from a spatial distribution.  Multiple
+components (\pp{nsource}) are chosen in proportion to luminosity.
+
+\subsection{Exponential disk}
+A razor-thin exponential disk has surface density $\Sigma(r)\propto e^{-r/r_s}$,
+so the probability of a packet at cylindrical radius $r$ is
+$p(r)\propto 2\pi r\,\Sigma(r)\propto r\,e^{-r/r_s}$.  This is the
+$\mathrm{Gamma}(2)$ (double-exponential) law, sampled exactly by \code{rand\_r1exp}
+(the sum of two exponential deviates).  The vertical structure is exponential
+(\code{rand\_zexp}) or $\mathrm{sech}^2$ (\code{rand\_sech2}).
+
+\subsection{Spiral arms}
+Log-spiral arms multiply the disk by
+\begin{equation}
+  1 + A\,\sin\!\Big[m\Big(\frac{\ln r}{\tan p}-\phi\Big)\Big],
+\end{equation}
+with $m$ arms, pitch angle $p$, and amplitude $A$.  For \emph{sources} the
+azimuth is drawn by rejection against this factor (accept if
+$(1+A)\,\xi \le 1+A\sin[\dots]$); for the \emph{dust} density the cell opacity
+is multiplied by the same factor.  Seen face-on, the absorbed-power map traces
+the arms (validated in \file{examples/galaxy/spiral\_faceon.in}).
+
+\subsection{Sersic bulge (deprojection + alias sampling)}\label{sec:sersic}
+The projected 2-D Sersic profile is
+$I(R)=I_0\exp[-b_m(R/R_e)^{1/m}]$, with $b_m$ from Ciotti \& Bertin~(1999).
+MoCafe emits from the \emph{3-D} luminosity distribution, obtained by
+deprojecting $I(R)$ with an Abel transform; the deprojected cumulative
+luminosity within spherical radius $r$ is
+\begin{equation}
+  \mathcal L(<r) = \gamma\!\big(2m{+}1,\,b_m r^{1/m}\big)
+     + \frac{2}{\pi}\frac{b_m^{2m+1}}{m\,\Gamma(2m{+}1)}\,r^2
+       \!\int_1^\infty\!\! x\,f(x)\,e^{-b_m(rx)^{1/m}}(rx)^{1/m}\,dx,
+\end{equation}
+computed once on a log-radius grid (\code{sersic\_cumulative\_3D}).  The radius
+is then drawn with the \emph{alias} method (\S\ref{sec:alias}) rather than an
+inverse-CDF search: the bin probabilities (differences of the cumulative)
+build an alias table, and \code{rand\_alias\_linear} returns a continuous radius
+by linear interpolation within the selected bin.  The point is placed
+isotropically and flattened in $z$ by the axial ratio.  The alias-sampled
+distribution reproduces the analytic cumulative to $\sim10^{-4}$.
+
+\subsection{Boxy / bar / x-bar bulges}
+Generalized-ellipsoid bulges use the radius
+$r=(|x|^n+|y|^n+|z|^n)^{1/n}$ with boxiness $n$ ($n=2$ ellipsoid, $n>2$ boxy)
+and a power-law (\code{boxy}), Gaussian (\code{bar}), or peanut (\code{xbar})
+profile.  These are drawn with a slice-within-Gibbs sampler
+(\code{random\_bulge.f90}): an auxiliary level is drawn under the current
+density and each coordinate is updated uniformly on the resulting slice.
+Consecutive draws are therefore correlated---adequate for a bulge, but
+statistically weaker than the independent alias-sampled Sersic.
+
+%=============================================================================
+\section{Random sampling}\label{sec:alias}
+%=============================================================================
+\subsection{Alias method}
+Walker's alias method samples an index from a discrete distribution
+$\{p_k\}$ in $\mathcal O(1)$.  A setup pass (\code{random\_alias\_setup})
+converts $\{p_k\}$ into an acceptance probability $q_k$ and an alias $A_k$ per
+bin; a draw picks a random bin $k$ and returns $k$ with probability $q_k$, else
+$A_k$.  MoCafe uses it for wavelength sampling, the Mueller $S_{11}$, and the
+Sersic radius.
+
+\subsection{Continuous alias (piecewise-linear)}
+For a continuous variable tabulated at nodes $x_i$ with density $p_i$, the bin
+selection probability is the trapezoid area
+$\tfrac12(p_i+p_{i+1})(x_{i+1}-x_i)$; after the alias picks a bin, the value is
+returned by inverting the linear density inside it
+(\code{rand\_alias\_linear}).  This gives an independent, continuous draw and is
+used for external-illumination angles, the scattering angle, and the Sersic
+radius.
+
+%=============================================================================
+\section{HEALPix all-sky interior observer}\label{sec:allsky}
+%=============================================================================
+For an observer \emph{inside} the medium (the Milky-Way case) there is no single
+image plane.  Each scattering / dust-reemission / direct event peels toward the
+observer point, and the contribution is binned into the HEALPix pixel (RING
+scheme, $n_{\rm pix}=12\,n_{\rm side}^2$, equal-area pixels
+$\Omega=4\pi/n_{\rm pix}$) of the arrival direction $\hat{\mathbf n}$, computed
+by \code{vec2pix}.  The optical depth to the observer is integrated along the
+matching ray (Cartesian or AMR).  The output carries the standard HEALPix
+keywords so it reads directly with \code{healpy}.  Because each event maps to
+the single pixel of its \emph{source} direction, a diffuse map needs many events
+distributed over the sky; concentrated (inner-disk) far-infrared emission is
+sparse at high $n_{\rm side}$ and benefits from a finer spatial grid or
+smoothing.
+
+%=============================================================================
+\section{Energy conservation}
+%=============================================================================
+Energy conservation is the main internal check.  The total stellar luminosity
+equals the escaped starlight plus the absorbed (hence re-emitted) power; the
+dust solvers normalize the emission to the absorbed power cell by cell, so the
+integrated intrinsic dust luminosity equals \code{L\_ABS}, and the emergent SED
+integrated over $4\pi d^2$ recovers the same value to Monte-Carlo accuracy.  The
+\code{\_jlam} output additionally reports the pathlength-tallied absorbed power
+against an independent event counter.
+
+\end{document}

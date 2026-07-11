@@ -33,14 +33,19 @@ The scattered-light image is in units of `(luminosity unit) cm^-2 sr^-1`.
   each cell, and two emission methods:
   - **Lucy (1999) + [SEDust](SEDust/)** — equilibrium + stochastically heated
     grains + PAHs; iterable for dust self-absorption; fast equilibrium
-    (`dust_single_teq`) and table (`dust_fast_table`) options.
+    (`dust_single_teq`) and table (`dust_fast_table`) options; grain models
+    **astrodust / DL07 / Zubko**.
   - **Bjorkman & Wood (2001)** — immediate reemission, no iteration.
-  - Plus **multiple stellar populations**, a **HEALPix all-sky interior
-    observer** (the Milky-Way case), and a **Modified Random Walk** for high τ.
+  - **Galaxy models** — multiple stellar populations; radially-exponential and
+    `sech²` disks with **log-spiral arms**; **Sersic** (alias-sampled) and
+    boxy/bar bulges; a **HEALPix all-sky interior observer** (the Milky-Way
+    case); a **Modified Random Walk** for high τ.
   - Runs on **both the Cartesian grid and the AMR octree**.
   - See **[README_HOWTO.md](README_HOWTO.md#dust-thermal-emission-v200)** and
     `MoCafe_v2.00_PLAN.md`.  Validated against the Camps et al. (2015) SHG
     dust-emission benchmark.
+- **Python analysis tools** (`python/`) — a format-agnostic reader (`mocafe_io`)
+  and plotters for SEDs, temperature/power maps, `J_λ`, and HEALPix all-sky maps.
 
 The clumpy and AMR media carry **dust only** (no gas velocity, temperature, or
 Lyman-α radiative transfer).  The dust-emission modes run on the Cartesian grid
@@ -74,4 +79,4 @@ Kwang-il Seon (KASI).
 
 ---
 
-Last updated: 2026-07-11 13:21 KST
+Last updated: 2026-07-11 13:39 KST

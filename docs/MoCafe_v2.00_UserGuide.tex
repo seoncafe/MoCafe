@@ -52,18 +52,19 @@
 
 \begin{abstract}
 \noindent
-MoCafe is a parallel (Fortran~90 + MPI) Monte-Carlo dust radiative-transfer
-code.  Version~2.00 extends the scattering-only v1.20 into a panchromatic code
-that computes \emph{dust thermal emission}: it transports photon packets over a
-wavelength grid, tallies the radiation field in every cell, and re-emits the
-absorbed energy as thermal dust emission through either the Lucy~(1999) method
-coupled to the \textsc{SEDust} grain library (equilibrium and stochastically
-heated grains, including PAH features) or the Bjorkman \& Wood~(2001)
-immediate-reemission method.  It also adds multiple stellar populations, an
-all-sky interior observer (for the Milky-Way case), and a Modified Random Walk
-for very optically thick regions.  This guide covers installation, execution,
-the complete input reference, the dust-emission workflow, the output products,
-worked examples, and the underlying algorithms.
+MoCafe is a parallel (Fortran~90 + MPI) Monte-Carlo radiative-transfer code for
+dust scattering and thermal emission.  It transports photon packets over a
+wavelength grid through a dusty medium, scatters them off dust grains
+(Henyey--Greenstein phase function or a tabulated Mueller matrix), tallies the
+radiation field in every cell, and re-emits the absorbed energy as thermal dust
+emission through either the Lucy~(1999) method coupled to the \textsc{SEDust}
+grain library (equilibrium and stochastically heated grains, including PAH
+features) or the Bjorkman \& Wood~(2001) immediate-reemission method.  It
+supports multiple stellar populations and galaxy models, an all-sky interior
+observer (for the Milky-Way case), and a Modified Random Walk for very optically
+thick regions.  This guide covers installation, execution, the complete input
+reference, the dust-emission workflow, the output products, worked examples, and
+the underlying algorithms.
 \end{abstract}
 
 \tableofcontents
@@ -75,28 +76,30 @@ worked examples, and the underlying algorithms.
 
 MoCafe follows photon packets emitted by one or more sources through a dusty
 medium.  Packets scatter off dust grains (Henyey--Greenstein phase function or
-a tabulated Mueller matrix) and, in v2.00, are absorbed and re-emitted as
-thermal radiation.  At every interaction a contribution is ``peeled off''
-toward each observer to build an image or spectral-energy distribution (SED).
+a tabulated Mueller matrix) and are absorbed and re-emitted as thermal
+radiation.  At every interaction a contribution is ``peeled off'' toward each
+observer to build an image or spectral-energy distribution (SED).
 
-\paragraph{What is new in v2.00.}
+\paragraph{Capabilities.}
 \begin{itemize}
 \item \textbf{Multi-wavelength (SED) transport} (\pp{use\_sed}): one run covers
       the full UV-to-far-IR range on a log-spaced wavelength grid.
 \item \textbf{Mean intensity in each cell} $J_\lambda(x,y,z)$ (\pp{save\_jlam})
       via the Lucy~(1999) pathlength estimator.
 \item \textbf{Dust thermal emission} (\pp{use\_dustemis}) in two modes:
-      \emph{Mode~1} (Lucy + \textsc{SEDust}) and \emph{Mode~2}
-      (Bjorkman \& Wood~2001).
-\item \textbf{Multiple stellar populations} (\pp{nsource}) with independent
-      spectra, luminosities, and spatial distributions.
+      \emph{Mode~1} (Lucy + \textsc{SEDust}, grain models astrodust / DL07 /
+      Zubko) and \emph{Mode~2} (Bjorkman \& Wood~2001).
+\item \textbf{Galaxy models}: multiple stellar populations (\pp{nsource}) with
+      radially-exponential and $\mathrm{sech}^2$ disks, log-spiral arms, and
+      Sersic (alias-sampled) / boxy / bar bulges.
 \item \textbf{All-sky interior observer} (\pp{allsky}) for the Milky-Way case.
 \item \textbf{Modified Random Walk} (\pp{use\_mrw}) plus Russian roulette for
       very optically thick media.
+\item \textbf{Python analysis tools} (\file{python/}): a format-agnostic reader
+      and plotters for SEDs, temperature/power maps, $J_\lambda$, and all-sky maps.
 \end{itemize}
-Everything above is opt-in; a plain monochromatic scattering run behaves
-exactly as in v1.20.  The design and validation record is in
-\file{MoCafe\_v2.00\_PLAN.md}.
+The emission features are opt-in: a plain monochromatic scattering run uses none
+of them.  The design and validation record is in \file{MoCafe\_v2.00\_PLAN.md}.
 
 \paragraph{Units.}  In scattering-only mode MoCafe is unit-agnostic and the
 image is in \code{(luminosity unit)\,cm$^{-2}$\,sr$^{-1}$}.  In SED / emission
@@ -239,9 +242,10 @@ distance\_unit     & 'kpc'  & '', 'pc', 'au', 'kpc'; sets \code{distance2cm}. In
 \toprule
 \textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
 \midrule \endhead
-source\_geometry   & 'point'& 'point', 'uniform', 'uniform\_xy', 'gaussian', 'exponential', 'external\_\{sph,cyl,rec\}'\\
+source\_geometry   & 'point'& 'point', 'uniform', 'uniform\_xy', 'gaussian', 'exponential', 'sech', 'exp\_spiral', 'external\_\{sph,cyl,rec\}'\\
 xs\_point, ys\_point, zs\_point & 0.0 & Point-source location\\
-source\_zscale     & NaN    & Scale height for 'gaussian'/'exponential'\\
+source\_zscale     & NaN    & Vertical scale height (gaussian/exponential/sech/exp\_spiral)\\
+source\_rscale     & NaN    & Radial scale length of the exponential disk\\
 radiation\_angular\_PDF\_file & '\,' & Angular PDF for external illumination\\
 \bottomrule
 \end{longtable}
@@ -429,23 +433,50 @@ stochastic-heating features.  It writes \file{<base>\_bwdust} (equilibrium
 $T_{\rm dust}$ and absorbed-power maps); the emergent dust emission is added to
 the observer \code{Scattered} SED image.
 
-\subsection{Multiple stellar populations}\label{sec:multisource}
+\subsection{Multiple stellar populations and galaxy models}\label{sec:multisource}
 \begin{longtable}{P D X}
 \toprule
 \textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
 \midrule \endhead
 nsource            & 1       & Number of stellar components ($>1$ activates multi-source)\\
-src\_geometry(i)   & 'point' & Geometry of each source: point/uniform/gaussian/exponential\\
+src\_geometry(i)   & 'point' & Geometry of each source (list below)\\
 src\_tstar(i)      & -999    & Planck temperature of each source [K]\\
 src\_spectrum(i)   & '\,'    & Spectrum file of each source (overrides src\_tstar)\\
 src\_lum(i)        & -999    & Luminosity of each source [erg/s] (equal split if unset)\\
 src\_x/y/z(i)      & 0       & Position of each source ('point')\\
-src\_zscale(i)     & -999    & Scale height of each source ('gaussian'/'exponential')\\
+src\_zscale(i)     & -999    & Vertical scale height (exponential/sech/exp\_spiral)\\
+src\_rscale(i)     & -999    & Radial scale length of the exponential disk\\
+src\_sersic\_index(i) & 4    & Sersic index $n$ of a 'sersic' bulge\\
+src\_reff(i)       & -999    & Effective radius (sersic) / scale (boxy/bar/xbar)\\
+src\_axial\_ratio(i) & 1     & Vertical flattening of a sersic/boxy/bar/xbar bulge\\
+src\_boxiness(i)   & 2       & Boxiness of a boxy/bar/xbar bulge (2 = ellipsoid, $>$2 = boxy)\\
+\bottomrule
+\end{longtable}
+\noindent\textbf{Source geometries.}  \code{point}, \code{uniform},
+\code{gaussian} as before; \code{exponential} (radially exponential disk
+$r\sim r\,e^{-r/r_s}$ $\times$ vertical exponential); \code{sech} (radial disk
+$\times$ $\mathrm{sech}^2$); \code{exp\_spiral} (exponential disk with log-spiral
+arms); \code{sersic} (3-D deprojected Sersic bulge, radius \emph{alias-sampled}
+from the analytic cumulative); \code{boxy}/\code{bar}/\code{xbar}
+(generalized-ellipsoid bulges, boxiness \code{src\_boxiness}).
+
+\medskip\noindent\textbf{Spiral arms and vertical dust profile} (shared by the
+\code{exp\_spiral} sources and the cylinder dust density):
+\begin{longtable}{P D X}
+\toprule
+\textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
+\midrule \endhead
+spiral\_m          & 0       & Number of log-spiral arms (0 = axisymmetric)\\
+spiral\_pitch      & 15      & Pitch angle [deg]\\
+spiral\_amp        & 0.5     & Arm amplitude in $1+\mathrm{amp}\sin(m(\ln r/\tan p-\phi))$\\
+density\_zprofile  & 'exp'   & Vertical dust: 'exp' $e^{-|z|/z_s}$ or 'sech' $\mathrm{sech}^2(z/z_s)$\\
 \bottomrule
 \end{longtable}
 Sources are sampled in proportion to their luminosity, and \pp{luminosity}
-becomes $\sum_i$\code{src\_lum(i)}.  A typical use is a hot young disk plus a
-cool old bulge (\file{examples/galaxy/}).
+becomes $\sum_i$\code{src\_lum(i)}.  Examples: a disk + bulge SED
+(\file{examples/galaxy/galaxy\_sed.in}), a face-on spiral galaxy
+(\file{spiral\_faceon.in}), and the Milky-Way all-sky
+(\file{examples/milkyway/mw\_allsky.in}).
 
 \subsection{HEALPix all-sky interior observer (Milky Way)}\label{sec:allsky}
 \begin{longtable}{P D X}
@@ -575,19 +606,23 @@ examples/clump\_sphere, amr\_sphere, amr\_tng, amr\_ramses & Clumpy and AMR medi
 examples/dustemis & Dust emission: Lucy$+$\textsc{SEDust}, iteration, single-$T_{\rm eq}$, table, B\&W, MRW\\
 examples/amr\_sphere & Dust emission on the AMR octree (\file{amr\_dustemis.in}; matches the Cartesian sphere)\\
 examples/multipop & Two stellar populations (hot young $+$ cool old)\\
-examples/galaxy   & External galaxy SED (disk $+$ bulge, edge-on / face-on)\\
-examples/milkyway & All-sky map from an interior observer\\
+examples/galaxy   & Galaxy SED (\file{galaxy\_sed.in}: disk $+$ Sersic bulge) and a face-on spiral galaxy (\file{spiral\_faceon.in})\\
+examples/milkyway & All-sky map from an interior observer (spiral dust disk)\\
 examples/benchmarks & Camps~(2015) SHG dust-emission benchmark and Mode~1/2 $\tau$ sweep\\
 \bottomrule
 \end{longtable}
+The \file{python/} tools read and plot these outputs: \file{mocafe\_io.py}
+(reader), \file{plot\_dust\_sed.py}, \file{plot\_dust\_maps.py},
+\file{plot\_jlam.py}, \file{plot\_allsky.py}, \file{plot\_galaxy\_sed.py}, and
+the \file{quickstart\_dustemis.ipynb} notebook.
 
 %=============================================================================
 \section{Validation}
 %=============================================================================
 \begin{itemize}
-\item \textbf{Regression.}  The monochromatic scattering, the $(a,g)$/$\tau$
-      scans, and the clumpy-medium outputs remain bit-identical to v1.20
-      throughout the upgrade.
+\item \textbf{Regression.}  With the emission features off, the monochromatic
+      scattering, the $(a,g)$/$\tau$ scans, and the clumpy-medium outputs are
+      bit-identical to a stand-alone scattering run.
 \item \textbf{Dust-emission engine.}  Run through the \textsc{SEDust}
       library with the Zubko et al.~(2004) BARE-GR-S model, the emission
       spectra agree with the Camps et al.~(2015) seven-code stochastic-heating

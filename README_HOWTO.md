@@ -110,10 +110,15 @@ For a dimensionless model with no density file, `distance_unit` is forced to
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `source_geometry` | `'point'` | `'point'`, `'uniform'`, `'uniform_xy'`, `'gaussian'`, `'exponential'`, or `'external_{sph,cyl,rec}'` (and `external_*` variants) |
+| `source_geometry` | `'point'` | `'point'`, `'uniform'`, `'uniform_xy'`, `'gaussian'`, `'exponential'`, `'sech'`, `'exp_spiral'`, or `'external_{sph,cyl,rec}'` |
 | `xs_point`, `ys_point`, `zs_point` | 0.0 | Point-source location |
-| `source_zscale` | NaN | Scale height for `'gaussian'`/`'exponential'` sources |
+| `source_zscale` | NaN | Vertical scale height (`gaussian`/`exponential`/`sech`/`exp_spiral`) |
+| `source_rscale` | NaN | Radial scale length of the exponential disk (`exponential`/`sech`/`exp_spiral`) |
 | `radiation_angular_PDF_file` | `''` | Angular PDF for external illumination |
+
+For multi-component galaxies (disk + bulge, Sersic / boxy / bar bulges, spiral
+arms) use the multi-source `nsource` / `src_*` parameters in
+[§5](#5-multiple-stellar-populations-and-galaxy-models).
 
 ### Dust & scattering
 
@@ -277,20 +282,54 @@ only the `kext_file` (no SEDust).  No PAH/stochastic features.  Writes
 `<base>_bwdust` (equilibrium `Tdust` and absorbed-power maps); the emergent
 dust emission lands in the observer `Scattered` SED image.
 
-### 5. Multiple stellar populations
+### 5. Multiple stellar populations and galaxy models
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `nsource` | 1 | Number of stellar components (>1 activates multi-source) |
-| `src_geometry(i)` | `'point'` | Geometry of each source: `point`/`uniform`/`gaussian`/`exponential` |
+| `src_geometry(i)` | `'point'` | Geometry of each source (see the list below) |
 | `src_tstar(i)` | -999 | Planck temperature of each source [K] |
 | `src_spectrum(i)` | `''` | Spectrum file of each source (overrides `src_tstar`) |
 | `src_lum(i)` | -999 | Luminosity of each source [erg/s] (equal split if unset) |
 | `src_x/y/z(i)` | 0 | Position of each source (`point`) |
-| `src_zscale(i)` | -999 | Scale height of each source (`gaussian`/`exponential`) |
+| `src_zscale(i)` | -999 | Vertical scale height (`gaussian`/`exponential`/`sech`/`exp_spiral`) |
+| `src_rscale(i)` | -999 | Radial scale length of the exponential disk (`exponential`/`sech`/`exp_spiral`) |
+| `src_sersic_index(i)` | 4 | Sersic index n of a `sersic` bulge |
+| `src_reff(i)` | -999 | Effective radius of a `sersic` bulge / scale of a `boxy`/`bar`/`xbar` bulge |
+| `src_axial_ratio(i)` | 1 | Vertical flattening of a `sersic`/`boxy`/`bar`/`xbar` bulge |
+| `src_boxiness(i)` | 2 | Boxiness exponent of a `boxy`/`bar`/`xbar` bulge (2 = ellipsoid, >2 = boxy) |
+
+**Source geometries** (`src_geometry`, and the single-source `source_geometry`
+with the `source_rscale`/`source_zscale` scalars):
+
+- `point`, `uniform`, `gaussian` — as before.
+- `exponential` — radially exponential disk (`r ~ r e^{-r/rscale}`, drawn with
+  the alias-free `rand_r1exp`) times a vertical exponential.  Falls back to a
+  plane-uniform disk when the radial scale is unset.
+- `sech` — the same radial disk with a vertical `sech²` profile.
+- `exp_spiral` — the exponential disk modulated by log-spiral arms (rejection on
+  the azimuth; see the spiral parameters below).
+- `sersic` — a 3-D deprojected Sersic bulge (index n, effective radius Re,
+  oblate `axial_ratio`), the radius **alias-sampled** from the analytic
+  cumulative (`random_sersic.f90`).
+- `boxy` / `bar` / `xbar` — generalized-ellipsoid bulges with boxiness exponent
+  `src_boxiness` (`random_bulge.f90`, Gibbs-sampled).
+
+**Spiral arms and disk vertical profile** (shared by the `exp_spiral` sources
+and the `cylinder` dust density):
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `spiral_m` | 0 | Number of log-spiral arms (0 = axisymmetric, no arms) |
+| `spiral_pitch` | 15 | Pitch angle [deg] |
+| `spiral_amp` | 0.5 | Arm amplitude in `1 + amp·sin(m(ln r/tan p − φ))` |
+| `density_zprofile` | `'exp'` | Vertical dust profile: `'exp'` = `e^{-|z|/zscale}`, `'sech'` = `sech²(z/zscale)` |
 
 Sources are sampled in proportion to their luminosity; `luminosity` becomes
-`Σ src_lum`.  Example: a hot young disk + a cool old bulge (`examples/galaxy/`).
+`Σ src_lum`.  Examples: a hot young disk + a cool old bulge
+(`examples/galaxy/galaxy_sed.in`), a face-on spiral galaxy with a Sersic bulge
+(`examples/galaxy/spiral_faceon.in`), and the Milky-Way all-sky
+(`examples/milkyway/mw_allsky.in`).
 
 ### 6. HEALPix all-sky interior observer (Milky Way)
 
@@ -565,12 +604,20 @@ python python/AMR_grid/convert_illustris_to_generic.py \
 
 | Tool | Description |
 |------|-------------|
-| `mocafe_io.py` | Format-agnostic reader/converter for MoCafe outputs. CLI: `python mocafe_io.py {info,peek,convert} <file>`. API: `load_mocafe('out_obs.h5')` → `MoCafeFile` with `.scattered/.direct/.direct0/.total/.stokes('I')`, `.scattered_at(a=,g=,tau=)`, `.direct_at(tau=)`, axis accessors, and `find_mocafe_outputs(stem)`. |
+| `mocafe_io.py` | Format-agnostic reader/converter. CLI: `python mocafe_io.py {info,peek,convert} <file>`. API: `load_mocafe('out_obs.h5')` → `MoCafeFile` with `.scattered/.direct/.direct0/.total/.stokes('I')`, `.scattered_at(a=,g=,tau=)`, and dust-emission accessors `.dust_sed()`, `.dust_maps()`, `.allsky()`, `.jlambda()`; plus `find_mocafe_outputs(stem)`. |
+| `plot_dust_sed.py <run>` | Dust-emission SED (λL_λ) from a `_dustsed` run (`--emergent` overlays the emergent shape). |
+| `plot_dust_maps.py <run>` | Tdust and Ldust/Labs maps (Cartesian central slice or AMR leaf scatter) from `_dustsed`/`_bwdust`. |
+| `plot_jlam.py <run>` | J_bol slice + the J_λ spectrum of the brightest cell, from `_jlam`. |
+| `plot_allsky.py <run>` | HEALPix Mollweide of an `_allsky` map (`--lam`, `--band LO HI`, `--bol`, `--smooth FWHM`; needs `healpy`). |
+| `plot_galaxy_sed.py <run>` | Panchromatic galaxy SED: stellar input (blackbody sum from the namelist) + dust emission. |
+| `plot_model_compare.py` | Overlay the astrodust / DL07 / Zubko dust-emission SEDs of the `examples/dustemis/model_compare_*` runs. |
+| `quickstart_dustemis.ipynb` | Build → run an example → plot, end-to-end. |
 
 ```python
 import mocafe_io
 mf  = mocafe_io.load_mocafe('out_obs.h5')
-img = mf.scattered_at(a=0.5, g=0.3, tau=1.5)   # nearest scan slice
+img = mf.scattered_at(a=0.5, g=0.3, tau=1.5)     # nearest scan slice
+sed = mocafe_io.load_mocafe('run_dustsed.h5').dust_sed()   # dust SED + maps
 ```
 
 ---
@@ -627,4 +674,4 @@ Each directory's `run.sh` shows the typical invocation
 
 ---
 
-Last updated: 2026-07-11 13:21 KST
+Last updated: 2026-07-11 13:39 KST
