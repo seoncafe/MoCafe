@@ -158,6 +158,10 @@ public
      !real(kind=wp) :: rsource = 0.0_wp
      !--- continuum parameters
      real(kind=wp) :: source_zscale          = nan64
+     !--- radial scale length of an 'exponential' stellar disk source; when set,
+     !--- x,y are drawn radially exponential (r ~ r*exp(-r/source_rscale))
+     !--- instead of uniform over the plane.
+     real(kind=wp) :: source_rscale          = nan64
      real(kind=wp) :: density_zscale         = nan64
      real(kind=wp) :: density_rscale         = nan64
      real(kind=wp) :: density_powerlaw_index = nan64
@@ -279,6 +283,11 @@ public
      real(kind=wp)      :: src_z(MAX_SRC)          = 0.0_wp
      real(kind=wp)      :: src_zscale(MAX_SRC)     = -999.0_wp
      real(kind=wp)      :: src_rscale(MAX_SRC)     = -999.0_wp
+     !--- Sersic bulge (src_geometry = 'sersic'): index n, effective radius Re,
+     !--- and vertical axial ratio (oblate flattening z = r*cos*axratio).
+     real(kind=wp)      :: src_sersic_index(MAX_SRC) = 4.0_wp
+     real(kind=wp)      :: src_reff(MAX_SRC)         = -999.0_wp
+     real(kind=wp)      :: src_axial_ratio(MAX_SRC)  = 1.0_wp
      !--- HEALPix all-sky interior observer (Milky-Way case).  When
      !--- par%allsky = .true. the observer sits at par%allsky_x/y/z INSIDE the
      !--- grid and each event peels toward it, binned into the HEALPix pixel

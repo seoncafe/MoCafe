@@ -35,6 +35,8 @@ def main():
     ap.add_argument("run", help="run stem or an _allsky file")
     ap.add_argument("-o", "--out", default=None)
     ap.add_argument("--lam", type=float, default=None, help="wavelength [um] (nearest bin)")
+    ap.add_argument("--band", type=float, nargs=2, metavar=("LO", "HI"), default=None,
+                    help="integrate over a wavelength band [um] (e.g. --band 60 500 for FIR)")
     ap.add_argument("--bol", action="store_true", help="wavelength-integrated map")
     args = ap.parse_args()
 
@@ -47,6 +49,11 @@ def main():
     lam = a["wavelength"]
     if sky.ndim == 1:                    # single-wavelength file
         m, title = sky, "all-sky"
+    elif args.band is not None:
+        lo, hi = sorted(args.band)
+        sel = (lam >= lo) & (lam <= hi)
+        m = sky[sel].sum(axis=0)
+        title = rf"${lo:.0f}$-${hi:.0f}\ \mu$m"
     elif args.bol or lam is None:
         m = sky.sum(axis=0)
         title = r"$\int I_\lambda\,d\lambda$"
@@ -59,10 +66,13 @@ def main():
     m = np.asarray(m, dtype=float)
     pos = m[m > 0]
     vmin = pos.min() if pos.size else None
+    # mask non-positive pixels (unsampled directions) so the log scale works
+    m = np.where(m > 0, m, hp.UNSEEN)
 
     fig = plt.figure(figsize=(8.0, 5.0))
     hp.mollview(m, fig=fig.number, title=f"{os.path.basename(path)}   {title}",
-                unit="surface brightness", norm="log", min=vmin, cmap="inferno")
+                unit="surface brightness", norm="log", min=vmin, cmap="inferno",
+                badcolor="0.85")
     hp.graticule()
 
     out = args.out or (mio._strip_mocafe_ext(os.path.basename(path)) + "_allsky.pdf")

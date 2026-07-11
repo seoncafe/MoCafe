@@ -56,8 +56,15 @@ contains
      photon%z = par%source_zscale/sqrt(2.0_wp)*rand_gauss()
      photon%wgt = 1.0_wp
   case ('exponential')
-     photon%x = grid%xrange*rand_number()+grid%xmin
-     photon%y = grid%yrange*rand_number()+grid%ymin
+     !--- radially exponential disk when source_rscale is set, else plane-uniform.
+     if (par%source_rscale > 0.0_wp) then
+        rp  = par%source_rscale*rand_r1exp(par%rmax/par%source_rscale)
+        phi = twopi*rand_number()
+        photon%x = rp*cos(phi);  photon%y = rp*sin(phi)
+     else
+        photon%x = grid%xrange*rand_number()+grid%xmin
+        photon%y = grid%yrange*rand_number()+grid%ymin
+     endif
      photon%z = par%source_zscale*rand_zexp(par%zmax/par%source_zscale)
      photon%wgt = 1.0_wp
   case ('external_cyl')

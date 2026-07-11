@@ -7,9 +7,11 @@ module sources_mod
 !--- different spatial distributions.  When par%nsource == 1 this reduces to
 !--- the single-source SED path (sed_mod) and is not activated.
   use define
-  use random,  only : random_alias_setup, rand_alias_choise, rand_number, rand_gauss, rand_zexp
+  use random,  only : random_alias_setup, rand_alias_choise, rand_number, rand_gauss, &
+                      rand_zexp, rand_sech2, rand_r1exp
   use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo, sed_hgg, &
                       planck_shape, read_spectrum_file, interp_clamped
+  use random_sersic, only : rand_sersic
   implicit none
   private
   public :: setup_sources, gen_source_photon, use_sources
@@ -117,7 +119,7 @@ contains
   implicit none
   type(grid_type),   intent(in)  :: grid
   type(photon_type), intent(out) :: photon
-  real(kind=wp) :: u, sint, cost, phi, rp
+  real(kind=wp) :: u, sint, cost, phi, rp, rs_max
   integer :: is, il, lo, hi, mid
 
   !--- select source by luminosity CDF.
@@ -140,10 +142,38 @@ contains
      photon%x = grid%xrange*rand_number()+grid%xmin
      photon%y = grid%yrange*rand_number()+grid%ymin
      photon%z = par%src_zscale(is)/sqrt(2.0_wp)*rand_gauss()
-  case ('exponential')
-     photon%x = grid%xrange*rand_number()+grid%xmin
-     photon%y = grid%yrange*rand_number()+grid%ymin
-     photon%z = par%src_zscale(is)*rand_zexp(par%zmax/par%src_zscale(is))
+  case ('exponential', 'sech')
+     !--- radially exponential disk (r ~ r*exp(-r/rscale)); vertically
+     !--- exponential ('exponential') or sech^2 ('sech').  Falls back to a
+     !--- plane-uniform disk when src_rscale is not set (backward compatible).
+     if (par%src_rscale(is) > 0.0_wp) then
+        rp  = par%src_rscale(is) * rand_r1exp(par%rmax/par%src_rscale(is))
+        phi = twopi*rand_number()
+        photon%x = rp*cos(phi);  photon%y = rp*sin(phi)
+     else
+        photon%x = grid%xrange*rand_number()+grid%xmin
+        photon%y = grid%yrange*rand_number()+grid%ymin
+     endif
+     if (trim(par%src_geometry(is)) == 'sech') then
+        photon%z = par%src_zscale(is)*rand_sech2(par%zmax/par%src_zscale(is))
+     else
+        photon%z = par%src_zscale(is)*rand_zexp(par%zmax/par%src_zscale(is))
+     endif
+  case ('sersic')
+     !--- 3-D deprojected Sersic bulge: spherical radius from rand_sersic,
+     !--- isotropic direction, oblate flattening by src_axial_ratio.  Reject
+     !--- draws outside the box (cylinder rmax / zmax).
+     rs_max = sqrt(par%zmax**2 + par%rmax**2)/par%src_reff(is)
+     do
+        rp   = par%src_reff(is) * rand_sersic(par%src_sersic_index(is), rs_max)
+        cost = 2.0_wp*rand_number()-1.0_wp;  sint = sqrt(1.0_wp-cost*cost)
+        phi  = twopi*rand_number()
+        photon%x = rp*sint*cos(phi)
+        photon%y = rp*sint*sin(phi)
+        photon%z = rp*cost*par%src_axial_ratio(is)
+        if (sqrt(photon%x**2+photon%y**2) <= par%rmax .and. &
+            abs(photon%z) <= par%zmax) exit
+     enddo
   case default   ! 'point'
      photon%x = par%src_x(is);  photon%y = par%src_y(is);  photon%z = par%src_z(is)
   end select

@@ -2,20 +2,25 @@
  !--- Stage 7: external galaxy SED -- exponential stellar disk (young 1e4 K)
  !--- + bulge-like central point source (old 4000 K) in an exponential dust
  !--- disk, viewed edge-on and face-on (two observers by inclination).
- par%no_photons      = 4.0e6
+ par%no_photons      = 2.0e6
  par%use_sed         = .true.
  par%save_jlam       = .true.
  par%use_dustemis    = .true.
- par%dust_single_teq = .true.
- par%luminosity      = 3.828e36
+ par%dust_fast_table  = .true.
+ par%luminosity      = 3.828e43
 
  par%nsource         = 2
- par%src_geometry    = 'exponential', 'point'
+ par%src_geometry    = 'exponential', 'sersic'
  par%src_tstar       = 1.0e4,         4.0e3
- par%src_lum         = 3.0e36,        0.828e36
+ par%src_lum         = 3.0e43,        0.828e43
  par%src_zscale      = 0.2,           0.0
+ par%src_rscale      = 0.3,           0.0
+ !--- bulge: de Vaucouleurs Sersic (n=4), Re=0.15 kpc, oblate axial ratio 0.6
+ par%src_sersic_index = 4.0,          4.0
+ par%src_reff         = 0.0,          0.15
+ par%src_axial_ratio  = 1.0,          0.6
 
- par%nlambda         = 80
+ par%nlambda         = 120
  par%lambda_min      = 0.0912
  par%lambda_max      = 2000.0
  par%lambda_ref      = 0.55
@@ -36,7 +41,7 @@
  par%distance = 1.0e4
  par%use_master_slave = .false.
  par%iseed = 1234
- par%no_print = 4.0e6
+ par%no_print = 2.0e6
  par%file_format = 'hdf5'
  par%out_file = 'galaxy_sed.h5'
 /
