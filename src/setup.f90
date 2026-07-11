@@ -14,7 +14,8 @@ contains
 
 ! local variables
   character(len=128) :: model_infile, arg
-  integer :: unit, ierr, status
+  character(len=256) :: exepath
+  integer :: unit, ierr, status, islash
 
 !--- Read in parameters from params.par using namelist command
   namelist /parameters/ par
@@ -32,6 +33,20 @@ contains
   open(newunit=unit,file=trim(model_infile),status='old')
   read(unit,parameters)
   close(unit)
+
+  !--- Resolve the vendored SEDust directory relative to the executable when the
+  !--- user leaves par%sed_workdir blank, so a fresh checkout runs dust emission
+  !--- from any working directory without editing paths.  argv(0) is the path to
+  !--- MoCafe.x (e.g. '../../MoCafe.x'); take its directory and append sedust/sed.
+  if (len_trim(par%sed_workdir) == 0) then
+     call get_command_argument(0, exepath)
+     islash = index(trim(exepath), '/', back=.true.)
+     if (islash > 0) then
+        par%sed_workdir = exepath(1:islash-1) // '/sedust/sed'
+     else
+        par%sed_workdir = 'sedust/sed'
+     endif
+  endif
 
   par%nprint = par%no_print
   if (par%nprint >= par%no_photons) par%nprint = par%no_photons/10

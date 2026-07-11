@@ -225,7 +225,10 @@ public
      character(len=256) :: sed_qtable       = '../tmatrix/output/q_astrodust_P0.20_Fe0.00_1.400.dat'
      character(len=256) :: sed_sizedist     = '../data/release/size_distribution.dat'
      !--- vendored SEDust sed/ directory (self-contained under the MoCafe tree).
-     character(len=256) :: sed_workdir      = '/home/kiseon/MoCafe/new/MoCafe_v2.00/sedust/sed'
+     !--- Blank (default) = auto-resolve to <executable dir>/sedust/sed at
+     !--- run time (see read_input), so a fresh checkout works from any path.
+     !--- Set an explicit absolute path here only to override that.
+     character(len=256) :: sed_workdir      = ''
      integer            :: sed_NT           = 200
      real(kind=wp)      :: sed_Tlo          = 2.7_wp
      real(kind=wp)      :: sed_Thi          = 5.0e3_wp
