@@ -343,6 +343,18 @@ $\tau$ scan).  All three ray tracers (Cartesian, clumpy, AMR) are therefore
 shared with the monochromatic path, and a run with $s_{\rm ext}=1$ is
 bit-identical to the mono code.
 
+The source spectrum is either a Planck function at \pp{tstar} or a two-column
+file $\lambda[\mu\mathrm{m}],\ L_\lambda$ (\pp{source\_spectrum}, or
+\pp{src\_spectrum}$(i)$ per component); only its shape is used, as the
+wavelength-sampling distribution, while the absolute scale is set by
+\pp{luminosity} / \pp{src\_lum}.  The helper \file{python/make\_source\_spectrum.py}
+writes ready-to-use tables under \file{data/}: single stellar populations from
+FSPS (\file{spec\_\{young,old\}\_fsps.dat}) and Starburst99
+(\file{spec\_\{young,old\}\_sb99.dat}), and the Mathis et al.~(1983) Milky-Way
+interstellar radiation field (\file{isrf\_mathis.dat}).  The \file{examples/galaxy}
+models use the FSPS young/old pair and \file{examples/milkyway} uses the Mathis
+field.
+
 Restrictions: SED mode is incompatible with Stokes polarization and with the
 $(a,g)$/$\tau$ single-run scans, and (in this version) supports internal
 sources only.
@@ -616,6 +628,66 @@ The \file{python/} tools read and plot these outputs: \file{mocafe\_io.py}
 \file{plot\_jlam.py}, \file{plot\_allsky.py}, \file{plot\_galaxy\_sed.py}, and
 the \file{quickstart\_dustemis.ipynb} notebook.
 
+\begin{figure}[htb]
+\centering
+\begin{minipage}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../examples/galaxy/galaxy_sed.pdf}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../examples/galaxy/spiral_faceon.pdf}
+\end{minipage}
+\caption{\emph{Left}: the UV-to-FIR SED of the \file{examples/galaxy} model
+(exponential disk $+$ Sersic bulge): the attenuated starlight and the thermal
+dust emission (PAH bands and a far-infrared peak), with $L_{\rm dust}/L_\star
+\approx 0.8$.  \emph{Right}: the mid-plane dust-emission luminosity of the
+\file{spiral\_faceon.in} model, showing the $m=2$ log-spiral arms imposed on the
+dust density.}
+\label{fig:galaxy}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\begin{minipage}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../examples/dustemis/dust_model_compare.pdf}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../examples/dustemis/table_accuracy.pdf}
+\end{minipage}
+\caption{\emph{Left}: the emission spectrum of a single cell heated by the same
+radiation field, for the three \textsc{SEDust} grain models
+(\code{astrodust}, \code{dl07}, \code{zubko}); the total power is identical (each
+is normalized to the absorbed luminosity) while the PAH bands and the
+far-infrared slope differ by model.  \emph{Right}: the \pp{dust\_fast\_table}
+approximation against the exact stochastic solve --- the total luminosity is
+identical, the PAH/mid-infrared region agrees to $\sim1\%$, and the largest
+deviations sit on the far-infrared slope.}
+\label{fig:dustmodels}
+\end{figure}
+
+\begin{figure}[htb]
+\centering
+\begin{minipage}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../examples/dustemis/iter_convergence.pdf}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{../examples/milkyway/mw_cirrus.pdf}
+\end{minipage}
+\caption{\emph{Left}: convergence of the dust self-absorption iteration
+(\pp{dust\_niter}) at $\tau_V=100$: the emitted luminosity converges
+geometrically, and only the converged run conserves energy (a single pass loses
+the reabsorbed dust emission).  \emph{Right}: the smoothed $8$--$500\,\mu$m
+all-sky map from the interior-observer Milky-Way model
+(\file{examples/milkyway}), a HEALPix Mollweide projection showing the
+Galactic-plane concentration.}
+\label{fig:iter}
+\end{figure}
+
 %=============================================================================
 \section{Validation}
 %=============================================================================
@@ -640,6 +712,17 @@ the \file{quickstart\_dustemis.ipynb} notebook.
       energy balance of the equivalent Cartesian sphere; Bjorkman \& Wood and
       MRW on the octree conserve energy identically.
 \end{itemize}
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.7\textwidth]{../examples/benchmarks/shg_benchmark.pdf}
+\caption{The \textsc{SEDust} single-cell emission spectrum (\code{zubko}
+BARE-GR-S) against the Camps et al.~(2015) seven-code stochastic-heating
+benchmark at several field strengths $U$; the shaded band is the code-to-code
+spread.  MoCafe tracks the benchmark median to a 2--4\% relative difference over
+$U=10^{-2}\ldots10^{4}$.}
+\label{fig:shg}
+\end{figure}
+
 These checks are consolidated in \file{examples/benchmarks/validate.py}, which
 re-runs the energy-conservation, two-method, and SHG cross-code tests and reports
 PASS/FAIL.  External full-galaxy transport benchmarks (the TRUST slab, a direct

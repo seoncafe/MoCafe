@@ -11,7 +11,7 @@
  par%luminosity      = 3.828e43
  par%nsource         = 2
  par%src_geometry    = 'exp_spiral', 'sersic'
- par%src_tstar       = 1.0e4,        4.0e3
+ par%src_spectrum    = '../../data/spec_young_fsps.dat', '../../data/spec_old_fsps.dat'
  par%src_lum         = 3.0e43,       0.828e43
  par%src_zscale      = 0.15,         0.0
  par%src_rscale      = 0.3,          0.0

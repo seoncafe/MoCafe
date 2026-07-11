@@ -12,7 +12,7 @@
  par%luminosity      = 3.828e43
 
  par%nsource         = 1
- par%tstar           = 5.0e3
+ par%source_spectrum = '../../data/isrf_mathis.dat'
  par%source_geometry = 'exp_spiral'
  par%source_rscale   = 0.4
  par%source_zscale   = 0.3

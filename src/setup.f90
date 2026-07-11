@@ -107,10 +107,6 @@ contains
   call MPI_COMM_RANK(mpar%hostcomm, mpar%h_rank, ierr)
   call MPI_COMM_SPLIT(MPI_COMM_WORLD, mpar%h_rank, mpar%p_rank, mpar%SAME_HRANK_COMM, ierr)
   call MPI_COMM_SIZE(mpar%SAME_HRANK_COMM, mpar%SAME_HRANK_NPROC, ierr)
-  if (par%use_shared_memory) then
-     par%use_shared_memory = .false.
-     write(*,'(a)') 'par%use_shared_memory = .true. is not allowed.'
-  endif
 
   !--- grid-type selector (LaRT v2.10 style): map legacy booleans and validate.
   if (par%use_clump_medium) par%grid_type = 'clump'

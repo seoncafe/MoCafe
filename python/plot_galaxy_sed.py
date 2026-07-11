@@ -29,7 +29,7 @@ H, C, K = 6.62607015e-27, 2.99792458e10, 1.380649e-16   # cgs
 
 def _nml_values(text, key):
     """Return the comma-separated values of `par%<key>` from namelist text."""
-    m = re.search(rf"par%{key}\s*=\s*([^\n!/]+)", text, re.IGNORECASE)
+    m = re.search(rf"par%{key}\s*=\s*([^\n!]+)", text, re.IGNORECASE)
     if not m:
         return []
     out = []
@@ -41,21 +41,29 @@ def _nml_values(text, key):
 
 
 def parse_sources(in_path):
-    """Return a list of (T[K], L[erg/s]) blackbody components from a .in file."""
+    """Return a list of stellar components from a .in file.
+
+    Each component is ``('file', path, L)`` for a tabulated source spectrum or
+    ``('bb', T, L)`` for a blackbody.  Spectrum-file paths are resolved relative
+    to the namelist location.  L is the component luminosity (``src_lum``, or the
+    single ``luminosity``).
+    """
     if not in_path or not os.path.isfile(in_path):
         return []
     txt = open(in_path).read()
+    base = os.path.dirname(os.path.abspath(in_path))
+    ls = [float(x) for x in _nml_values(txt, "src_lum")] \
+        or [float(x) for x in _nml_values(txt, "luminosity")]
+
+    def _lum(i):
+        return ls[i] if i < len(ls) else (ls[-1] if ls else 1.0)
+
+    specs = _nml_values(txt, "src_spectrum") or _nml_values(txt, "source_spectrum")
+    if specs:
+        return [("file", s if os.path.isabs(s) else os.path.join(base, s), _lum(i))
+                for i, s in enumerate(specs)]
     ts = _nml_values(txt, "src_tstar") or _nml_values(txt, "tstar")
-    ls = _nml_values(txt, "src_lum")
-    if not ls:
-        ls = _nml_values(txt, "luminosity")
-    T = [float(x) for x in ts]
-    L = [float(x) for x in ls]
-    if not T:
-        return []
-    if len(L) < len(T):                     # single luminosity split? just pad
-        L = (L or [1.0]) + [L[-1] if L else 1.0] * (len(T) - len(L))
-    return [(t, l) for t, l in zip(T, L) if t > 0]
+    return [("bb", float(t), _lum(i)) for i, t in enumerate(ts) if float(t) > 0]
 
 
 def blackbody_llam(lam_um, T):
@@ -66,11 +74,19 @@ def blackbody_llam(lam_um, T):
     return np.where(np.isfinite(B), B, 0.0)
 
 
+def _component_shape(lam_um, kind, data):
+    """L_lambda shape of one component (blackbody or tabulated file)."""
+    if kind == "file":
+        tbl = np.loadtxt(data, comments="#")
+        return np.interp(lam_um, tbl[:, 0], tbl[:, 1], left=0.0, right=0.0)
+    return blackbody_llam(lam_um, data)
+
+
 def stellar_input(lam_um, comps):
-    """Sum of blackbodies, each normalized to its L over the plotted grid."""
+    """Sum of components (blackbody or file), each normalized to its L."""
     Llam = np.zeros_like(lam_um)
-    for T, L in comps:
-        shape = blackbody_llam(lam_um, T)
+    for kind, data, L in comps:
+        shape = _component_shape(lam_um, kind, data)
         norm = np.trapz(shape, lam_um)
         if norm > 0:
             Llam += L * shape / norm
