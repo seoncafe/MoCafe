@@ -621,3 +621,7 @@ python python/mocafe_io.py convert out_obs.h5 out_obs.fits.gz
 
 Each directory's `run.sh` shows the typical invocation
 (`mpirun -np $(nproc) ../../MoCafe.x <input>.in`).
+
+---
+
+Last updated: 2026-07-11 10:20 KST
