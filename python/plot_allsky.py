@@ -38,6 +38,9 @@ def main():
     ap.add_argument("--band", type=float, nargs=2, metavar=("LO", "HI"), default=None,
                     help="integrate over a wavelength band [um] (e.g. --band 60 500 for FIR)")
     ap.add_argument("--bol", action="store_true", help="wavelength-integrated map")
+    ap.add_argument("--smooth", type=float, default=None,
+                    help="Gaussian-smooth the map with this FWHM [deg] to suppress "
+                         "shot noise and reveal large-scale structure")
     args = ap.parse_args()
 
     path = resolve(args.run)
@@ -64,10 +67,18 @@ def main():
         title = rf"$\lambda = {lam[il]:.3g}\ \mu$m"
 
     m = np.asarray(m, dtype=float)
-    pos = m[m > 0]
+    if args.smooth:
+        # fill gaps with 0 and smooth (a spherical-harmonic transform needs a
+        # full-sky map); reveals the large-scale plane / arm structure.
+        filled = np.where(m > 0, m, 0.0)
+        m = hp.smoothing(filled, fwhm=np.radians(args.smooth))
+        m = np.where(m > 0, m, hp.UNSEEN)
+    pos = m[m > 0] if (m != hp.UNSEEN).any() else m
+    pos = m[(m > 0) & (m != hp.UNSEEN)]
     vmin = pos.min() if pos.size else None
-    # mask non-positive pixels (unsampled directions) so the log scale works
-    m = np.where(m > 0, m, hp.UNSEEN)
+    if not args.smooth:
+        # mask non-positive pixels (unsampled directions) so the log scale works
+        m = np.where(m > 0, m, hp.UNSEEN)
 
     fig = plt.figure(figsize=(8.0, 5.0))
     hp.mollview(m, fig=fig.number, title=f"{os.path.basename(path)}   {title}",

@@ -12,6 +12,7 @@ module sources_mod
   use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo, sed_hgg, &
                       planck_shape, read_spectrum_file, interp_clamped
   use random_sersic, only : rand_sersic
+  use random_bulge,  only : rand_boxy, rand_bar, rand_xbar
   implicit none
   private
   public :: setup_sources, gen_source_photon, use_sources
@@ -119,7 +120,7 @@ contains
   implicit none
   type(grid_type),   intent(in)  :: grid
   type(photon_type), intent(out) :: photon
-  real(kind=wp) :: u, sint, cost, phi, rp, rs_max
+  real(kind=wp) :: u, sint, cost, phi, rp, rs_max, tanp, bx, by, bz
   integer :: is, il, lo, hi, mid
 
   !--- select source by luminosity CDF.
@@ -142,13 +143,25 @@ contains
      photon%x = grid%xrange*rand_number()+grid%xmin
      photon%y = grid%yrange*rand_number()+grid%ymin
      photon%z = par%src_zscale(is)/sqrt(2.0_wp)*rand_gauss()
-  case ('exponential', 'sech')
+  case ('exponential', 'sech', 'exp_spiral')
      !--- radially exponential disk (r ~ r*exp(-r/rscale)); vertically
-     !--- exponential ('exponential') or sech^2 ('sech').  Falls back to a
-     !--- plane-uniform disk when src_rscale is not set (backward compatible).
+     !--- exponential ('exponential') or sech^2 ('sech'); 'exp_spiral' adds
+     !--- log-spiral arms by rejection.  Falls back to a plane-uniform disk when
+     !--- src_rscale is not set (backward compatible).
      if (par%src_rscale(is) > 0.0_wp) then
-        rp  = par%src_rscale(is) * rand_r1exp(par%rmax/par%src_rscale(is))
-        phi = twopi*rand_number()
+        if (trim(par%src_geometry(is)) == 'exp_spiral' .and. par%spiral_m > 0) then
+           tanp = tan(par%spiral_pitch*pi/180.0_wp)
+           do
+              rp  = par%src_rscale(is) * rand_r1exp(par%rmax/par%src_rscale(is))
+              phi = twopi*rand_number()
+              if (rp <= 0.0_wp) cycle
+              if ((1.0_wp+par%spiral_amp)*rand_number() <= &
+                  1.0_wp + par%spiral_amp*sin(par%spiral_m*(log(rp)/tanp - phi))) exit
+           enddo
+        else
+           rp  = par%src_rscale(is) * rand_r1exp(par%rmax/par%src_rscale(is))
+           phi = twopi*rand_number()
+        endif
         photon%x = rp*cos(phi);  photon%y = rp*sin(phi)
      else
         photon%x = grid%xrange*rand_number()+grid%xmin
@@ -171,6 +184,26 @@ contains
         photon%x = rp*sint*cos(phi)
         photon%y = rp*sint*sin(phi)
         photon%z = rp*cost*par%src_axial_ratio(is)
+        if (sqrt(photon%x**2+photon%y**2) <= par%rmax .and. &
+            abs(photon%z) <= par%zmax) exit
+     enddo
+  case ('boxy', 'bar', 'xbar')
+     !--- generalized-ellipsoid bulge (boxiness src_boxiness), scaled by
+     !--- src_reff and flattened in z by src_axial_ratio.  Sampled in units of
+     !--- the bulge scale (hard bound 8); rejected outside the box.
+     do
+        select case (trim(par%src_geometry(is)))
+        case ('boxy')
+           call rand_boxy(bx, by, bz, 0.1_wp, 8.0_wp, 8.0_wp, 8.0_wp, &
+                          par%src_boxiness(is), par%src_sersic_index(is))
+        case ('bar')
+           call rand_bar(bx, by, bz, 0.1_wp, 8.0_wp, 8.0_wp, 8.0_wp, par%src_boxiness(is))
+        case default   ! 'xbar'
+           call rand_xbar(bx, by, bz, 8.0_wp, 8.0_wp, 8.0_wp, par%src_boxiness(is))
+        end select
+        photon%x = bx*par%src_reff(is)
+        photon%y = by*par%src_reff(is)
+        photon%z = bz*par%src_reff(is)*par%src_axial_ratio(is)
         if (sqrt(photon%x**2+photon%y**2) <= par%rmax .and. &
             abs(photon%z) <= par%zmax) exit
      enddo

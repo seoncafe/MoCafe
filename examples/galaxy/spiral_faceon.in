@@ -1,0 +1,47 @@
+&parameters
+ !--- Face-on spiral galaxy: exp_spiral stellar disk + Sersic bulge in a
+ !--- spiral dust disk (m=2 arms).  Demonstrates the spiral-arm dust density
+ !--- and the alias-sampled Sersic bulge; the face-on dust-emission image
+ !--- shows the arms.
+ par%no_photons      = 2.0e6
+ par%use_sed         = .true.
+ par%save_jlam       = .true.
+ par%use_dustemis    = .true.
+ par%dust_fast_table = .true.
+ par%luminosity      = 3.828e43
+ par%nsource         = 2
+ par%src_geometry    = 'exp_spiral', 'sersic'
+ par%src_tstar       = 1.0e4,        4.0e3
+ par%src_lum         = 3.0e43,       0.828e43
+ par%src_zscale      = 0.15,         0.0
+ par%src_rscale      = 0.3,          0.0
+ par%src_sersic_index = 4.0,         4.0
+ par%src_reff         = 0.0,         0.15
+ par%src_axial_ratio  = 1.0,         0.6
+ par%spiral_m        = 2
+ par%spiral_pitch    = 15.0
+ par%spiral_amp      = 0.8
+ par%nlambda         = 60
+ par%lambda_min      = 0.0912
+ par%lambda_max      = 2000.0
+ par%lambda_ref      = 0.55
+ par%kext_file       = '../../data/kext_astrodust_MW.dat'
+ par%geometry        = 'cylinder'
+ par%tauhomo         = 3.0
+ par%density_zscale  = 0.1
+ par%density_rscale  = 0.5
+ par%distance_unit   = 'kpc'
+ par%rmax = 1.0
+ par%nx = 96
+ par%ny = 96
+ par%nz = 24
+ par%nxim = 129
+ par%nyim = 129
+ par%inclination_angle = 0.0
+ par%distance = 1.0e4
+ par%use_master_slave = .false.
+ par%iseed = 1234
+ par%no_print = 2.0e6
+ par%file_format = 'hdf5'
+ par%out_file = 'spiral_faceon.h5'
+/

@@ -21,7 +21,7 @@ contains
   integer :: nxcen,nycen,nzcen
   real(kind=wp) :: taueq,taupole
   real(kind=wp) :: dens
-  real(kind=wp) :: xx,yy,zz,rr
+  real(kind=wp) :: xx,yy,zz,rr,pp,tanp
   real(kind=wp) :: rmin_positive
   character(len=128) :: dens_out
 
@@ -150,9 +150,14 @@ contains
        if (is_finite(par%density_zscale)) then
          do k=1,grid%nz
             zz = (grid%zface(k)+grid%zface(k+1))/2.0_wp
-            grid%rhokap(:,:,k) = grid%rhokap(:,:,k)*exp(-abs(zz) / par%density_zscale)
+            if (trim(par%density_zprofile) == 'sech') then
+               grid%rhokap(:,:,k) = grid%rhokap(:,:,k)/cosh(zz/par%density_zscale)**2
+            else
+               grid%rhokap(:,:,k) = grid%rhokap(:,:,k)*exp(-abs(zz) / par%density_zscale)
+            endif
          enddo
        endif
+       tanp = tan(par%spiral_pitch*pi/180.0_wp)
        do j=1,grid%ny
          yy = (grid%yface(j)+grid%yface(j+1))/2.0_wp
          do i=1,grid%nx
@@ -160,6 +165,11 @@ contains
            rr = sqrt(xx**2 + yy**2)
            if (par%rmax > 0.0 .and. rr > par%rmax) grid%rhokap(i,j,:) = 0.0_wp
            if (is_finite(par%density_rscale))      grid%rhokap(i,j,:) = grid%rhokap(i,j,:)*exp(-rr / par%density_rscale)
+           if (par%spiral_m > 0 .and. rr > 0.0_wp) then
+              pp = atan2(yy, xx)
+              grid%rhokap(i,j,:) = grid%rhokap(i,j,:) * &
+                 (1.0_wp + par%spiral_amp*sin(par%spiral_m*(log(rr)/tanp - pp)))
+           endif
          enddo
        enddo
     ! Spherical Geometry

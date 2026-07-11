@@ -17,7 +17,7 @@ contains
   type(photon_type), intent(out)   :: photon
 
   ! local variables
-  real(kind=wp) :: sint,cost,phi,sinp,cosp,rp
+  real(kind=wp) :: sint,cost,phi,sinp,cosp,rp,tanp
 
   !--- multi-source (Stage 6): pick a luminosity-weighted component and set
   !--- position/direction/wavelength from it, then run the common tail
@@ -55,17 +55,33 @@ contains
      photon%y = grid%yrange*rand_number()+grid%ymin
      photon%z = par%source_zscale/sqrt(2.0_wp)*rand_gauss()
      photon%wgt = 1.0_wp
-  case ('exponential')
-     !--- radially exponential disk when source_rscale is set, else plane-uniform.
+  case ('exponential', 'sech', 'exp_spiral')
+     !--- radially exponential disk when source_rscale is set, else plane-uniform;
+     !--- vertically exp or sech^2; 'exp_spiral' adds log-spiral arms by rejection.
      if (par%source_rscale > 0.0_wp) then
-        rp  = par%source_rscale*rand_r1exp(par%rmax/par%source_rscale)
-        phi = twopi*rand_number()
+        if (trim(par%source_geometry) == 'exp_spiral' .and. par%spiral_m > 0) then
+           tanp = tan(par%spiral_pitch*pi/180.0_wp)
+           do
+              rp  = par%source_rscale*rand_r1exp(par%rmax/par%source_rscale)
+              phi = twopi*rand_number()
+              if (rp <= 0.0_wp) cycle
+              if ((1.0_wp+par%spiral_amp)*rand_number() <= &
+                  1.0_wp + par%spiral_amp*sin(par%spiral_m*(log(rp)/tanp - phi))) exit
+           enddo
+        else
+           rp  = par%source_rscale*rand_r1exp(par%rmax/par%source_rscale)
+           phi = twopi*rand_number()
+        endif
         photon%x = rp*cos(phi);  photon%y = rp*sin(phi)
      else
         photon%x = grid%xrange*rand_number()+grid%xmin
         photon%y = grid%yrange*rand_number()+grid%ymin
      endif
-     photon%z = par%source_zscale*rand_zexp(par%zmax/par%source_zscale)
+     if (trim(par%source_geometry) == 'sech') then
+        photon%z = par%source_zscale*rand_sech2(par%zmax/par%source_zscale)
+     else
+        photon%z = par%source_zscale*rand_zexp(par%zmax/par%source_zscale)
+     endif
      photon%wgt = 1.0_wp
   case ('external_cyl')
      call external_illumination_cyl(photon,grid)

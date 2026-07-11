@@ -165,6 +165,14 @@ public
      real(kind=wp) :: density_zscale         = nan64
      real(kind=wp) :: density_rscale         = nan64
      real(kind=wp) :: density_powerlaw_index = nan64
+     !--- disk vertical profile ('exp' = exp(-|z|/zscale), 'sech' = sech^2(z/zscale))
+     !--- and log-spiral arm modulation (1 + spiral_amp*sin(m*(ln r/tan(pitch)-phi)))
+     !--- applied to the cylinder dust density and to 'exp_spiral' disk sources.
+     !--- spiral_m = 0 disables the arms.
+     character(len=8)  :: density_zprofile = 'exp'
+     integer           :: spiral_m         = 0
+     real(kind=wp)     :: spiral_pitch     = 15.0_wp    ! pitch angle [deg]
+     real(kind=wp)     :: spiral_amp       = 0.5_wp     ! arm amplitude
      real(kind=wp) :: distance2cm          = kpc2cm
      character(len=128) :: distance_unit   = 'kpc'
      character(len=128) :: source_geometry = 'point'
@@ -288,6 +296,10 @@ public
      real(kind=wp)      :: src_sersic_index(MAX_SRC) = 4.0_wp
      real(kind=wp)      :: src_reff(MAX_SRC)         = -999.0_wp
      real(kind=wp)      :: src_axial_ratio(MAX_SRC)  = 1.0_wp
+     !--- boxiness exponent for 'boxy'/'bar'/'xbar' bulges (2 = ellipsoidal,
+     !--- >2 = boxy, <2 = disky); src_reff sets the scale, src_sersic_index is
+     !--- the 'boxy' power-law index, src_axial_ratio flattens z.
+     real(kind=wp)      :: src_boxiness(MAX_SRC)     = 2.0_wp
      !--- HEALPix all-sky interior observer (Milky-Way case).  When
      !--- par%allsky = .true. the observer sits at par%allsky_x/y/z INSIDE the
      !--- grid and each event peels toward it, binned into the HEALPix pixel

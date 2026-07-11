@@ -3,21 +3,22 @@
  !--- Exponential stellar disk (4000 K) heating an exponential dust disk in a
  !--- cylinder; the observer sits off-center (like the Sun) and sees the
  !--- diffuse Galactic light + FIR cirrus over the whole sky.
- par%no_photons      = 6.0e6
+ par%no_photons      = 1.0e7
  par%use_sed         = .true.
  par%save_jlam       = .true.
  par%use_dustemis    = .true.
- par%dust_no_photons = 2.0e7
+ par%dust_no_photons = 3.0e7
  par%dust_fast_table = .true.
  par%luminosity      = 3.828e43
 
  par%nsource         = 1
  par%tstar           = 5.0e3
- par%source_geometry = 'exponential'
+ par%source_geometry = 'exp_spiral'
+ par%source_rscale   = 0.4
  par%source_zscale   = 0.3
 
  par%allsky          = .true.
- par%allsky_nside    = 16
+ par%allsky_nside    = 32
  par%allsky_x        = 0.6
  par%allsky_y        = 0.0
  par%allsky_z        = 0.0
@@ -29,14 +30,17 @@
  par%kext_file       = '../../data/kext_astrodust_MW.dat'
  par%geometry        = 'cylinder'
  par%tauhomo         = 3.0
- par%density_zscale  = 0.2
+ par%spiral_m        = 2
+ par%spiral_pitch    = 15.0
+ par%spiral_amp      = 0.6
+ par%density_zscale  = 0.12
  par%density_rscale  = 0.5
 
  par%distance_unit   = 'kpc'
  par%rmax = 1.0
- par%nx = 32
- par%ny = 32
- par%nz = 32
+ par%nx = 64
+ par%ny = 64
+ par%nz = 64
  par%use_master_slave = .false.
  par%iseed = 1234
  par%no_print = 4.0e6
