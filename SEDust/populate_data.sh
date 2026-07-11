@@ -2,7 +2,7 @@
 # Populate SEDust optics data that is NOT committed to git.
 #
 # The minimal data set the default 'astrodust'+PAH dust-emission path needs is
-# already bundled in the repository (see .gitignore), so a fresh checkout runs
+# already in the repository (see .gitignore), so a fresh checkout runs
 # dust emission out of the box -- you normally do NOT need this script.
 #
 # The only file kept out of git is the 17 MB D16 spheroid Q-library

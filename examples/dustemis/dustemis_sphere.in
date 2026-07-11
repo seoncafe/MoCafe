@@ -2,7 +2,7 @@
  !--- Stage 3 Mode 1 (Lucy, non-iterative): point source of luminosity L_star
  !--- at the center of a uniform astrodust sphere, tau_V(center->edge) = 1.
  !--- Distances in pc; L in erg/s (~1 Lsun) for physical dust temperatures.
- !--- SEDust optics come from the bundled SEDust/ tree (par%sed_* defaults).
+ !--- SEDust optics come from the SEDust/ tree (par%sed_* defaults).
  par%no_photons      = 2.0e6
  par%use_sed         = .true.
  par%save_jlam       = .true.

@@ -134,14 +134,14 @@ add a source file, append its object to \code{OBJS} in the \file{Makefile} in
 dependency order.
 
 \subsection{Building the \textsc{SEDust} library}
-The Lucy emission engine (Mode~1) links the bundled \textsc{SEDust} library,
+The Lucy emission engine (Mode~1) links the \textsc{SEDust} library,
 kept self-contained under \file{SEDust/}.  Build it once:
 \begin{lstlisting}[style=sh]
 cd SEDust/sed && ./build_lib.sh    # -> SEDust/sed/lib/libsedust.a  (Intel)
 \end{lstlisting}
 The MoCafe \file{Makefile} links \file{SEDust/sed/lib/libsedust.a}
 automatically (variable \code{SEDUST\_LIBDIR}).  The \textsc{SEDust} module
-named \code{mathlib} is bundled as \code{sed\_mathlib} to avoid a clash with
+named \code{mathlib} is renamed to \code{sed\_mathlib} to avoid a clash with
 MoCafe's own \code{mathlib}.  The optics tables the default \code{astrodust}
 path reads ($\sim$26\,MB) are committed to the repository, and
 \code{par\%sed\_workdir} defaults to blank so MoCafe auto-resolves the
@@ -375,7 +375,7 @@ the AMR octree; see \S\ref{sec:amremission}).
 use\_dustemis      & .false.   & Compute dust emission (requires \pp{use\_sed})\\
 dust\_emission\_method & 'lucy'& 'lucy' (\textsc{SEDust}) or 'bw01' (Bjorkman \& Wood)\\
 dust\_model\_sed   & 'astrodust' & \textsc{SEDust} model\\
-sed\_qtable, sed\_sizedist & (bundled) & \textsc{SEDust} optics / size-distribution paths\\
+sed\_qtable, sed\_sizedist & \code{SEDust/} & \textsc{SEDust} optics / size-distribution paths\\
 sed\_workdir       & blank (auto) & \textsc{SEDust} data dir; blank auto-resolves to \code{<MoCafe.x dir>/SEDust/sed}\\
 sed\_NT, sed\_Tlo, sed\_Thi & 200, 2.7, 5000 & Grain temperature grid\\
 dust\_niter        & 1         & Lucy iterations (dust self-absorption)\\
@@ -586,7 +586,7 @@ examples/benchmarks & Camps~(2015) SHG dust-emission benchmark and Mode~1/2 $\ta
 \item \textbf{Regression.}  The monochromatic scattering, the $(a,g)$/$\tau$
       scans, and the clumpy-medium outputs remain bit-identical to v1.20
       throughout the upgrade.
-\item \textbf{Dust-emission engine.}  Run through the bundled \textsc{SEDust}
+\item \textbf{Dust-emission engine.}  Run through the \textsc{SEDust}
       library with the Zubko et al.~(2004) BARE-GR-S model, the emission
       spectra agree with the Camps et al.~(2015) seven-code stochastic-heating
       benchmark to a median relative difference of 2--4\% across

@@ -2,7 +2,7 @@
 
 ## 1. SHG dust-emission benchmark (Camps et al. 2015, A&A 580, A87)
 
-Validates the **emission engine** (the bundled SEDust library) against the
+Validates the **emission engine** (the SEDust library) against the
 published multi-code stochastic-heating-of-grains (SHG) benchmark, using the
 same Zubko et al. (2004) BARE-GR-S dust model the benchmark defines.
 
@@ -46,5 +46,5 @@ which B&W captures through immediate reemission; running Lucy with
 
 The 3-D transport benchmarks in the plan (DUSTY 1-D, Pascucci 2-D disk,
 Gordon et al. 2017 TRUST 3-D slab, and a direct Hyperion cross-check) require
-their published reference solutions, which are not bundled here.  Add them
+their published reference solutions, which are not included here.  Add them
 under this directory when available.

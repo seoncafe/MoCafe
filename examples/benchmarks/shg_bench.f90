@@ -1,6 +1,6 @@
 program shg_bench
    !--- Camps et al. (2015, A&A 580, A87) stochastic-heating dust-emission
-   !--- benchmark, run through the bundled SEDust library with the same
+   !--- benchmark, run through the SEDust library with the same
    !--- Zubko et al. (2004) BARE-GR-S dust model the benchmark uses.  For each
    !--- Mathis-ISRF scaling U we compute the emission spectrum and write it so
    !--- it can be overlaid on the published multi-code reference (CRT, DIRTY,
@@ -10,7 +10,7 @@ program shg_bench
    use dust_lib,  only: dust_model_t, build_zubko, dust_emission, dust_nlam, dust_lambda
    implicit none
    !--- EDIT ZDIR to your own SEDust Zubko-data location.  This benchmark uses
-   !--- the Zubko et al. (2004) BARE-GR-S tables, which are NOT bundled in the
+   !--- the Zubko et al. (2004) BARE-GR-S tables, which are NOT in the
    !--- MoCafe repository (only the default 'astrodust' optics are).  Point it
    !--- at data/zubko/ inside your SEDust tree.
    character(len=*), parameter :: ZDIR = &
