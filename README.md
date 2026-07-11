@@ -36,19 +36,20 @@ The scattered-light image is in units of `(luminosity unit) cm^-2 sr^-1`.
     grains + PAHs; iterable for dust self-absorption; fast equilibrium
     (`dust_single_teq`) and table (`dust_fast_table`) options.
   - **Bjorkman & Wood (2001)** — immediate reemission, no iteration.
-  - Plus **multiple stellar populations**, an **all-sky interior observer**
-    (the Milky-Way case), and a **Modified Random Walk** for high τ.
+  - Plus **multiple stellar populations**, a **HEALPix all-sky interior
+    observer** (the Milky-Way case), and a **Modified Random Walk** for high τ.
+  - Runs on **both the Cartesian grid and the AMR octree**.
   - See **[README_HOWTO.md](README_HOWTO.md#dust-thermal-emission-v200)** and
     `MoCafe_v2.00_PLAN.md`.  Validated against the Camps et al. (2015) SHG
     dust-emission benchmark.
 
-The clumpy and AMR media are **dust only** at this stage (no gas velocity,
-temperature, or Lyman-α machinery); the dust-emission modes run on the
-Cartesian grid.
+The clumpy and AMR media carry **dust only** (no gas velocity, temperature, or
+Lyman-α radiative transfer).  The dust-emission modes run on the Cartesian grid
+and the AMR octree (not the clumpy medium).
 
 ## References
 
-- [Seon & Draine 2016, ApJ, 833, 201](https://ui.adsabs.harvard.edu/abs/2016ApJ...833..201S/abstract) & [Seon & Kim 2020, ApJS, 250, 9](https://ui.adsabs.harvard.edu/abs/2020ApJS..250....9S/abstract) — dust/Monte-Carlo radiative transfer by the author (general background; the shared MC machinery is ported from LaRT).
+- [Seon & Draine 2016, ApJ, 833, 201](https://ui.adsabs.harvard.edu/abs/2016ApJ...833..201S/abstract) & [Seon & Kim 2020, ApJS, 250, 9](https://ui.adsabs.harvard.edu/abs/2020ApJS..250....9S/abstract) — dust/Monte-Carlo radiative transfer by the author (general background; the shared Monte-Carlo core is ported from LaRT).
 - [Seon 2010, PKAS, 25, 177](https://koreascience.kr/journal/CMHHCI/v25n4.do) — the `(a,g)` single-run scan.
 - [Jonsson 2006, MNRAS, 372, 2](https://ui.adsabs.harvard.edu/abs/2006MNRAS.372....2J/abstract) — the polychromatic optical-depth scan (SUNRISE).
 - [Lucy 1999, A&A, 344, 282](https://ui.adsabs.harvard.edu/abs/1999A%26A...344..282L/abstract) — the iterative dust-emission / mean-intensity estimator.
@@ -70,4 +71,4 @@ Cartesian grid.
 
 ---
 
-Last updated: 2026-07-11 09:06 KST
+Last updated: 2026-07-11 09:12 KST
