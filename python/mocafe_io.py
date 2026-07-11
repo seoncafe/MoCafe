@@ -402,6 +402,85 @@ class MoCafeFile:
         s = self.section('TAU_dust')
         return None if s is None else s.data
 
+    # ---- dust-emission (v2.00) convenience accessors --------------------------
+    def _data(self, name: str) -> Optional[np.ndarray]:
+        s = self.section(name)
+        return None if s is None else s.data
+
+    def dust_sed(self) -> Optional[Dict[str, np.ndarray]]:
+        """Dust-emission SED from a ``_dustsed`` file.
+
+        Returns a dict with ``wavelength`` / ``dwavelength`` [um], the
+        ``intrinsic`` (unattenuated) SED [erg/s per bin], the ``emergent``
+        SED (nlam, nobs), and ``tdust`` / ``ldust`` cell maps if present.
+        ``None`` when the file carries no dust SED.
+        """
+        lam = self._data('Wavelength')
+        intr = self._data('SED_intrinsic')
+        if lam is None or intr is None:
+            return None
+        return {
+            'wavelength':  np.asarray(lam),
+            'dwavelength': self._data('Dwavelength'),
+            'intrinsic':   np.asarray(intr),
+            'emergent':    self._data('SED_emergent'),
+            'image':       self._data('DustEmis_image'),
+            'tdust':       self._data('Tdust'),
+            'ldust':       self._data('Ldust'),
+            'leafxyz':     self._data('LeafXYZ'),
+        }
+
+    def dust_maps(self) -> Optional[Dict[str, np.ndarray]]:
+        """Cell temperature / power maps from ``_dustsed`` or ``_bwdust``.
+
+        ``tdust`` [K] plus ``ldust`` or ``labs`` [erg/s]; on AMR the maps are
+        1-D arrays indexed by leaf and ``leafxyz`` holds the leaf centers.
+        """
+        t = self._data('Tdust')
+        if t is None:
+            return None
+        return {
+            'tdust':   np.asarray(t),
+            'ldust':   self._data('Ldust'),
+            'labs':    self._data('Labs'),
+            'leafxyz': self._data('LeafXYZ'),
+        }
+
+    def allsky(self) -> Optional[Dict[str, Any]]:
+        """HEALPix all-sky map from an ``_allsky`` file.
+
+        ``sky`` is (npix, nlam) surface brightness (RING scheme), with
+        ``wavelength`` [um], ``pixdir`` (npix, 3) pixel-center vectors, and
+        the HEALPix ``nside``.
+        """
+        sky = self._data('AllSky')
+        if sky is None:
+            return None
+        s = self.section('AllSky')
+        nside = s.attr('NSIDE') if s is not None else None
+        return {
+            'sky':        np.asarray(sky),
+            'wavelength': self._data('Wavelength'),
+            'pixdir':     self._data('PixelDir'),
+            'nside':      int(nside) if nside is not None else None,
+        }
+
+    def jlambda(self) -> Optional[Dict[str, np.ndarray]]:
+        """Mean-intensity tally from a ``_jlam`` file.
+
+        ``J`` is J(lambda, ...) — (nlam, nx, ny, nz) on Cartesian or
+        (nlam, nleaf) on AMR — with ``jbol`` and ``wavelength`` [um].
+        """
+        J = self._data('J_lambda')
+        if J is None:
+            return None
+        return {
+            'J':          np.asarray(J),
+            'jbol':       self._data('J_bol'),
+            'wavelength': self._data('Wavelength'),
+            'leafxyz':    self._data('LeafXYZ'),
+        }
+
     # ---- header inspection helpers --------------------------------------------
     def header(self, name: Optional[str] = None) -> Dict[str, Any]:
         """Attributes of one section (default: the first image section).
