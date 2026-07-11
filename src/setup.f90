@@ -197,11 +197,26 @@ contains
               'ERROR: dust_emission_method=''lucy'' requires par%save_jlam = .true.'
            call MPI_FINALIZE(ierr);  stop
         endif
-        if (len_trim(par%sed_qtable) == 0 .or. len_trim(par%sed_sizedist) == 0) then
-           if (mpar%p_rank == 0) write(*,'(a)') &
-              'ERROR: dust_emission_method=''lucy'' requires par%sed_qtable and par%sed_sizedist.'
+        select case (trim(par%dust_model_sed))
+        case ('astrodust', 'dl07')
+           if (len_trim(par%sed_qtable) == 0 .or. len_trim(par%sed_sizedist) == 0) then
+              if (mpar%p_rank == 0) write(*,'(3a)') &
+                 'ERROR: dust_model_sed=''', trim(par%dust_model_sed), &
+                 ''' requires par%sed_qtable and par%sed_sizedist.'
+              call MPI_FINALIZE(ierr);  stop
+           endif
+        case ('zubko')
+           if (len_trim(par%sed_zubko_config) == 0 .or. len_trim(par%sed_zubko_dir) == 0) then
+              if (mpar%p_rank == 0) write(*,'(a)') &
+                 'ERROR: dust_model_sed=''zubko'' requires par%sed_zubko_config and par%sed_zubko_dir.'
+              call MPI_FINALIZE(ierr);  stop
+           endif
+        case default
+           if (mpar%p_rank == 0) write(*,'(3a)') &
+              'ERROR: par%dust_model_sed = ''', trim(par%dust_model_sed), &
+              ''' unknown (use ''astrodust'', ''dl07'', or ''zubko'').'
            call MPI_FINALIZE(ierr);  stop
-        endif
+        end select
      case ('bw01')
         !--- Bjorkman & Wood needs only the mixture opacity (par%kext_file).
      case default

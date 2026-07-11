@@ -83,7 +83,7 @@ toward each observer to build an image or spectral-energy distribution (SED).
 \begin{itemize}
 \item \textbf{Multi-wavelength (SED) transport} (\pp{use\_sed}): one run covers
       the full UV-to-far-IR range on a log-spaced wavelength grid.
-\item \textbf{Per-cell mean intensity} $J_\lambda(x,y,z)$ (\pp{save\_jlam})
+\item \textbf{Mean intensity in each cell} $J_\lambda(x,y,z)$ (\pp{save\_jlam})
       via the Lucy~(1999) pathlength estimator.
 \item \textbf{Dust thermal emission} (\pp{use\_dustemis}) in two modes:
       \emph{Mode~1} (Lucy + \textsc{SEDust}) and \emph{Mode~2}
@@ -217,7 +217,7 @@ dust\_model        & 'global\_dgr' & AMR leaf opacity: 'global\_dgr', 'from\_fil
 DGR, Z\_global, Z\_ref, f\_ion\_dust & --- & Dust-to-gas / metallicity parameters (AMR)\\
 clump\_radius      & -1     & Clump radius (clumpy medium)\\
 clump\_f\_cov / \_f\_vol / \_N\_clumps & -1 & Clump count specification\\
-clump\_tau0 / \_ndust / \_nH & -1 & Per-clump opacity specification\\
+clump\_tau0 / \_ndust / \_nH & -1 & Opacity specification for each clump\\
 \bottomrule
 \end{longtable}
 The clumpy and AMR media are documented in \file{docs/MoCafe\_clump.pdf} and
@@ -303,7 +303,7 @@ file\_format       & 'hdf5' & 'hdf5' or 'fits'; authoritative for the container\
 out\_file          & '\,'   & Output base name (from the input name if empty)\\
 out\_bitpix        & -32    & FITS bitpix ($-32$ float32, $-64$ float64)\\
 save\_direc0       & .false.& Also write the unattenuated direct image\\
-sightline\_tau     & .false.& Also write a per-pixel sight-line optical-depth map\\
+sightline\_tau     & .false.& Also write a sight-line optical-depth map for each pixel\\
 \bottomrule
 \end{longtable}
 
@@ -329,7 +329,7 @@ source\_spectrum   & '\,'    & Two-column source spectrum $\lambda,\ L_\lambda$\
 tstar              & -999    & Planck source temperature [K] (if no spectrum file)\\
 \bottomrule
 \end{longtable}
-Wavelength-dependent extinction is applied as a per-photon grey rescaling
+Wavelength-dependent extinction is applied as a grey rescaling for each photon
 \begin{equation}
   s_{\rm ext}(\lambda) \;=\; \frac{C_{\rm ext}(\lambda)}{C_{\rm ext}(\lambda_{\rm ref})},
 \end{equation}
@@ -343,7 +343,7 @@ Restrictions: SED mode is incompatible with Stokes polarization and with the
 $(a,g)$/$\tau$ single-run scans, and (in this version) supports internal
 sources only.
 
-\subsection{Per-cell mean intensity $J_\lambda$}\label{sec:jlam}
+\subsection{Mean intensity $J_\lambda$ in each cell}\label{sec:jlam}
 \begin{longtable}{P D X}
 \toprule
 \textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
@@ -374,8 +374,10 @@ the AMR octree; see \S\ref{sec:amremission}).
 \midrule \endhead
 use\_dustemis      & .false.   & Compute dust emission (requires \pp{use\_sed})\\
 dust\_emission\_method & 'lucy'& 'lucy' (\textsc{SEDust}) or 'bw01' (Bjorkman \& Wood)\\
-dust\_model\_sed   & 'astrodust' & \textsc{SEDust} model\\
-sed\_qtable, sed\_sizedist & \code{SEDust/} & \textsc{SEDust} optics / size-distribution paths\\
+dust\_model\_sed   & 'astrodust' & \textsc{SEDust} grain model: 'astrodust', 'dl07', or 'zubko'\\
+sed\_qtable, sed\_sizedist & \code{SEDust/} & optics / size-distribution paths ('astrodust', 'dl07')\\
+sed\_dl07\_sdindex, sed\_dl07\_uisrf & 7, 1.0 & 'dl07' only: WD01 size-dist.\ index and reference $U$\\
+sed\_zubko\_config, sed\_zubko\_dir & \code{../data/zubko/} & 'zubko' only: ZDA config + DustEM data dir\\
 sed\_workdir       & blank (auto) & \textsc{SEDust} data dir; blank auto-resolves to \code{<MoCafe.x dir>/SEDust/sed}\\
 sed\_NT, sed\_Tlo, sed\_Thi & 200, 2.7, 5000 & Grain temperature grid\\
 dust\_niter        & 1         & Lucy iterations (dust self-absorption)\\
@@ -388,7 +390,7 @@ mean intensity $J_\lambda$ (converted to SI and resampled onto the
 \textsc{SEDust} wavelength grid) is passed to \textsc{SEDust}, which returns
 the emission spectrum from the full grain-size distribution --- equilibrium
 grains plus stochastically heated small grains and PAH features.  The
-\emph{shape} is taken from \textsc{SEDust} while the per-cell bolometric
+\emph{shape} is taken from \textsc{SEDust} while the bolometric
 luminosity is set to the locally absorbed power,
 \begin{equation}
   L_{\rm emit}(\mathrm{cell}) \;=\; L_{\rm abs}(\mathrm{cell})
@@ -433,12 +435,12 @@ the observer \code{Scattered} SED image.
 \textrm{Parameter} & \textrm{Default} & \textrm{Description}\\
 \midrule \endhead
 nsource            & 1       & Number of stellar components ($>1$ activates multi-source)\\
-src\_geometry(i)   & 'point' & Per-source geometry: point/uniform/gaussian/exponential\\
-src\_tstar(i)      & -999    & Per-source Planck temperature [K]\\
-src\_spectrum(i)   & '\,'    & Per-source spectrum file (overrides src\_tstar)\\
-src\_lum(i)        & -999    & Per-source luminosity [erg/s] (equal split if unset)\\
-src\_x/y/z(i)      & 0       & Per-source position ('point')\\
-src\_zscale(i)     & -999    & Per-source scale height ('gaussian'/'exponential')\\
+src\_geometry(i)   & 'point' & Geometry of each source: point/uniform/gaussian/exponential\\
+src\_tstar(i)      & -999    & Planck temperature of each source [K]\\
+src\_spectrum(i)   & '\,'    & Spectrum file of each source (overrides src\_tstar)\\
+src\_lum(i)        & -999    & Luminosity of each source [erg/s] (equal split if unset)\\
+src\_x/y/z(i)      & 0       & Position of each source ('point')\\
+src\_zscale(i)     & -999    & Scale height of each source ('gaussian'/'exponential')\\
 \bottomrule
 \end{longtable}
 Sources are sampled in proportion to their luminosity, and \pp{luminosity}
@@ -495,14 +497,14 @@ The entire dust-emission suite --- SED transport, the $J_\lambda$ tally, Mode~1
 \& Wood), and the Modified Random Walk --- runs on the AMR octree
 (\pp{grid\_type}${}={}$\code{'amr'}) exactly as on the Cartesian grid.  A
 ``cell'' is simply an octree leaf: the radiation field, absorbed power, and
-dust temperature are tallied per leaf (per-leaf code-volume and opacity), and
+dust temperature are tallied per leaf (code-volume and opacity of each leaf), and
 MRW uses the nearest leaf-face distance for its trigger.  Set up the octree as
 usual (\pp{grid\_type}${}={}$\code{'amr'}, \pp{amr\_file}, and \pp{dust\_model}
 for the leaf opacity) and add the emission parameters above.  The derived files
 carry
-per-leaf arrays instead of Cartesian cubes: \file{<base>\_jlam},
+arrays indexed by leaf instead of Cartesian cubes: \file{<base>\_jlam},
 \file{<base>\_dustsed}, and \file{<base>\_bwdust} each add a \code{LeafXYZ}
-table of leaf-center coordinates so the per-leaf quantities can be placed in
+table of leaf-center coordinates so the leaf quantities can be placed in
 space.  Example: \file{examples/amr\_sphere/amr\_dustemis.in} (a uniform
 level-5 octree sphere) reproduces the energy budget and SED of the equivalent
 Cartesian sphere.
@@ -547,7 +549,7 @@ keywords become group attributes).
 \midrule \endhead
 \_obs      & always & Observer images; in SED mode \code{Scattered}/\code{Direct} become $(x,y,\lambda)$ cubes plus the wavelength / optics tables\\
 \_jlam     & save\_jlam & $J_\lambda(\lambda,x,y,z)$, $J_{\rm bol}$, energy-conservation keywords\\
-\_dustsed  & use\_dustemis ('lucy') & Emergent and intrinsic dust SED, a pixel-resolved $\code{DustEmis\_image}(x,y,\lambda)$, and per-cell $T_{\rm dust}$/$L_{\rm dust}$ maps\\
+\_dustsed  & use\_dustemis ('lucy') & Emergent and intrinsic dust SED, a pixel-resolved $\code{DustEmis\_image}(x,y,\lambda)$, and $T_{\rm dust}$/$L_{\rm dust}$ maps for each cell\\
 \_bwdust   & 'bw01' & Equilibrium $T_{\rm dust}$ and absorbed-power maps\\
 \_allsky   & allsky & HEALPix $(n_{\rm pix},\lambda)$ all-sky surface-brightness map (RING) $+$ \code{PixelDir}\\
 \_obs\_tau & sightline\_tau & Sight-line optical-depth map\\
@@ -555,7 +557,7 @@ keywords become group attributes).
 \bottomrule
 \end{longtable}
 On the AMR octree the \code{\_jlam}, \code{\_dustsed}, and \code{\_bwdust}
-images are per-leaf arrays (indexed by leaf) rather than Cartesian cubes, and
+images are arrays indexed by leaf rather than Cartesian cubes, and
 each adds a \code{LeafXYZ} table of leaf-center coordinates.  Read and convert
 the outputs with \file{python/mocafe\_io.py} (\code{info}, \code{peek},
 \code{convert}).
@@ -612,7 +614,7 @@ solutions and are added as they become available.
 \paragraph{Packet energy.}  Each packet carries a physical luminosity
 $L_{\rm pk}$ [erg/s]: $L_\star/N_\star$ for stellar packets and
 $L_{\rm dust}/N_{\rm dust}$ for dust-emission packets, so populations with
-different per-packet energies combine correctly in the $J_\lambda$ tally.
+different packet energies combine correctly in the $J_\lambda$ tally.
 
 \paragraph{Lucy iteration.}  The stellar $J_\lambda$ is tallied once and
 reused; each iteration transports fresh dust-emission photons (sampled per cell

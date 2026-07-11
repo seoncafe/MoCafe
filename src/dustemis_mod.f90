@@ -79,11 +79,18 @@ contains
   case ('astrodust')
      call build_astrodust(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
                           par%sed_NT, par%sed_Tlo, par%sed_Thi)
+  case ('dl07')
+     call build_dl07(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
+                     par%sed_dl07_sdindex, par%sed_dl07_uisrf, &
+                     par%sed_NT, par%sed_Tlo, par%sed_Thi)
+  case ('zubko')
+     call build_zubko(dmodel, trim(par%sed_zubko_config), trim(par%sed_zubko_dir), &
+                      par%sed_NT, par%sed_Tlo, par%sed_Thi)
   case default
      cstat = chdir(trim(cwd_save))
      if (mpar%p_rank == 0) write(*,'(3a)') &
         'ERROR: par%dust_model_sed = ''', trim(par%dust_model_sed), &
-        ''' not wired yet (use ''astrodust'').'
+        ''' unknown (use ''astrodust'', ''dl07'', or ''zubko'').'
      call MPI_FINALIZE(ierr);  stop
   end select
 

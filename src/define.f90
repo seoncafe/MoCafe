@@ -232,6 +232,17 @@ public
      integer            :: sed_NT           = 200
      real(kind=wp)      :: sed_Tlo          = 2.7_wp
      real(kind=wp)      :: sed_Thi          = 5.0e3_wp
+     !--- DL07 (Draine & Li 2007; dust_model_sed='dl07') reuses sed_qtable and
+     !--- sed_sizedist (same files as astrodust).  sed_dl07_sdindex = WD01
+     !--- size-distribution index (7 = MW R_V=3.1, b_C=6e-5); sed_dl07_uisrf =
+     !--- reference radiation-field scaling U (1 = MMP83 diffuse ISM).
+     integer            :: sed_dl07_sdindex = 7
+     real(kind=wp)      :: sed_dl07_uisrf   = 1.0_wp
+     !--- Zubko (ZDA 2004 BARE-GR-S; dust_model_sed='zubko'): the ZDA config
+     !--- file and the DustEM optics/calorimetry directory, resolved from
+     !--- sed_workdir (defaults point at the copied SEDust/data/zubko).
+     character(len=256) :: sed_zubko_config = '../data/zubko/ZDA_BARE_GR_S_Config.dat'
+     character(len=256) :: sed_zubko_dir    = '../data/zubko/'
      !--- Lucy iteration for dust self-absorption (Stage 3 follow-up #1).
      !--- dust_niter = max iterations (1 = non-iterative); dust_nphotons =
      !--- dust-emission photons per iteration; dust_tol = relative-change

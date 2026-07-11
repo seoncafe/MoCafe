@@ -190,8 +190,9 @@ cd SEDust/sed && ./build_lib.sh          # -> SEDust/sed/lib/libsedust.a
 The MoCafe `Makefile` links `SEDust/sed/lib/libsedust.a` automatically
 (variable `SEDUST_LIBDIR`).
 
-**Data works out of the box.** The optics tables the default `astrodust`+PAH
-path reads (~26 MB) are committed to the repository, and `par%sed_workdir`
+**Data works out of the box.** The optics tables the `astrodust`+PAH and `dl07`
+paths read (~26 MB) and the `zubko` DustEM tables (~25 MB, `SEDust/data/zubko/`)
+are committed to the repository, and `par%sed_workdir`
 defaults to blank so MoCafe auto-resolves the SEDust directory relative to the
 `MoCafe.x` executable at run time — a fresh checkout runs dust emission from any
 working directory with no path editing.  You only need `SEDust/populate_data.sh`
@@ -240,8 +241,10 @@ On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are arrays indexed by leaf plus 
 |-----------|---------|-------------|
 | `use_dustemis` | `.false.` | Compute dust emission (requires `use_sed`) |
 | `dust_emission_method` | `'lucy'` | `'lucy'` (SEDust) or `'bw01'` (Bjorkman & Wood) |
-| `dust_model_sed` | `'astrodust'` | SEDust model (`astrodust`; DL07/Zubko available in the library) |
-| `sed_qtable`, `sed_sizedist` | `SEDust/` | SEDust optics / size-distribution paths (relative to `sed_workdir`) |
+| `dust_model_sed` | `'astrodust'` | SEDust grain model: `'astrodust'` (Hensley & Draine 2023), `'dl07'` (Draine & Li 2007), or `'zubko'` (Zubko et al. 2004 BARE-GR-S) |
+| `sed_qtable`, `sed_sizedist` | `SEDust/` | Optics / size-distribution paths for `astrodust` and `dl07` (relative to `sed_workdir`) |
+| `sed_dl07_sdindex`, `sed_dl07_uisrf` | 7, 1.0 | `dl07` only: WD01 size-distribution index (7 = MW R_V=3.1) and reference field scaling U |
+| `sed_zubko_config`, `sed_zubko_dir` | `../data/zubko/...` | `zubko` only: ZDA config file and DustEM data directory (relative to `sed_workdir`; committed under `SEDust/data/zubko/`) |
 | `sed_workdir` | `''` (auto) | Directory SEDust reads its `../data/...` tables from; blank auto-resolves to `<MoCafe.x dir>/SEDust/sed` |
 | `sed_NT`, `sed_Tlo`, `sed_Thi` | 200, 2.7, 5000 | Grain temperature grid |
 | `dust_niter` | 1 | Lucy iterations for dust self-absorption (1 = non-iterative) |
