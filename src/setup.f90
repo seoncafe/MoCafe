@@ -37,14 +37,14 @@ contains
   !--- Resolve the vendored SEDust directory relative to the executable when the
   !--- user leaves par%sed_workdir blank, so a fresh checkout runs dust emission
   !--- from any working directory without editing paths.  argv(0) is the path to
-  !--- MoCafe.x (e.g. '../../MoCafe.x'); take its directory and append sedust/sed.
+  !--- MoCafe.x (e.g. '../../MoCafe.x'); take its directory and append SEDust/sed.
   if (len_trim(par%sed_workdir) == 0) then
      call get_command_argument(0, exepath)
      islash = index(trim(exepath), '/', back=.true.)
      if (islash > 0) then
-        par%sed_workdir = exepath(1:islash-1) // '/sedust/sed'
+        par%sed_workdir = exepath(1:islash-1) // '/SEDust/sed'
      else
-        par%sed_workdir = 'sedust/sed'
+        par%sed_workdir = 'SEDust/sed'
      endif
   endif
 

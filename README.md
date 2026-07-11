@@ -32,7 +32,7 @@ The scattered-light image is in units of `(luminosity unit) cm^-2 sr^-1`.
   for read-only grid/clump/octree arrays (one copy per node).
 - **Dust thermal emission (v2.00)** — panchromatic (SED) transport, a per-cell
   `J_λ` tally, and two emission methods:
-  - **Lucy (1999) + [SEDust](sedust/)** — equilibrium + stochastically heated
+  - **Lucy (1999) + [SEDust](SEDust/)** — equilibrium + stochastically heated
     grains + PAHs; iterable for dust self-absorption; fast equilibrium
     (`dust_single_teq`) and table (`dust_fast_table`) options.
   - **Bjorkman & Wood (2001)** — immediate reemission, no iteration.

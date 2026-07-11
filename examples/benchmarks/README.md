@@ -6,12 +6,12 @@ Validates the **emission engine** (the vendored SEDust library) against the
 published multi-code stochastic-heating-of-grains (SHG) benchmark, using the
 same Zubko et al. (2004) BARE-GR-S dust model the benchmark defines.
 
-- `shg_bench.f90` links `sedust/sed/lib/libsedust.a`, builds the Zubko
+- `shg_bench.f90` links `SEDust/sed/lib/libsedust.a`, builds the Zubko
   BARE-GR-S model (`build_zubko`), and computes the dust emission for the
   Mathis ISRF scaled by U = 1e-2 … 1e6.  Build/run:
   ```
-  ifort -O2 -qopenmp -I../../sedust/sed/lib shg_bench.f90 \
-        ../../sedust/sed/lib/libsedust.a -o shg_bench.x
+  ifort -O2 -qopenmp -I../../SEDust/sed/lib shg_bench.f90 \
+        ../../SEDust/sed/lib/libsedust.a -o shg_bench.x
   OMP_NUM_THREADS=8 ./shg_bench.x
   ```
 - `cmp_shg.py` / `plot_shg.py` compare the output against the reference

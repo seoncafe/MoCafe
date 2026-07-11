@@ -181,20 +181,20 @@ monochromatic scattering run is unchanged.
 ### The SEDust grain library (vendored)
 
 The Lucy emission engine is the **SEDust** library, vendored self-contained
-under `sedust/`.  Build it once (Intel):
+under `SEDust/`.  Build it once (Intel):
 
 ```bash
-cd sedust/sed && ./build_lib.sh          # -> sedust/sed/lib/libsedust.a
+cd SEDust/sed && ./build_lib.sh          # -> SEDust/sed/lib/libsedust.a
 ```
 
-The MoCafe `Makefile` links `sedust/sed/lib/libsedust.a` automatically
+The MoCafe `Makefile` links `SEDust/sed/lib/libsedust.a` automatically
 (variable `SEDUST_LIBDIR`).
 
 **Data works out of the box.** The optics tables the default `astrodust`+PAH
 path reads (~26 MB) are committed to the repository, and `par%sed_workdir`
 defaults to blank so MoCafe auto-resolves the SEDust directory relative to the
 `MoCafe.x` executable at run time — a fresh checkout runs dust emission from any
-working directory with no path editing.  You only need `sedust/populate_data.sh`
+working directory with no path editing.  You only need `SEDust/populate_data.sh`
 to fetch the one file kept out of git (the 17 MB D16 spheroid Q-library, used
 only by the non-default graphite path); edit the source path inside that script,
 or set `SEDUST_SRC=/your/SEDust`, to point at your own SEDust tree.
@@ -242,7 +242,7 @@ On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are per-leaf arrays plus a
 | `dust_emission_method` | `'lucy'` | `'lucy'` (SEDust) or `'bw01'` (Bjorkman & Wood) |
 | `dust_model_sed` | `'astrodust'` | SEDust model (`astrodust`; DL07/Zubko available in the library) |
 | `sed_qtable`, `sed_sizedist` | (vendored) | SEDust optics / size-distribution paths (relative to `sed_workdir`) |
-| `sed_workdir` | `''` (auto) | Directory SEDust reads its `../data/...` tables from; blank auto-resolves to `<MoCafe.x dir>/sedust/sed` |
+| `sed_workdir` | `''` (auto) | Directory SEDust reads its `../data/...` tables from; blank auto-resolves to `<MoCafe.x dir>/SEDust/sed` |
 | `sed_NT`, `sed_Tlo`, `sed_Thi` | 200, 2.7, 5000 | Grain temperature grid |
 | `dust_niter` | 1 | Lucy iterations for dust self-absorption (1 = non-iterative) |
 | `dust_no_photons` | 1e6 | Dust-emission photons per iteration |

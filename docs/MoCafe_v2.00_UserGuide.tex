@@ -135,11 +135,11 @@ dependency order.
 
 \subsection{Building the \textsc{SEDust} library}
 The Lucy emission engine (Mode~1) links the vendored \textsc{SEDust} library,
-kept self-contained under \file{sedust/}.  Build it once:
+kept self-contained under \file{SEDust/}.  Build it once:
 \begin{lstlisting}[style=sh]
-cd sedust/sed && ./build_lib.sh    # -> sedust/sed/lib/libsedust.a  (Intel)
+cd SEDust/sed && ./build_lib.sh    # -> SEDust/sed/lib/libsedust.a  (Intel)
 \end{lstlisting}
-The MoCafe \file{Makefile} links \file{sedust/sed/lib/libsedust.a}
+The MoCafe \file{Makefile} links \file{SEDust/sed/lib/libsedust.a}
 automatically (variable \code{SEDUST\_LIBDIR}).  The \textsc{SEDust} module
 named \code{mathlib} is vendored as \code{sed\_mathlib} to avoid a clash with
 MoCafe's own \code{mathlib}.  The optics tables the default \code{astrodust}
@@ -148,7 +148,7 @@ path reads ($\sim$26\,MB) are committed to the repository, and
 \textsc{SEDust} directory relative to the \file{MoCafe.x} executable at run
 time --- a fresh checkout runs dust emission from any working directory with no
 path editing.  Only the 17\,MB D16 spheroid Q-library (used by a non-default
-graphite path) is kept out of git; run \file{sedust/populate\_data.sh} to fetch
+graphite path) is kept out of git; run \file{SEDust/populate\_data.sh} to fetch
 it, editing its source path (or setting \code{SEDUST\_SRC}) to your own
 \textsc{SEDust} tree.  Mode~2 (Bjorkman \& Wood) needs only the extinction table
 and not \textsc{SEDust}.
@@ -376,7 +376,7 @@ use\_dustemis      & .false.   & Compute dust emission (requires \pp{use\_sed})\
 dust\_emission\_method & 'lucy'& 'lucy' (\textsc{SEDust}) or 'bw01' (Bjorkman \& Wood)\\
 dust\_model\_sed   & 'astrodust' & \textsc{SEDust} model\\
 sed\_qtable, sed\_sizedist & (vendored) & \textsc{SEDust} optics / size-distribution paths\\
-sed\_workdir       & blank (auto) & \textsc{SEDust} data dir; blank auto-resolves to \code{<MoCafe.x dir>/sedust/sed}\\
+sed\_workdir       & blank (auto) & \textsc{SEDust} data dir; blank auto-resolves to \code{<MoCafe.x dir>/SEDust/sed}\\
 sed\_NT, sed\_Tlo, sed\_Thi & 200, 2.7, 5000 & Grain temperature grid\\
 dust\_niter        & 1         & Lucy iterations (dust self-absorption)\\
 dust\_no\_photons  & 1e6       & Dust-emission photons per iteration\\
