@@ -75,8 +75,8 @@ and the AMR octree (not the clumpy medium).
 
 ## Author
 
-Kwang-il Seon (KASI).
+Kwang-il Seon (KASI/UST)
 
 ---
 
-Last updated: 2026-07-12 00:45 KST
+Last updated: 2026-07-13 13:05 KST
