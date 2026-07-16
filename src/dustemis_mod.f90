@@ -59,8 +59,9 @@ contains
   use ifport, only : chdir, getcwd
   implicit none
   type(grid_type), intent(in) :: grid
-  integer :: ierr, cstat
+  integer :: ierr, cstat, st
   character(len=512) :: cwd_save
+  st = 0
 
   !--- SEDust reads its dielectric tables via paths hard-coded relative to its
   !--- sed/ directory ('../data/dielectric/...'), so build the model from
@@ -78,14 +79,14 @@ contains
   select case (trim(par%dust_model_sed))
   case ('astrodust')
      call build_astrodust(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
-                          par%sed_NT, par%sed_Tlo, par%sed_Thi)
+                          par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st)
   case ('dl07')
      call build_dl07(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
                      par%sed_dl07_sdindex, par%sed_dl07_uisrf, &
-                     par%sed_NT, par%sed_Tlo, par%sed_Thi)
+                     par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st)
   case ('zubko')
      call build_zubko(dmodel, trim(par%sed_zubko_config), trim(par%sed_zubko_dir), &
-                      par%sed_NT, par%sed_Tlo, par%sed_Thi)
+                      par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st)
   case default
      cstat = chdir(trim(cwd_save))
      if (mpar%p_rank == 0) write(*,'(3a)') &
@@ -95,6 +96,16 @@ contains
   end select
 
   cstat = chdir(trim(cwd_save))
+
+  !--- SEDust reports a missing or malformed input through status instead of
+  !--- stopping itself, so a bad par%sed_* path fails cleanly on every rank
+  !--- here rather than aborting mid-build.
+  if (st /= 0) then
+     if (mpar%p_rank == 0) write(*,'(3a,i0,a)') &
+        'ERROR: SEDust failed to build the ''', trim(par%dust_model_sed), &
+        ''' dust model (status=', st, '); check the par%sed_* input paths.'
+     call MPI_FINALIZE(ierr);  stop
+  endif
 
   nl_sed = dust_nlam(dmodel)
   lam_sed = dust_lambda(dmodel)          ! allocatable assignment
@@ -118,10 +129,11 @@ contains
   type(grid_type), intent(in) :: grid
   real(kind=wp), allocatable :: Jcgs(:), Jsi(:), Jsed(:), lamI_sed(:), lamI_mc(:), emis(:)
   real(kind=wp) :: vol, dist2, jnorm, Labs, esum, lam_mean, csum, cell_Teq_true, rhk
-  integer :: nl_mc, ic, il, ierr, ndone, nmine
+  integer :: nl_mc, ic, il, ierr, ndone, nmine, est, emis_err
 
   nl_mc = sed_nlam
   ndone = 0
+  emis_err = 0
   nmine = (ncell_tot - mpar%p_rank + mpar%nproc - 1)/mpar%nproc
   dist2 = par%distance2cm**2
 
@@ -173,7 +185,8 @@ contains
         block
           real(kind=wp) :: Ucell
           Ucell = sum(Jsed(:))/max(Jref_bol, tinest)
-          call dust_emission_interp(emtab, max(Ucell, tinest), lamI_sed)
+          call dust_emission_interp(emtab, max(Ucell, tinest), lamI_sed, status=est)
+          if (est /= 0) emis_err = est
         end block
      else if (par%dust_single_teq) then
         !--- fast equilibrium-only path (SEDust single mixture Teq): more
@@ -185,7 +198,8 @@ contains
           cell_Teq_true = Teq
         end block
      else
-        call dust_emission(dmodel, Jsed, lamI_sed)
+        call dust_emission(dmodel, Jsed, lamI_sed, status=est)
+        if (est /= 0) emis_err = est
         cell_Teq_true = -1.0_wp
      endif
      call resample_from_sed(lam_sed, lamI_sed, sed_wave, lamI_mc)
@@ -208,6 +222,16 @@ contains
         cell_Teq(ic) = 2897.77_wp/max(lam_mean, 1.0e-30_wp)   ! Wien [K], lam in um
      endif
   enddo
+
+  !--- a per-cell SEDust solve reports a misconfigured model through status
+  !--- instead of stopping itself; the failure is the same on every rank, so
+  !--- reduce it and stop together (this collective is reached by all ranks).
+  call MPI_ALLREDUCE(MPI_IN_PLACE, emis_err, 1, MPI_INTEGER, MPI_MAX, MPI_COMM_WORLD, ierr)
+  if (emis_err /= 0) then
+     if (mpar%p_rank == 0) write(*,'(a,i0,a)') &
+        'ERROR: SEDust dust_emission failed (status=', emis_err, ').'
+     call MPI_FINALIZE(ierr);  stop
+  endif
 
   !--- combine partial results of each cell across ranks.
   call MPI_ALLREDUCE(MPI_IN_PLACE, cell_Lemit, ncell_tot,       MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
@@ -266,7 +290,7 @@ contains
   type(grid_type), intent(in) :: grid
   real(kind=wp), allocatable :: Jsi(:), Jsed(:), Jref_sed(:), Jsum(:), Ugrid(:)
   real(kind=wp) :: jnorm, dist2, Ucell, Umin, Umax, dlnU
-  integer :: nl_mc, ic, il, ierr, ncnt, iu
+  integer :: nl_mc, ic, il, ierr, ncnt, iu, st
 
   nl_mc = sed_nlam
   dist2 = par%distance2cm**2
@@ -322,7 +346,12 @@ contains
      Ugrid(iu) = Umin*exp(dble(iu-1)*dlnU)
   enddo
 
-  call dust_build_table(dmodel, Jref_sed, Ugrid, emtab)
+  call dust_build_table(dmodel, Jref_sed, Ugrid, emtab, status=st)
+  if (st /= 0) then
+     if (mpar%p_rank == 0) write(*,'(a,i0,a)') &
+        'ERROR: SEDust dust_build_table failed (status=', st, ').'
+     call MPI_FINALIZE(ierr);  stop
+  endif
   table_built = .true.
   if (mpar%p_rank == 0) then
      write(*,'(a,i0,a,2es11.3)') 'dust emission table built: NU=', par%dust_nU, '  U range ', Umin, Umax

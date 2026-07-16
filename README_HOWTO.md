@@ -186,7 +186,8 @@ monochromatic scattering run is unchanged.
 ### The SEDust grain library
 
 The Lucy emission engine is the **SEDust** library, self-contained
-under `SEDust/`.  Build it once (Intel):
+under `SEDust/` (synced from SEDust revision `583095f`, 2026-07-16).  Build it
+once (Intel):
 
 ```bash
 cd SEDust/sed && ./build_lib.sh          # -> SEDust/sed/lib/libsedust.a
