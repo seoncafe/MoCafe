@@ -49,6 +49,10 @@ temperature, or Lyman-α machinery).
   — algorithm memos for the scans, the clumpy medium, and the AMR grid.
 - `UPGRADE_NOTES.md` — change history; `CLAUDE.md` — architecture overview.
 
+## Author
+
+Kwang-il Seon (KASI/UST)
+
 ---
 
-Last updated: 2026-06-11
+Last updated: 2026-07-17 08:18 KST
