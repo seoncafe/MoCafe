@@ -96,6 +96,10 @@ public
      real(kind=wp) :: wgt
      logical       :: inside
      real(kind=wp) :: albedo, hgg
+     !--- .true. when this packet is an external-field photon (set at birth in
+     !--- gen_photon).  Used to route the direct peel to the external-boundary
+     !--- peel when an internal source and the external field COMPOSE.
+     logical       :: is_external = .false.
      !--- SED (multi-wavelength) mode: wavelength bin index, wavelength [um],
      !--- and the grey-rescaling factor s_ext = C_ext(lambda)/C_ext(lambda_ref).
      !--- s_ext = 1 in monochromatic mode (keeps the mono path bit-identical).
@@ -135,7 +139,10 @@ public
      real(kind=wp)       :: no_photons = 1e5
      real(kind=wp)       :: no_print   = 1e7
      integer       :: iseed        = 0
-     real(kind=wp) :: luminosity   = 1.0
+     !--- source luminosity [erg/s].  Default -999 = unset sentinel: read_input
+     !--- maps it to 1.0 (exact legacy) unless an absolute (physical-type)
+     !--- source spectrum file will DERIVE it from the file integral.
+     real(kind=wp) :: luminosity   = -999.0_wp
      real(kind=wp) :: tauhomo      = -999.0
      real(kind=wp) :: taumax       = -999.0
      real(kind=wp) :: lambda0      = 6563.0_wp
@@ -216,6 +223,35 @@ public
      character(len=128) :: kext_file       = ''
      character(len=128) :: source_spectrum = ''
      real(kind=wp)      :: tstar           = -999.0_wp
+     !--- par%spectrum_type sets the COLUMN UNITS of every source spectrum file
+     !--- (par%source_spectrum, par%src_spectrum(:)):
+     !---   'shape'   col1 lambda [um], col2 L_lambda [arbitrary] (renormalized; legacy);
+     !---   'per_um'  col1 lambda [um], col2 L_lambda [erg/s/um];
+     !---   'per_ang' col1 lambda [A],  col2 L_lambda [erg/s/A];
+     !---   'per_hz'  col1 nu [Hz],     col2 L_nu     [erg/s/Hz];
+     !---   'per_ev'  col1 E [eV],      col2 L_E      [erg/s/eV].
+     !--- A physical type is ABSOLUTE: the luminosity comes from the file integral
+     !--- over the wavelength grid when the scale (par%luminosity / src_lum(i)) is
+     !--- unset; a set scale rescales the file to it.  'shape' keeps the legacy
+     !--- renormalize-to-scale behavior.  Planck (tstar) sources are always shapes.
+     character(len=16)  :: spectrum_type   = 'shape'
+     !--- external-field spectrum for SED mode.  A 2-column file (columns set by
+     !--- par%spectrum_type; a physical type carries mean-intensity densities
+     !--- J_lambda [erg/s/cm^2/sr/um] etc.) if nonblank, else a Planck function at
+     !--- ext_tstar (K) if > 0, else the global source spectrum
+     !--- (par%source_spectrum / par%tstar).
+     character(len=128) :: ext_spectrum  = ''
+     real(kind=wp)      :: ext_tstar     = -999.0_wp
+     !--- band-integrated mean intensity J [erg/s/cm^2/sr] of the external field.
+     !--- Sets the scale of a shape spectrum; rescales an absolute (physical-type)
+     !--- ext_spectrum file; unset (-999) with an absolute file DERIVES J from the
+     !--- file integral.  The luminosity entering the grid is pi*J*A_surface.
+     real(kind=wp)      :: ext_intensity = -999.0_wp
+     !--- external-field boundary geometry ('sph'|'cyl'|'rec') used to place the
+     !--- external field when it COMPOSES with internal sources (an internal
+     !--- source coexisting with an external field); the external-only shorthand
+     !--- still uses source_geometry='external_*'.  Blank = auto (from geometry/rmax).
+     character(len=8)   :: ext_geometry  = ''
      !--- Stage 2: mean-intensity tally J_lambda(x,y,z) in each cell (Lucy 1999
      !--- pathlength estimator); writes '<base>_jlam.<ext>'.  Requires
      !--- use_sed and the plain Cartesian grid.

@@ -120,6 +120,28 @@ For multi-component galaxies (disk + bulge, Sersic / boxy / bar bulges, spiral
 arms) use the multi-source `nsource` / `src_*` parameters in
 [§5](#5-multiple-stellar-populations-and-galaxy-models).
 
+### Source configurations (monochromatic vs SED)
+
+MoCafe runs one or more internal sources, an external isotropic radiation
+field, or an internal source composed with an external field, in either the
+monochromatic (scattering-only) mode or the SED mode:
+
+| Source configuration | Monochromatic (scattering only) | SED (spectrum → dust emission) |
+|---|---|---|
+| Single internal source (point / uniform / gaussian / disk / bulge) | supported | supported |
+| Multiple internal sources (`nsource > 1`) | supported | supported |
+| External isotropic field (`source_geometry = 'external_*'`) | supported | supported |
+| Internal source(s) + external field composed in one run | supported | supported |
+
+Monochromatic mode does grey single-wavelength scattering with `par%albedo` and
+`par%hgg`; SED mode (`par%use_sed = .true.`) transports over a wavelength grid
+and optionally drives dust thermal emission.  Multiple internal sources are set
+with `par%nsource > 1` and the `par%src_*` arrays ([§5](#5-multiple-stellar-populations-and-galaxy-models))
+— this works in **both** modes, not only in SED.  A single internal source uses
+the scalar `source_geometry`.  The external-only field uses
+`source_geometry = 'external_{sph,cyl,rec}'`; the composed internal + external
+case is described under [Composition](#composition-internal-source--external-field).
+
 ### Dust & scattering
 
 | Parameter | Default | Description |
@@ -215,9 +237,14 @@ or set `SEDUST_SRC=/your/SEDust`, to point at your own SEDust tree.
 | `lambda_min`, `lambda_max` | 0.0912, 2000 | Wavelength range [µm] |
 | `lambda_ref` | 0.55 | Reference wavelength [µm]; `taumax`/`tauhomo` and the grid opacity are defined here |
 | `kext_file` | `''` | Table of `λ, albedo, ⟨cos⟩, C_ext/H` (e.g. `data/kext_astrodust_MW.dat`, from SEDust `calc_kext_*.x`) |
-| `source_spectrum` | `''` | Two-column source spectrum `λ[µm], L_λ` (single source) |
+| `source_spectrum` | `''` | Two-column source spectrum `λ, L_λ` (single source); column units set by `spectrum_type` |
+| `spectrum_type` | `'shape'` | Column units of every source spectrum file (see below) |
 | `tstar` | -999 | Planck source temperature [K] (single source), if no `source_spectrum` |
-| `luminosity` | 1.0 | **Physical** stellar luminosity [erg/s] — required for absolute dust temperatures |
+| `luminosity` | -999 (unset) | **Physical** stellar luminosity [erg/s] — required for absolute dust temperatures |
+| `ext_spectrum` | `''` | External-field spectrum file (columns set by `spectrum_type`; column 2 is the mean-intensity density `J_λ`) |
+| `ext_tstar` | -999 | External-field Planck temperature [K] (shape) |
+| `ext_intensity` | -999 | Band mean intensity `J` [erg/s/cm²/sr]; sets the absolute scale of a shape external spectrum or rescales an absolute `ext_spectrum` file |
+| `ext_geometry` | `''` | Boundary the external field enters through **when composing** an internal source with an external field: `'sph'` / `'cyl'` / `'rec'` (blank auto-selects from `geometry`/`rmax`).  The external-*only* run uses `source_geometry='external_*'` instead — see [Composition](#composition-internal-source--external-field) |
 
 Wavelength-dependent extinction is applied as a grey rescaling for each photon
 `s_ext = C_ext(λ)/C_ext(λ_ref)`, so the grid stores the reference-wavelength
@@ -225,7 +252,66 @@ opacity and all three raytracers are shared with the mono path.  In SED mode
 `distance_unit` sets the physical length scale (1 code unit = 1 distance unit),
 needed for absolute intensities and temperatures.
 
-Restrictions: no Stokes, no `(a,g)`/`tau` scans, internal sources only.
+`spectrum_type` sets the shape-vs-absolute treatment and the column units of
+every source spectrum file (`source_spectrum`, `src_spectrum(:)`):
+
+| `spectrum_type` | Column 1 | Column 2 |
+|-----------------|----------|----------|
+| `'shape'` (default) | `λ` [µm] | `L_λ` [arbitrary] — renormalized to `luminosity` (legacy) |
+| `'per_um'` | `λ` [µm] | `L_λ` [erg/s/µm] |
+| `'per_ang'` | `λ` [Å] | `L_λ` [erg/s/Å] |
+| `'per_hz'` | `ν` [Hz] | `L_ν` [erg/s/Hz] |
+| `'per_ev'` | `E` [eV] | `L_E` [erg/s/eV] |
+
+A physical (non-`'shape'`) type is **absolute**: when `luminosity` (or
+`src_lum(i)` for a multi-source component) is left unset, the source luminosity
+[erg/s] is derived from the file integral over the wavelength grid; when set, the
+file is rescaled to that value.  `'shape'` keeps the legacy behavior (the file is
+renormalized and `luminosity` supplies the absolute scale).  Planck (`tstar`)
+sources are always shapes.  A physical `spectrum_type` requires `use_sed`.  For an
+external field (`ext_spectrum`) column 2 carries the mean-intensity density `J_λ`
+in the same convention (e.g. `[erg/s/cm²/sr/µm]` for `per_um`).
+
+External illumination in SED mode: the external geometries (`external_sph`,
+`external_cyl`, `external_rec`) are supported.  The external field is given as an
+isotropic mean intensity — either a shape (`ext_spectrum` file or `ext_tstar`
+Planck) scaled by the band mean intensity `ext_intensity`, or an absolute
+`ext_spectrum` file (whose `J` is derived from the file integral when
+`ext_intensity` is unset).  The luminosity entering the grid is
+`L = π·J·A_surface`, where `A_surface` is the illuminated boundary area:
+`4π(rmax·distance2cm)²` for `external_sph`, the six box faces for `external_rec`,
+and the side plus both end caps for `external_cyl`.  This `L` becomes
+`par%luminosity` for the absolute image normalization.  The spectrum priority is
+`ext_spectrum` file > `ext_tstar` Planck > global `source_spectrum`/`tstar`.
+
+Restrictions: no Stokes, no `(a,g)`/`tau` scans.
+
+#### Composition (internal source + external field)
+
+An internal source (or sources) and an external isotropic field can illuminate
+the medium in a single run.  This activates when at least one internal source is
+present (`nsource >= 1`, with `source_geometry` **not** an `external_*` value)
+and the external field is also switched on — `par%ext_intensity > 0` in the
+monochromatic mode, or `ext_intensity > 0` / `ext_spectrum` / `ext_tstar` set in
+SED mode.
+
+- `par%ext_geometry` (`'sph'` / `'cyl'` / `'rec'`; blank auto-selects from
+  `geometry`/`rmax`) sets the boundary the external field enters through, used
+  **only** when composing.  The external-only run keeps
+  `source_geometry='external_*'`.
+- Luminosity model: `L_int` is the internal total (a single `par%luminosity`, or
+  `Σ src_lum` for multiple sources) and `L_ext = π·J·A_surface`, with
+  `J = ext_intensity` (monochromatic) or `J` from `ext_intensity`/`ext_spectrum`
+  (SED).  The total is `L_tot = L_int + L_ext`, and `par%luminosity` (the output
+  normalization) is set to `L_tot`.  `A_surface` is `4π(rmax·distance2cm)²`
+  (`sph`), the six box faces (`rec`), or the side plus both end caps (`cyl`).
+- Each photon's origin is drawn internal-vs-external in proportion to
+  `L_int : L_ext`, and every packet carries `L_tot / no_photons`.  The run
+  reports `TOT_LUM = L_int + L_ext`, and the composed image equals
+  (internal-only) + (external-only) within Monte-Carlo noise.
+- Composition is incompatible with Stokes polarization (`use_stokes`) and with
+  the `(a,g)`/`tau` scans (`use_ag_list` / `use_tau_list`).  Pre-existing
+  external-only and internal-only runs are unchanged.
 
 ### 2. Mean intensity J_λ in each cell
 
@@ -291,7 +377,7 @@ dust emission lands in the observer `Scattered` SED image.
 | `src_geometry(i)` | `'point'` | Geometry of each source (see the list below) |
 | `src_tstar(i)` | -999 | Planck temperature of each source [K] |
 | `src_spectrum(i)` | `''` | Spectrum file of each source (overrides `src_tstar`) |
-| `src_lum(i)` | -999 | Luminosity of each source [erg/s] (equal split if unset) |
+| `src_lum(i)` | -999 | Luminosity of each source [erg/s] (equal split if unset; derived from the file integral for an absolute `spectrum_type` file) |
 | `src_x/y/z(i)` | 0 | Position of each source (`point`) |
 | `src_zscale(i)` | -999 | Vertical scale height (`gaussian`/`exponential`/`sech`/`exp_spiral`) |
 | `src_rscale(i)` | -999 | Radial scale length of the exponential disk (`exponential`/`sech`/`exp_spiral`) |
@@ -659,12 +745,16 @@ python python/mocafe_io.py convert out_obs.h5 out_obs.fits.gz
 | Directory | Shows |
 |-----------|-------|
 | `examples/point_source/`, `uniform_source/`, `external_*/` | Cartesian grids, point/extended/external sources |
+| `examples/mono_multi_source/` | Monochromatic scattering with two internal point sources (`nsource > 1`) |
+| `examples/compose_int_ext/` | Internal source + external field composed in one run (`compose_mono.in`, `compose_sed.in`) |
 | `examples/agtau_list/` | `(a,g)` and `tau` single-run scans (+ a notebook) |
 | `examples/clump_sphere/` | Clumpy medium (uniform / profile / cone / file-loaded) + validation |
 | `examples/amr_sphere/` | AMR octree sphere vs. the Cartesian reference |
 | `examples/amr_tng/` | Illustris-TNG cutout → converter → MoCafe AMR |
 | `examples/amr_ramses/` | RAMSES → converter → MoCafe AMR (template) |
 | `examples/dustemis/` | Dust thermal emission: Lucy+SEDust, iteration, single-Teq, table, B&W, MRW |
+| `examples/sed_external/` | External-field SED illumination (Planck shape + `ext_intensity`; absolute `per_um` J file) |
+| `examples/sed_multi_source/` | Two point sources with luminosity derived from absolute `per_um` spectra |
 | `examples/multipop/` | Two stellar populations (hot young + cool old) |
 | `examples/galaxy/` | External galaxy SED (disk + bulge, edge-on/face-on) |
 | `examples/milkyway/` | All-sky map from an interior observer |

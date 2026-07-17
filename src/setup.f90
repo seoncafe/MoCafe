@@ -145,6 +145,62 @@ contains
      call setup_scattering_matrix(par%scatt_mat_file)
   endif
 
+  !--- source spectrum shape/absolute mode (par%spectrum_type).  It sets the
+  !--- column units of every source spectrum file; a physical type makes the
+  !--- file luminosity ABSOLUTE (derived from the file integral when the scale is
+  !--- unset), while 'shape' keeps the legacy renormalize-to-scale behavior.
+  block
+    logical :: is_phys, has_global_spec, has_any_srcspec, src_is_absolute, ext_is_absolute
+    integer :: is
+    select case (trim(par%spectrum_type))
+    case ('shape', 'per_um', 'per_ang', 'per_hz', 'per_ev')
+       is_phys = trim(par%spectrum_type) /= 'shape'
+    case default
+       if (mpar%p_rank == 0) write(*,'(a)') &
+          'ERROR: par%spectrum_type must be ''shape'' (default), ''per_um'', '// &
+          '''per_ang'', ''per_hz'', or ''per_ev''.'
+       call MPI_FINALIZE(ierr);  stop
+    end select
+    if (is_phys .and. .not. par%use_sed) then
+       if (mpar%p_rank == 0) write(*,'(a)') &
+          'ERROR: a physical par%spectrum_type requires par%use_sed = .true. (SED mode only).'
+       call MPI_FINALIZE(ierr);  stop
+    endif
+    has_global_spec = len_trim(par%source_spectrum) > 0
+    has_any_srcspec = .false.
+    if (par%nsource > 1) then
+       do is = 1, min(par%nsource, MAX_SRC)
+          if (len_trim(par%src_spectrum(is)) > 0) has_any_srcspec = .true.
+       enddo
+    endif
+    src_is_absolute = par%use_sed .and. is_phys .and. (has_global_spec .or. has_any_srcspec)
+    !--- external SED illumination also DERIVES the luminosity (pi*J*A_surface)
+    !--- when the mean intensity J is known: par%ext_intensity is set, or a
+    !--- physical par%spectrum_type + par%ext_spectrum file yields J from its integral.
+    ext_is_absolute = par%use_sed .and. (trim(par%source_geometry(1:8)) == 'external') .and. &
+       ( par%ext_intensity > -900.0_wp .or. (is_phys .and. len_trim(par%ext_spectrum) > 0) )
+    !--- luminosity sentinel (default -999 = unset): map to the legacy 1.0
+    !--- unless an absolute file spectrum will DERIVE it from the file integral.
+    if (par%luminosity < -900.0_wp .and. .not. src_is_absolute .and. .not. ext_is_absolute) &
+       par%luminosity = 1.0_wp
+  end block
+
+  !--- resolve the physical length scale (code unit -> cm) before the SED /
+  !--- external-field setup, which converts the illuminated boundary area to cm^2
+  !--- for the pi*J*A luminosity.
+  select case(trim(par%distance_unit))
+     case ('kpc')
+        par%distance2cm = kpc2cm
+     case ('pc')
+        par%distance2cm = pc2cm
+     case ('au')
+        par%distance2cm = au2cm
+     case ('')
+        par%distance2cm = 1.0_wp
+     case default
+        par%distance2cm = kpc2cm
+  end select
+
   !--- SED (multi-wavelength) mode: Stage 1 restrictions and setup.
   if (par%use_sed) then
      if (par%use_stokes) then
@@ -157,15 +213,25 @@ contains
            'ERROR: par%use_sed is incompatible with the (a,g)/tau scans (use_ag_list / use_tau_list).'
         call MPI_FINALIZE(ierr);  stop
      endif
-     if (trim(par%source_geometry(1:8)) == 'external') then
-        if (mpar%p_rank == 0) write(*,'(a)') &
-           'ERROR: par%use_sed does not yet support external illumination (Stage 1: internal sources only).'
-        call MPI_FINALIZE(ierr);  stop
-     endif
+     if (trim(par%source_geometry(1:8)) == 'external' .and. &
+         trim(par%spectrum_type) /= 'shape' .and. len_trim(par%distance_unit) == 0 .and. &
+         mpar%p_rank == 0) write(*,'(a)') &
+        'WARNING: external SED with a physical par%spectrum_type and blank par%distance_unit: '// &
+        'the surface-area conversion uses code units (par%distance2cm = 1).'
      call setup_sed()
      !--- Stage 6: multiple stellar source components (activated when nsource>1).
      if (par%nsource > 1) call setup_sources()
   endif
+
+  !--- monochromatic multiple internal sources (the SED path is handled above).
+  !--- setup_sources sets use_sources = .true. so gen_photon dispatches to the
+  !--- luminosity-weighted component sampler.
+  if (.not. par%use_sed .and. par%nsource > 1) call setup_sources()
+
+  !--- compose (task C2): an internal source coexisting with an external field
+  !--- (not the 'external_*' external-only shorthand).  Runs after the internal
+  !--- luminosity is fixed (par%luminosity = L_int at this point).
+  call setup_compose()
 
   !--- Stage 2: J_lambda tally restrictions.
   if (par%save_jlam) then
@@ -258,19 +324,6 @@ contains
         endif
      endif
   endif
-
-  select case(trim(par%distance_unit))
-     case ('kpc')
-        par%distance2cm = kpc2cm
-     case ('pc')
-        par%distance2cm = pc2cm
-     case ('au')
-        par%distance2cm = au2cm
-     case ('')
-        par%distance2cm = 1.0_wp
-     case default
-        par%distance2cm = kpc2cm
-  end select
 
   if (len_trim(par%out_file) == 0) then
      par%base_name = trim(get_base_input_name(model_infile))
@@ -455,11 +508,12 @@ contains
   if (par%use_sed) then
      !--- SED (multi-wavelength) mode: H-G no-Stokes path with
      !--- wavelength-dependent albedo/g and s_ext-rescaled optical depths.
-     !--- External illumination is rejected in read_input (Stage 1), so the
-     !--- direct peel can be bound unconditionally here.
      scattering               => scatter_dust_nostokes_sed
      peeling_scattered_photon => peeling_scattered_photon_nostokes_sed
-     peeling_direct_photon    => peeling_direct_photon_nostokes_sed
+     !--- external sources keep the (now SED-aware) external direct peel bound
+     !--- above; only an internal source uses the SED point-source direct peel.
+     if (trim(par%source_geometry(1:8)) /= 'external') &
+        peeling_direct_photon => peeling_direct_photon_nostokes_sed
   else if (par%use_tau_list) then
      !--- polychromatic (tau) scan, optionally combined with (a,g).  H-G no-Stokes
      !--- path only; the (a,g) axes collapse to length 1 when use_ag_list = .false.
@@ -503,5 +557,108 @@ contains
   endif
 
   end subroutine setup_procedure
+  !=================================================
+  !--- compose (task C2): decide whether an internal source composes with an
+  !--- isotropic external field, and if so build the luminosity split.  Leaves
+  !--- compose_ext = .false. (no-op) for every legacy path.
+  subroutine setup_compose
+  use define
+  use compose_mod
+  use sed_mod, only : setup_sed_external, ext_surface_area
+  use mpi
+  implicit none
+  real(kind=wp) :: L_int, L_ext, L_tot, J_ext, A_surf
+  logical :: ext_on
+  integer :: ierr
+
+  compose_ext  = .false.
+  int_lum_frac = 0.0_wp
+  Lpacket_tot  = par%luminosity/dble(par%nphotons)
+
+  !--- the 'external_*' shorthand is the external-only path: never composed.
+  if (trim(par%source_geometry(1:8)) == 'external') return
+  if (par%nsource < 1) return
+
+  !--- is an external field switched on?
+  if (par%use_sed) then
+     ext_on = (par%ext_intensity > -900.0_wp) .or. (len_trim(par%ext_spectrum) > 0) &
+              .or. (par%ext_tstar > 0.0_wp)
+  else
+     ext_on = (par%ext_intensity > 0.0_wp)
+  endif
+  if (.not. ext_on) return
+
+  !--- restrictions outside the scope of this task.
+  if (par%use_stokes) then
+     if (mpar%p_rank == 0) write(*,'(a)') &
+        'ERROR: composing an internal source with an external field is not supported with par%use_stokes.'
+     call MPI_FINALIZE(ierr);  stop
+  endif
+  if (par%use_ag_list .or. par%use_tau_list) then
+     if (mpar%p_rank == 0) write(*,'(a)') &
+        'ERROR: composing an internal source with an external field is not supported with the '// &
+        '(a,g)/tau scans (use_ag_list / use_tau_list).'
+     call MPI_FINALIZE(ierr);  stop
+  endif
+
+  !--- resolve the external-field boundary geometry (default from geometry/rmax).
+  if (len_trim(par%ext_geometry) == 0) then
+     if (trim(par%geometry) == 'cylinder') then
+        par%ext_geometry = 'cyl'
+     else if (par%rmax > 0.0_wp) then
+        par%ext_geometry = 'sph'
+     else
+        par%ext_geometry = 'rec'
+     endif
+  endif
+  select case (trim(par%ext_geometry))
+  case ('sph')
+     if (.not. (par%rmax > 0.0_wp)) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%ext_geometry = ''sph'' requires par%rmax > 0.'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+  case ('cyl', 'rec')
+     !--- ok
+  case default
+     if (mpar%p_rank == 0) write(*,'(3a)') &
+        'ERROR: par%ext_geometry = ''', trim(par%ext_geometry), ''' (use ''sph'', ''cyl'', or ''rec'').'
+     call MPI_FINALIZE(ierr);  stop
+  end select
+
+  !--- internal luminosity (already fixed by setup_sed / setup_sources).
+  L_int = par%luminosity
+
+  !--- external luminosity L_ext = pi * J * A_surface.
+  if (par%use_sed) then
+     !--- also builds the external-field spectrum alias (sample_ext_lambda).
+     call setup_sed_external(compose_mode=.true., lum_out=L_ext)
+  else
+     J_ext  = par%ext_intensity
+     A_surf = ext_surface_area(par%ext_geometry)
+     L_ext  = pi * J_ext * A_surf
+  endif
+
+  if (.not. (L_ext > 0.0_wp)) then
+     if (mpar%p_rank == 0) write(*,'(a)') &
+        'ERROR: composed external luminosity L_ext = pi*J*A is not positive (check par%ext_intensity / ext_spectrum).'
+     call MPI_FINALIZE(ierr);  stop
+  endif
+
+  L_tot          = L_int + L_ext
+  int_lum_frac   = L_int/L_tot
+  Lpacket_tot    = L_tot/dble(par%nphotons)
+  par%luminosity = L_tot
+  compose_ext    = .true.
+
+  if (mpar%p_rank == 0) then
+     write(*,'(a)')        '--- Compose: internal source + external field (task C2) ---'
+     write(*,'(2a)')       'external boundary geometry: ', trim(par%ext_geometry)
+     write(*,'(a,es12.4)') 'L_internal (erg/s)        : ', L_int
+     write(*,'(a,es12.4)') 'L_external (erg/s)        : ', L_ext
+     write(*,'(a,es12.4)') 'L_total    (erg/s)        : ', L_tot
+     write(*,'(a,f9.5)')   'internal photon fraction  : ', int_lum_frac
+  endif
+  end subroutine setup_compose
   !=================================================
 end module setup_mod

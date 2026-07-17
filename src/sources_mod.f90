@@ -10,7 +10,7 @@ module sources_mod
   use random,  only : random_alias_setup, rand_alias_choise, rand_number, rand_gauss, &
                       rand_zexp, rand_sech2, rand_r1exp
   use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo, sed_hgg, &
-                      planck_shape, read_spectrum_file, interp_clamped
+                      planck_shape, read_spectrum_file, interp_clamped, convert_spectrum_units
   use random_bulge,  only : rand_sersic, rand_boxy, rand_bar, rand_xbar
   implicit none
   private
@@ -32,31 +32,44 @@ contains
   real(kind=wp), allocatable :: lum(:), lam_f(:), lum_f(:), pdf(:)
   real(kind=wp) :: lsum, lnorm
   integer :: is, il, nsp, ierr
+  logical :: is_phys, absolute_is
+  logical, allocatable :: derived(:)
 
   nsrc = par%nsource
   if (nsrc <= 1) then
      use_sources = .false.;  return
   endif
+
+  !--- monochromatic (non-SED) multiple internal sources: luminosity-weighted
+  !--- component selection + geometry-based position sampling only, with no
+  !--- wavelength/spectrum concept.  The SED-only arrays (src_pdf, src_alias,
+  !--- src_lumfrac) are left unallocated and never referenced on this path.
+  if (.not. par%use_sed) then
+     call setup_sources_mono()
+     return
+  endif
+
   use_sources = .true.
+  is_phys = trim(par%spectrum_type) /= 'shape'
 
   allocate(src_lum_cdf(nsrc), src_pdf(sed_nlam,nsrc), src_alias(sed_nlam,nsrc))
   allocate(src_lumfrac(sed_nlam,nsrc), src_Lpacket(nsrc), lum(nsrc), pdf(sed_nlam))
+  allocate(derived(nsrc));  derived(:) = .false.
 
-  !--- luminosity of each source (default equal split of par%luminosity if unset).
+  !--- spectrum of each source -> luminosity fraction per bin + alias table, and
+  !--- the source luminosity.  For a physical-type (absolute) file spectrum the
+  !--- luminosity is the file integral lnorm [erg/s] when src_lum is unset, or
+  !--- src_lum when set (rescales the file).  For a 'shape' file or a Planck
+  !--- source the luminosity is src_lum when set, else the equal split of
+  !--- par%luminosity (legacy); mixing an unset shape/Planck source with an
+  !--- absolute file source is ambiguous and rejected.
   do is = 1, nsrc
-     if (par%src_lum(is) > 0.0_wp) then
-        lum(is) = par%src_lum(is)
-     else
-        lum(is) = par%luminosity/dble(nsrc)
-     endif
-  enddo
-  lsum = sum(lum)
-  par%luminosity = lsum          ! total luminosity is the sum of components
-
-  !--- spectrum of each source -> luminosity fraction per bin + alias table.
-  do is = 1, nsrc
+     absolute_is = is_phys .and. len_trim(par%src_spectrum(is)) > 0
      if (len_trim(par%src_spectrum(is)) > 0) then
-        if (mpar%p_rank == 0) call read_spectrum_file(trim(par%src_spectrum(is)), lam_f, lum_f, nsp)
+        if (mpar%p_rank == 0) then
+           call read_spectrum_file(trim(par%src_spectrum(is)), lam_f, lum_f, nsp)
+           call convert_spectrum_units(lam_f, lum_f)
+        endif
         call MPI_BCAST(nsp, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
         if (mpar%p_rank /= 0) allocate(lam_f(nsp), lum_f(nsp))
         call MPI_BCAST(lam_f, nsp, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
@@ -83,10 +96,33 @@ contains
         if (mpar%p_rank == 0) write(*,'(a,i0,a)') 'ERROR: source ', is, ' has zero luminosity on the grid.'
         call MPI_FINALIZE(ierr);  stop
      endif
+
+     !--- source luminosity.
+     if (absolute_is) then
+        if (par%src_lum(is) > 0.0_wp) then
+           lum(is) = par%src_lum(is)      ! rescale the absolute file to src_lum
+        else
+           lum(is) = lnorm                ! derive [erg/s] from the file integral
+           derived(is) = .true.
+        endif
+     else
+        if (par%src_lum(is) > 0.0_wp) then
+           lum(is) = par%src_lum(is)
+        else if (.not. is_phys) then
+           lum(is) = par%luminosity/dble(nsrc)   ! legacy equal split
+        else
+           if (mpar%p_rank == 0) write(*,'(a,i0,a)') 'ERROR: source ', is, &
+              ': set src_lum for Planck/shape components when mixing with absolute file spectra.'
+           call MPI_FINALIZE(ierr);  stop
+        endif
+     endif
+
      src_lumfrac(:,is) = pdf(:)/lnorm
      src_pdf(:,is)     = src_lumfrac(:,is)
      call random_alias_setup(src_pdf(:,is), src_alias(:,is))
   enddo
+  lsum = sum(lum)
+  par%luminosity = lsum          ! total luminosity is the sum of components
 
   !--- luminosity CDF over sources and packet energy for each source.  Each source
   !--- emits (nphotons * lum(is)/lsum) packets, so a packet carries lsum/nphotons.
@@ -100,16 +136,79 @@ contains
   if (mpar%p_rank == 0) then
      write(*,'(a)')      '--- Multiple stellar source components (Stage 6) ---'
      write(*,'(a,i0)')   'N sources          : ', nsrc
+     write(*,'(2a)')     'spectrum_type      : ', trim(par%spectrum_type)
      do is = 1, nsrc
-        write(*,'(a,i2,4a,es11.3,a,es11.3)') '  src ', is, '  geom=', trim(par%src_geometry(is)), &
+        write(*,'(a,i2,4a,es11.3,a,es11.3,a)') '  src ', is, '  geom=', trim(par%src_geometry(is)), &
            '  spec=', merge('Planck', 'file  ', par%src_tstar(is) > 0.0_wp), &
-           lum(is), '  T/-=', par%src_tstar(is)
+           lum(is), '  T/-=', par%src_tstar(is), &
+           merge('  (derived)', '           ', derived(is))
      enddo
      write(*,'(a,es12.4)') 'total luminosity   : ', lsum
   endif
 
-  deallocate(lum, pdf)
+  deallocate(lum, pdf, derived)
   end subroutine setup_sources
+
+  !---------------------------------------------------------------
+  subroutine setup_sources_mono()
+  !--- monochromatic multiple internal sources.  Each component has its own
+  !--- geometry and luminosity; components are sampled in proportion to their
+  !--- luminosity.  Grey dust (par%albedo, par%hgg) is used for every packet.
+  use mpi
+  implicit none
+  real(kind=wp), allocatable :: lum(:)
+  real(kind=wp) :: lsum
+  integer :: is, ierr
+
+  !--- gen_source_photon does not carry Stokes vectors, so multiple internal
+  !--- sources cannot be combined with the Stokes scattering path.
+  if (par%use_stokes) then
+     if (mpar%p_rank == 0) write(*,'(a)') &
+        'ERROR: monochromatic multiple internal sources (nsource>1) do not support par%use_stokes.'
+     call MPI_FINALIZE(ierr);  stop
+  endif
+
+  allocate(src_lum_cdf(nsrc), src_Lpacket(nsrc), lum(nsrc))
+
+  !--- component luminosity: par%src_lum when set, else the equal split of
+  !--- par%luminosity (same convention as the SED shape/Planck path).
+  do is = 1, nsrc
+     if (par%src_lum(is) > 0.0_wp) then
+        lum(is) = par%src_lum(is)
+     else
+        lum(is) = par%luminosity/dble(nsrc)
+     endif
+  enddo
+  lsum = sum(lum)
+  if (.not. (lsum > 0.0_wp)) then
+     if (mpar%p_rank == 0) write(*,'(a)') &
+        'ERROR: monochromatic multiple internal sources have zero total luminosity.'
+     call MPI_FINALIZE(ierr);  stop
+  endif
+  par%luminosity = lsum          ! total luminosity is the sum of components
+
+  !--- luminosity CDF over components and packet energy for each component.
+  src_lum_cdf(1) = lum(1)
+  do is = 2, nsrc
+     src_lum_cdf(is) = src_lum_cdf(is-1) + lum(is)
+  enddo
+  src_lum_cdf(:) = src_lum_cdf(:)/lsum
+  src_Lpacket(:) = lsum/dble(par%nphotons)
+
+  use_sources = .true.
+
+  if (mpar%p_rank == 0) then
+     write(*,'(a)')    '--- Multiple internal sources (monochromatic) ---'
+     write(*,'(a,i0)') 'N sources          : ', nsrc
+     do is = 1, nsrc
+        write(*,'(a,i2,3a,es11.3)') '  src ', is, '  geom=', &
+           trim(par%src_geometry(is)), '  lum=', lum(is)
+     enddo
+     write(*,'(a,es12.4)') 'total luminosity   : ', lsum
+  endif
+
+  deallocate(lum)
+  end subroutine setup_sources_mono
 
   !---------------------------------------------------------------
   !--- generate a photon from a luminosity-weighted source component: pick the
@@ -219,13 +318,21 @@ contains
   phi  = twopi*rand_number()
   photon%kx = sint*cos(phi);  photon%ky = sint*sin(phi);  photon%kz = cost
 
-  !--- wavelength from this source's spectrum.
-  il = rand_alias_choise(src_pdf(:,is), src_alias(:,is))
-  photon%il      = il
-  photon%lambda  = sed_wave(il)
-  photon%s_ext   = sed_sext(il)
-  photon%albedo  = sed_albedo(il)
-  photon%hgg     = sed_hgg(il)
+  if (par%use_sed) then
+     !--- wavelength from this source's spectrum.
+     il = rand_alias_choise(src_pdf(:,is), src_alias(:,is))
+     photon%il      = il
+     photon%lambda  = sed_wave(il)
+     photon%s_ext   = sed_sext(il)
+     photon%albedo  = sed_albedo(il)
+     photon%hgg     = sed_hgg(il)
+  else
+     !--- monochromatic: grey dust properties, no wavelength.  s_ext is unused
+     !--- by the monochromatic raytrace but set to the safe unit value.
+     photon%albedo  = par%albedo
+     photon%hgg     = par%hgg
+     photon%s_ext   = 1.0_wp
+  endif
 
   photon%nscatt  = 0
   photon%inside  = .true.

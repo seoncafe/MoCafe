@@ -575,6 +575,11 @@ subroutine peeling_direct_external_sph1(photon,grid)
              observer(k)%direc_t(ix,iy,it_tau) = observer(k)%direc_t(ix,iy,it_tau) &
                   + exp(-scan_s(it_tau)*tau) * wgt0
           enddo
+       else if (par%use_sed) then
+          !--- SED mode: the direct beam goes to the photon's wavelength-bin
+          !--- plane of direc_sed(x,y,lambda); optical depth rescaled by s_ext.
+          wgt = exp(-photon%s_ext*tau) * wgt0
+          observer(k)%direc_sed(ix,iy,photon%il) = observer(k)%direc_sed(ix,iy,photon%il) + wgt
        else
           wgt  = exp(-tau) * wgt0
           observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
@@ -584,7 +589,11 @@ subroutine peeling_direct_external_sph1(photon,grid)
           endif
        endif
        if (par%save_direc0) then
-          observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
+          if (par%use_sed) then
+             observer(k)%direc0_sed(ix,iy,photon%il) = observer(k)%direc0_sed(ix,iy,photon%il) + wgt0
+          else
+             observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
+          endif
        endif
     endif
   enddo
@@ -689,6 +698,11 @@ subroutine peeling_direct_external_sph2(photon,grid)
              observer(k)%direc_t(ix,iy,it_tau) = observer(k)%direc_t(ix,iy,it_tau) &
                   + exp(-scan_s(it_tau)*tau) * wgt0
           enddo
+       else if (par%use_sed) then
+          !--- SED mode: the direct beam goes to the photon's wavelength-bin
+          !--- plane of direc_sed(x,y,lambda); optical depth rescaled by s_ext.
+          wgt = exp(-photon%s_ext*tau) * wgt0
+          observer(k)%direc_sed(ix,iy,photon%il) = observer(k)%direc_sed(ix,iy,photon%il) + wgt
        else
           wgt  = exp(-tau) * wgt0
           observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
@@ -698,7 +712,11 @@ subroutine peeling_direct_external_sph2(photon,grid)
           endif
        endif
        if (par%save_direc0) then
-          observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
+          if (par%use_sed) then
+             observer(k)%direc0_sed(ix,iy,photon%il) = observer(k)%direc0_sed(ix,iy,photon%il) + wgt0
+          else
+             observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
+          endif
        endif
     endif
   enddo
@@ -770,6 +788,11 @@ subroutine peeling_direct_external_rec1(photon,grid)
              observer(k)%direc_t(ix,iy,it_tau) = observer(k)%direc_t(ix,iy,it_tau) &
                   + exp(-scan_s(it_tau)*tau) * wgt0
           enddo
+       else if (par%use_sed) then
+          !--- SED mode: the direct beam goes to the photon's wavelength-bin
+          !--- plane of direc_sed(x,y,lambda); optical depth rescaled by s_ext.
+          wgt = exp(-photon%s_ext*tau) * wgt0
+          observer(k)%direc_sed(ix,iy,photon%il) = observer(k)%direc_sed(ix,iy,photon%il) + wgt
        else
           wgt  = exp(-tau) * wgt0
           observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
@@ -779,7 +802,11 @@ subroutine peeling_direct_external_rec1(photon,grid)
           endif
        endif
        if (par%save_direc0) then
-          observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
+          if (par%use_sed) then
+             observer(k)%direc0_sed(ix,iy,photon%il) = observer(k)%direc0_sed(ix,iy,photon%il) + wgt0
+          else
+             observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
+          endif
        endif
     endif
   enddo
@@ -855,6 +882,11 @@ subroutine peeling_direct_external_cyl1(photon,grid)
              observer(k)%direc_t(ix,iy,it_tau) = observer(k)%direc_t(ix,iy,it_tau) &
                   + exp(-scan_s(it_tau)*tau) * wgt0
           enddo
+       else if (par%use_sed) then
+          !--- SED mode: the direct beam goes to the photon's wavelength-bin
+          !--- plane of direc_sed(x,y,lambda); optical depth rescaled by s_ext.
+          wgt = exp(-photon%s_ext*tau) * wgt0
+          observer(k)%direc_sed(ix,iy,photon%il) = observer(k)%direc_sed(ix,iy,photon%il) + wgt
        else
           wgt  = exp(-tau) * wgt0
           observer(k)%direc(ix,iy) = observer(k)%direc(ix,iy) + wgt
@@ -864,7 +896,11 @@ subroutine peeling_direct_external_cyl1(photon,grid)
           endif
        endif
        if (par%save_direc0) then
-          observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
+          if (par%use_sed) then
+             observer(k)%direc0_sed(ix,iy,photon%il) = observer(k)%direc0_sed(ix,iy,photon%il) + wgt0
+          else
+             observer(k)%direc0(ix,iy) = observer(k)%direc0(ix,iy) + wgt0
+          endif
        endif
     endif
   enddo

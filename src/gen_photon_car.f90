@@ -9,8 +9,10 @@ contains
   use scan_mod,    only : scan_reset_photon
   use clump_mod,   only : active_set_at_point
   use octree_mod,  only : amr_find_leaf
-  use sed_mod,     only : sample_sed_lambda, sed_wave, sed_sext, sed_albedo, sed_hgg
+  use sed_mod,     only : sample_sed_lambda, sample_ext_lambda, &
+                          sed_wave, sed_sext, sed_albedo, sed_hgg
   use sources_mod, only : use_sources, gen_source_photon
+  use compose_mod, only : compose_ext, int_lum_frac, Lpacket_tot
   implicit none
 
   type(grid_type),   intent(inout) :: grid
@@ -18,6 +20,27 @@ contains
 
   ! local variables
   real(kind=wp) :: sint,cost,phi,sinp,cosp,rp,tanp
+
+  !--- compose (task C2): an internal source and an isotropic external field in
+  !--- one run.  Draw the packet internal-or-external in proportion to
+  !--- L_int : L_ext (int_lum_frac = L_int/L_tot).  The external branch places
+  !--- the photon on the par%ext_geometry boundary and jumps to the shared
+  !--- cell-index / tail; the internal branch falls through to the normal
+  !--- single-/multi-source generation below.
+  if (compose_ext) then
+     if (rand_number() >= int_lum_frac) then
+        photon%is_external = .true.
+        select case (trim(par%ext_geometry))
+        case ('cyl')
+           call external_illumination_cyl(photon,grid)
+        case ('rec')
+           call external_illumination_rec(photon,grid)
+        case default
+           call external_illumination_sph(photon,grid)
+        end select
+        goto 100
+     endif
+  endif
 
   !--- multi-source (Stage 6): pick a luminosity-weighted component and set
   !--- position/direction/wavelength from it, then run the common tail
@@ -84,10 +107,13 @@ contains
      endif
      photon%wgt = 1.0_wp
   case ('external_cyl')
+     photon%is_external = .true.
      call external_illumination_cyl(photon,grid)
   case ('external_sph')
+     photon%is_external = .true.
      call external_illumination_sph(photon,grid)
   case ('external_rec')
+     photon%is_external = .true.
      call external_illumination_rec(photon,grid)
   case default
      photon%x = par%xs_point
@@ -96,6 +122,7 @@ contains
      photon%wgt = 1.0_wp
   endselect
 
+100 continue
   !--- Cell Index
   photon%icell = floor((photon%x-grid%xmin)/grid%dx)+1
   photon%jcell = floor((photon%y-grid%ymin)/grid%dy)+1
@@ -105,8 +132,10 @@ contains
   if (photon%kcell == grid%nz+1 .and. photon%kz < 0.0_wp) photon%kcell = grid%nz
 
   !=== set up photon's propagation and direction vetor.
-  !--- isotropic emission
-  if (trim(par%source_geometry(1:8)) /= 'external') then
+  !--- isotropic emission (skipped for external photons, whose direction the
+  !--- external_illumination_* routine already set: source_geometry='external_*'
+  !--- for the external-only path, photon%is_external for a composed one).
+  if (trim(par%source_geometry(1:8)) /= 'external' .and. .not. photon%is_external) then
      cost = 2.0_wp*rand_number()-1.0_wp
      sint = sqrt(1.0_wp-cost*cost)
      phi  = twopi*rand_number()
@@ -143,7 +172,13 @@ contains
   !--- SED mode: sample the wavelength bin from the source spectrum and set
   !--- the wavelength-dependent dust properties for this photon.
   if (par%use_sed) then
-     photon%il     = sample_sed_lambda()
+     !--- external illumination samples the external-field spectrum; internal
+     !--- (point/extended) sources sample the stellar source spectrum.
+     if (photon%is_external) then
+        photon%il = sample_ext_lambda()
+     else
+        photon%il = sample_sed_lambda()
+     endif
      photon%lambda = sed_wave(photon%il)
      photon%s_ext  = sed_sext(photon%il)
      photon%albedo = sed_albedo(photon%il)
@@ -155,6 +190,11 @@ contains
   endif
 
 900 continue
+  !--- compose (task C2): every composed packet carries L_tot/nphotons, so the
+  !--- internal and external energy tallies add up regardless of which branch
+  !--- (single/multi internal, or external) set Lpacket above.
+  if (compose_ext) photon%Lpacket = Lpacket_tot
+
   !--- clump medium: determine the birth clump (0 = vacuum) so the forced
   !--- first scattering and the direct peel-off see the correct starting cell.
   if (trim(par%grid_type) == 'clump') then
@@ -171,8 +211,21 @@ contains
   !--- reset each photon's scan accumulators (a,g and/or tau); no-op cost when off
   if (par%use_ag_list .or. par%use_tau_list) call scan_reset_photon()
 
-  !+++ peeled-off.
-  call peeling_direct_photon(photon,grid)
+  !+++ peeled-off.  In compose mode an external photon uses the external-boundary
+  !--- direct peel (par%ext_geometry); everything else uses the bound
+  !--- peeling_direct_photon (internal, or the external-only binding).
+  if (compose_ext .and. photon%is_external) then
+     select case (trim(par%ext_geometry))
+     case ('cyl')
+        call peeling_direct_external_cyl(photon,grid)
+     case ('rec')
+        call peeling_direct_external_rec(photon,grid)
+     case default
+        call peeling_direct_external_sph(photon,grid)
+     end select
+  else
+     call peeling_direct_photon(photon,grid)
+  endif
 
   return
   end subroutine gen_photon

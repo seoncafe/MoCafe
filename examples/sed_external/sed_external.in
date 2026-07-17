@@ -1,0 +1,40 @@
+&parameters
+ !--- External illumination in SED mode: an isotropic radiation field enters a
+ !--- spherical dust cloud (external_sph).  The field spectrum is a Planck
+ !--- function at ext_tstar (a SHAPE); its absolute scale is the band mean
+ !--- intensity par%ext_intensity [erg/s/cm^2/sr], so the luminosity entering
+ !--- the grid is pi * J * (4 pi rmax^2) in physical units.
+ par%no_photons      = 1.0e6
+ par%use_sed         = .true.
+ par%source_geometry = 'external_sph'
+ par%ext_tstar       = 1.0e4
+ par%ext_intensity   = 1.0e-3
+
+ par%nlambda         = 64
+ par%lambda_min      = 0.0912
+ par%lambda_max      = 1000.0
+ par%lambda_ref      = 0.55
+ par%kext_file       = '../../data/kext_astrodust_MW.dat'
+ par%taumax          = 1.0
+ par%save_direc0     = .true.
+
+ par%distance_unit   = 'kpc'
+ par%rmax = 1.0
+ par%nx   = 64
+ par%ny   = 64
+ par%nz   = 64
+
+ par%nxim = 65
+ par%nyim = 65
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%output_normalization = 'luminosity'
+ par%use_master_slave = .false.
+ par%iseed    = 5678
+ par%no_print = 1.0e6
+ par%file_format = 'hdf5'
+ par%out_file = 'sed_external.h5'
+/

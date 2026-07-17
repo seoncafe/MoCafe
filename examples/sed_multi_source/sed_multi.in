@@ -1,0 +1,45 @@
+&parameters
+ !--- Multiple stellar sources with ABSOLUTE spectra (par%spectrum_type).
+ !--- Two point sources carry 'per_um' spectrum files (lambda[um],
+ !--- L_lambda[erg/s/um]); par%src_lum is left unset, so each source
+ !--- luminosity is DERIVED from its file integral over the wavelength grid
+ !--- (young: 3.0e36 erg/s, old: 1.0e36 erg/s; see make_abs_spectra.py).
+ !--- par%luminosity is then set to the sum of the components.
+ par%no_photons      = 1.0e6
+ par%use_sed         = .true.
+ par%spectrum_type   = 'per_um'
+
+ par%nsource         = 2
+ par%src_geometry    = 'point',  'point'
+ par%src_spectrum    = 'spec_young_per_um.dat', 'spec_old_per_um.dat'
+ par%src_x           = -0.3,     0.3
+ par%src_y           =  0.0,     0.0
+ par%src_z           =  0.0,     0.0
+
+ par%nlambda         = 64
+ par%lambda_min      = 0.0912
+ par%lambda_max      = 2000.0
+ par%lambda_ref      = 0.55
+ par%kext_file       = '../../data/kext_astrodust_MW.dat'
+ par%taumax          = 1.0
+ par%save_direc0     = .true.
+
+ par%distance_unit   = 'kpc'
+ par%rmax = 1.0
+ par%nx   = 64
+ par%ny   = 64
+ par%nz   = 64
+
+ par%nxim = 65
+ par%nyim = 65
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .false.
+ par%iseed    = 1234
+ par%no_print = 1.0e6
+ par%file_format = 'hdf5'
+ par%out_file = 'sed_multi.h5'
+/

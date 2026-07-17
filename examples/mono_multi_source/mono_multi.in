@@ -1,0 +1,37 @@
+&parameters
+ !--- Monochromatic (scattering-only) run with MULTIPLE internal sources.
+ !--- Two point sources at different positions, sampled in proportion to
+ !--- par%src_lum; the total luminosity is their sum.  No SED / spectrum here
+ !--- (grey dust par%albedo, par%hgg) -- this is the v1.20 scattering path
+ !--- extended to nsource > 1.
+ par%no_photons      = 1.0e6
+ par%albedo          = 0.5
+ par%hgg             = 0.6
+ par%taumax          = 1.0
+
+ par%nsource         = 2
+ par%src_geometry    = 'point', 'point'
+ par%src_x           = -0.5,    0.5
+ par%src_y           =  0.0,    0.0
+ par%src_z           =  0.0,    0.0
+ par%src_lum         =  3.0,    1.0
+ par%save_direc0     = .true.
+
+ par%rmax = 1.0
+ par%nx   = 64
+ par%ny   = 64
+ par%nz   = 64
+
+ par%nxim = 65
+ par%nyim = 65
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .false.
+ par%iseed    = 1234
+ par%no_print = 1.0e6
+ par%file_format = 'hdf5'
+ par%out_file = 'mono_multi.h5'
+/

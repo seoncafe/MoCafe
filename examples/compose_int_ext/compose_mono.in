@@ -1,0 +1,41 @@
+&parameters
+ !--- COMPOSE (monochromatic): an internal source AND an isotropic external
+ !--- field in one run.  The internal source is a central point (L_int =
+ !--- par%luminosity); the external field enters through the spherical boundary
+ !--- (par%ext_geometry='sph') with band mean intensity par%ext_intensity, so
+ !--- L_ext = pi * J * 4 pi (rmax * distance2cm)^2.  Each photon is drawn
+ !--- internal-vs-external in proportion to L_int : L_ext, and the total
+ !--- luminosity is L_int + L_ext.
+ !--- (The external-only shorthand is still source_geometry='external_*'.)
+ par%no_photons      = 1.0e6
+ par%albedo          = 0.5
+ par%hgg             = 0.6
+ par%taumax          = 1.0
+
+ par%nsource         = 1
+ par%source_geometry = 'point'
+ par%luminosity      = 1.0
+
+ par%ext_geometry    = 'sph'
+ par%ext_intensity   = 0.025
+ par%save_direc0     = .true.
+
+ par%distance_unit   = ''
+ par%rmax = 1.0
+ par%nx   = 64
+ par%ny   = 64
+ par%nz   = 64
+
+ par%nxim = 65
+ par%nyim = 65
+ par%obsx = 0.0
+ par%obsy = 0.0
+ par%obsz = 1.0
+ par%distance = 1.0e+03
+
+ par%use_master_slave = .false.
+ par%iseed    = 2024
+ par%no_print = 1.0e6
+ par%file_format = 'hdf5'
+ par%out_file = 'compose_mono.h5'
+/
