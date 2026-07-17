@@ -14,7 +14,6 @@ stochastically heated grains + PAHs) and Bjorkman & Wood (2001) immediate
 reemission.  It also adds multiple stellar populations, an all-sky interior
 observer (the Milky-Way case), and a Modified Random Walk for very optically
 thick regions.  See **[Dust Thermal Emission (v2.00)](#dust-thermal-emission-v200)**.
-The full design and validation record is in `MoCafe_v2.00_PLAN.md`.
 
 ## How to Compile and Run
 
