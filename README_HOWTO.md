@@ -231,7 +231,9 @@ or set `SEDUST_SRC=/your/SEDust`, to point at your own SEDust tree.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `use_sed` | `.false.` | Enable panchromatic transport |
+| `use_sed` | `.false.` | Enable panchromatic (multi-wavelength) scattering transport |
+| `save_jlam` | `.false.` | Tally `J_λ(x,y,z)`; **opt-in**, required by the `'lucy'` dust emission |
+| `use_dustemis` | `.false.` | Add dust thermal emission (requires `use_sed`); **leave this and `save_jlam` off for scattering only** over the wavelength range |
 | `nlambda` | 128 | Number of log-spaced wavelength bins |
 | `lambda_min`, `lambda_max` | 0.0912, 2000 | Wavelength range [µm] |
 | `lambda_ref` | 0.55 | Reference wavelength [µm]; `taumax`/`tauhomo` and the grid opacity are defined here |
