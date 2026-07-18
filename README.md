@@ -58,7 +58,6 @@ temperature, or Lyman-α radiative transfer).
 - `docs/output_definitions.pdf` — output image definitions.
 - `docs/MoCafe_agtau_scan.pdf`, `docs/MoCafe_clump.pdf`, `docs/MoCafe_amr.pdf`
   — algorithm memos for the scans, the clumpy medium, and the AMR grid.
-- `UPGRADE_NOTES.md` — change history; `CLAUDE.md` — architecture overview.
 
 ## Author
 
@@ -66,4 +65,4 @@ Kwang-il Seon (KASI/UST)
 
 ---
 
-Last updated: 2026-07-18 21:07 KST
+Last updated: 2026-07-18 21:19 KST
