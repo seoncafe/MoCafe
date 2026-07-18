@@ -80,6 +80,7 @@ $(SRCDIR)/%.o: $(SRCDIR)/%.f90
 
 OBJS	= \
 	define.o \
+	qmc_mod.o \
 	utility.o \
 	scan_mod.o \
 	random_mt.o \

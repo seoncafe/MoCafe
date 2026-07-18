@@ -58,6 +58,8 @@ All parameters take the `par%` prefix in the namelist (`&parameters / par%... /`
 | `no_photons` | 1e5 | Number of photon packets |
 | `no_print` | 1e7 | Progress print interval (photons) |
 | `iseed` | 0 | RNG seed (0 → seeded from time/pid) |
+| `launch_sequence` | `'random'` | `'sobol'` = quasi-random (Owen-scrambled Sobol) launch of the emission direction and the external-sphere entry point, indexed by the global photon number; transport draws stay on the Mersenne Twister.  Not combined with `use_stokes`, the `(a,g)`/tau scans, external rec/cyl, or `radiation_angular_PDF_file`.  See `docs/QUASI_RANDOM_LAUNCH_MOCAFE.md` |
+| `qmc_seed` | 12345 | Scramble seed for `'sobol'`; a different seed is an independent replicate |
 | `luminosity` | 1.0 | Source luminosity (output is per unit luminosity) |
 | `use_master_slave` | `.true.` | Master–slave MPI (vs. equal-share when `.false.`) |
 | `num_send_at_once` | 10000 | Photon batch size in master–slave mode |

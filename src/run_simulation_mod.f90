@@ -69,6 +69,7 @@ contains
            !++++++++++++++++++++++++++++++++
            !--- Main Part of the simulation
            !--- Release photon
+           photon%id = ip
            call gen_photon(grid,photon)
 
            do while(photon%inside)
@@ -127,6 +128,7 @@ contains
      !++++++++++++++++++++++++++++++++
      !--- Main Part of the simulation
      !--- Release photon
+     photon%id = ip
      call gen_photon(grid,photon)
 
      do while(photon%inside)

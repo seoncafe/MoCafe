@@ -9,13 +9,34 @@ contains
   use scan_mod,   only : scan_reset_photon
   use clump_mod,  only : active_set_at_point
   use octree_mod, only : amr_find_leaf
+  use qmc_mod,    only : qmc_uniforms, QMC_MAXDIM
   implicit none
 
   type(grid_type),   intent(inout) :: grid
-  type(photon_type), intent(out)   :: photon
+  !--- photon is intent(inout) so that photon%id, set by the caller before
+  !--- this call (LaRT convention), survives; every per-photon field that the
+  !--- former intent(out) default-initialized is reset explicitly below.
+  type(photon_type), intent(inout) :: photon
 
   ! local variables
   real(kind=wp) :: sint,cost,phi,sinp,cosp,rp
+  !--- quasi-random (Owen-scrambled Sobol) launch: uq holds the fixed-layout
+  !--- launch coordinates for the global photon number photon%id.  use_qmc =
+  !--- .false. leaves every original Mersenne Twister draw untouched
+  !--- (bit-identical).  In this monochromatic version only uq(4),uq(5)
+  !--- (direction) and uq(6),uq(7) (external-sphere entry point) are consumed;
+  !--- uq(1:3) are reserved for the shared 7-dimension launch layout.
+  logical       :: use_qmc
+  real(kind=wp) :: uq(QMC_MAXDIM)
+
+  !--- reset the per-photon fields that carry default initializers in
+  !--- photon_type (formerly applied by intent(out) on every call).  photon%id
+  !--- is set by the caller and must NOT be reset here.
+  photon%icell_clump = 0
+  photon%icell_amr   = 0
+
+  use_qmc = trim(par%launch_sequence) == 'sobol'
+  if (use_qmc) call qmc_uniforms(photon%id - 1_int64, uq(1:7))
 
   !=== set up photon's position vector.
   select case(trim(par%source_geometry))
@@ -53,7 +74,11 @@ contains
   case ('external_cyl')
      call external_illumination_cyl(photon,grid)
   case ('external_sph')
-     call external_illumination_sph(photon,grid)
+     if (use_qmc) then
+        call external_illumination_sph1_qmc(photon,grid,uq(6),uq(7),uq(4),uq(5))
+     else
+        call external_illumination_sph(photon,grid)
+     endif
   case ('external_rec')
      call external_illumination_rec(photon,grid)
   case default
@@ -74,9 +99,14 @@ contains
   !=== set up photon's propagation and direction vetor.
   !--- isotropic emission
   if (trim(par%source_geometry(1:8)) /= 'external') then
-     cost = 2.0_wp*rand_number()-1.0_wp
+     if (use_qmc) then
+        cost = 2.0_wp*uq(4)-1.0_wp
+        phi  = twopi*uq(5)
+     else
+        cost = 2.0_wp*rand_number()-1.0_wp
+        phi  = twopi*rand_number()
+     endif
      sint = sqrt(1.0_wp-cost*cost)
-     phi  = twopi*rand_number()
      cosp = cos(phi)
      sinp = sin(phi)
 

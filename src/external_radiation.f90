@@ -175,6 +175,55 @@ subroutine external_illumination_sph1(photon,grid)
    endif
 end subroutine external_illumination_sph1
 !--------------------------------------------------
+!--- quasi-random variant of external_illumination_sph1: the four uniforms are
+!--- supplied from the scrambled Sobol point (entry-point cos/phi, propagation
+!--- mu/phi) instead of rand_number().  The isotropic-field weighting
+!--- (radiation_angular_PDF_file) and the Stokes path are rejected at setup for
+!--- the quasi-random launch, so this routine covers the plain isotropic case.
+subroutine external_illumination_sph1_qmc(photon,grid,u_ent_cost,u_ent_phi,u_mu,u_phi)
+   implicit none
+   type(photon_type), intent(inout) :: photon
+   type(grid_type),   intent(in)    :: grid
+   real(kind=wp),     intent(in)    :: u_ent_cost,u_ent_phi,u_mu,u_phi
+   real(kind=wp) :: cost,sint,phi,cosp,sinp
+   real(kind=wp) :: kx,ky,kz,mx,my,mz,nx,ny,nz
+   !--- incident location (entry point on the sphere)
+   cost = 2.0_wp*u_ent_cost - 1.0_wp
+   sint = sqrt(1.0_wp-cost*cost)
+   phi  = twopi*u_ent_phi
+   cosp = cos(phi)
+   sinp = sin(phi)
+
+   !--- reference vectors for isotropically incident ray
+   kx = sint*cosp
+   ky = sint*sinp
+   kz = cost
+   mx = cost*cosp
+   my = cost*sinp
+   mz = -sint
+   nx = -sinp
+   ny =  cosp
+   nz =  0.0_wp
+
+   !--- position of the incident photon (par%rmax > 0)
+   photon%x = par%rmax*kx
+   photon%y = par%rmax*ky
+   photon%z = par%rmax*kz
+
+   !--- propagation direction (pi/2 < theta < pi, i.e. -1 < cost < 0)
+   cost = -sqrt(u_mu)
+   sint = sqrt(1.0_wp-cost*cost)
+   phi  = twopi*u_phi
+   cosp = cos(phi)
+   sinp = sin(phi)
+
+   photon%kx = sint * (cosp * mx + sinp * nx) + cost * kx
+   photon%ky = sint * (cosp * my + sinp * ny) + cost * ky
+   photon%kz = sint * (cosp * mz + sinp * nz) + cost * kz
+
+   photon%wgt = 1.0_wp
+end subroutine external_illumination_sph1_qmc
+!--------------------------------------------------
 subroutine external_illumination_sph2(photon,grid)
    implicit none
    type(photon_type), intent(inout) :: photon

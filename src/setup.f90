@@ -7,6 +7,7 @@ contains
   use iofile_mod, only : io_file_extension
   use scan_mod,   only : scan_setup, scan_na, scan_ng, scan_alist, scan_glist, scan_g0, &
                          scan_nt, scan_tlist, scan_s, scan_taumax_ref
+  use qmc_mod,    only : qmc_setup
   use mpi
   implicit none
 
@@ -166,6 +167,50 @@ contains
      endif
   endif
 
+  !--- quasi-random (Owen-scrambled Sobol) photon launching: validate the
+  !--- launch_sequence selection, reject the configurations outside this
+  !--- monochromatic version's scope, then initialize the generator.  Runs after
+  !--- the source geometry, use_stokes, and the scan flags are all finalized.
+  select case (trim(par%launch_sequence))
+  case ('random')
+     !--- default pseudo-random launch; nothing to set up.
+  case ('sobol')
+     if (par%use_stokes) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%launch_sequence=''sobol'' is incompatible with par%use_stokes.'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     if (par%use_ag_list .or. par%use_tau_list) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%launch_sequence=''sobol'' is incompatible with the (a,g)/tau scans '// &
+           '(use_ag_list / use_tau_list).'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     if (len_trim(par%radiation_angular_PDF_file) > 0) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%launch_sequence=''sobol'' does not support an anisotropic external '// &
+           'field (par%radiation_angular_PDF_file).'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     if (trim(par%source_geometry(1:12)) == 'external_cyl' .or. &
+         trim(par%source_geometry(1:12)) == 'external_rec') then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%launch_sequence=''sobol'' supports external_sph only in this version '// &
+           '(external rec/cyl not yet supported).'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+     call qmc_setup(par%qmc_seed)
+     if (mpar%p_rank == 0) then
+        write(*,'(a)')    '--- quasi-random launch (Owen-scrambled Sobol) ---'
+        write(*,'(a,i0)') 'qmc_seed                  : ', par%qmc_seed
+     endif
+  case default
+     if (mpar%p_rank == 0) write(*,'(3a)') &
+        'ERROR: par%launch_sequence = ''', trim(par%launch_sequence), &
+        ''' (use ''random'' or ''sobol'').'
+     call MPI_FINALIZE(ierr);  stop
+  end select
+
   select case(trim(par%distance_unit))
      case ('kpc')
         par%distance2cm = kpc2cm
@@ -232,6 +277,7 @@ contains
      write(*,'(3a)')       '+++++ ',trim(model_infile),' +++++'
      write(*,'(2a)')       ' >>> START @ ', get_date_time()
      write(*,'(a,L1)')     'Use_Master_Slave          : ', par%use_master_slave
+     write(*,'(2a)')       'Launch sequence           : ', trim(par%launch_sequence)
      write(*,'(a,2f7.4)')  'Dust Parameters(a, g)     : ', par%albedo, par%hgg
      write(*,'(a,es12.3)') 'Dust Extinction per H     : ', par%cext_dust
      write(6,'(a,i14)')    'Total photons             : ', par%nphotons
