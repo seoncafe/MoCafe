@@ -55,8 +55,9 @@ The scattered-light image is in units of `(luminosity unit) cm^-2 sr^-1`.
   - See **[README_HOWTO.md](README_HOWTO.md#dust-thermal-emission-v200)** and
     `MoCafe_v2.00_PLAN.md`.  Validated against the Camps et al. (2015) SHG
     dust-emission benchmark.
-- **Python analysis tools** (`python/`) — a format-agnostic reader (`mocafe_io`)
-  and plotters for SEDs, temperature/power maps, `J_λ`, and HEALPix all-sky maps.
+- **Python analysis tools** (`python/`) — a format-agnostic reader (`mocafe_io`),
+  plotters for SEDs, temperature/power maps, `J_λ`, and HEALPix all-sky maps, and
+  `qmc_replicates.py` for replicate-scatter error estimates of quasi-random runs.
 
 The clumpy and AMR media carry **dust only** (no gas velocity, temperature, or
 Lyman-α radiative transfer).  The dust-emission modes run on the Cartesian grid
@@ -83,6 +84,10 @@ and the AMR octree (not the clumpy medium).
 - `docs/MoCafe_Geometry.pdf` — observer geometry and image conventions.
 - `docs/MoCafe_agtau_scan.pdf`, `docs/MoCafe_clump.pdf`, `docs/MoCafe_amr.pdf`
   — algorithm memos for the scans, the clumpy medium, and the AMR grid.
+- `docs/MoCafe_v2.00_Physics.pdf` — physics and algorithms (transport, peel-off,
+  panchromatic transport, the radiation field, dust emission, quasi-random launching).
+- `docs/QUASI_RANDOM_LAUNCH_MOCAFE.md` — design, scope, and validation record of
+  the quasi-random (Owen-scrambled Sobol) launch option.
 
 ## Author
 
@@ -90,4 +95,4 @@ Kwang-il Seon (KASI/UST)
 
 ---
 
-Last updated: 2026-07-18 20:37 KST
+Last updated: 2026-07-18 21:02 KST
