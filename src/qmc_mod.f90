@@ -35,12 +35,12 @@ module qmc_mod
   !--- number of embedded Sobol dimensions and the number reserved by the
   !--- launch.  QMC_MAXDIM covers the fixed layout with room to spare
   !--- (12 is the largest Joe & Kuo (2008) new-joe-kuo-6 dimension embedded
-  !--- here); QMC_NDIM_USED = 7 keeps the same 7-dimension reserved layout as
+  !--- here); QMC_NDIM_USED = 9 keeps the same reserved layout as
   !--- the full code.  In this monochromatic version only dimensions 4,5
   !--- (direction mu, phi) and 6,7 (external-sphere entry point) are actually
   !--- consumed; dimensions 1-3 are reserved and left unused.
   integer, parameter, public :: QMC_MAXDIM     = 12
-  integer, parameter, public :: QMC_NDIM_USED  = 7
+  integer, parameter, public :: QMC_NDIM_USED  = 9
 
   !--- two decorrelated scramble streams sharing the same Sobol net.  Distinct
   !--- keys for each dimension make the streams independent randomized

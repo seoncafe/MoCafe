@@ -193,13 +193,6 @@ contains
            'field (par%radiation_angular_PDF_file).'
         call MPI_FINALIZE(ierr);  stop
      endif
-     if (trim(par%source_geometry(1:12)) == 'external_cyl' .or. &
-         trim(par%source_geometry(1:12)) == 'external_rec') then
-        if (mpar%p_rank == 0) write(*,'(a)') &
-           'ERROR: par%launch_sequence=''sobol'' supports external_sph only in this version '// &
-           '(external rec/cyl not yet supported).'
-        call MPI_FINALIZE(ierr);  stop
-     endif
      call qmc_setup(par%qmc_seed)
      if (mpar%p_rank == 0) then
         write(*,'(a)')    '--- quasi-random launch (Owen-scrambled Sobol) ---'
@@ -507,14 +500,7 @@ contains
         call MPI_FINALIZE(ierr);  stop
      endif
   case ('cyl', 'rec')
-     !--- the quasi-random launch has no entry-point sampler for these
-     !--- boundaries in this version (same restriction as source_geometry).
-     if (trim(par%launch_sequence) == 'sobol') then
-        if (mpar%p_rank == 0) write(*,'(3a)') &
-           'ERROR: par%launch_sequence=''sobol'' supports par%ext_geometry=''sph'' only in this '// &
-           'version (got ''', trim(par%ext_geometry), ''').'
-        call MPI_FINALIZE(ierr);  stop
-     endif
+     !--- ok (quasi-random entry mappings exist for all three boundaries)
   case default
      if (mpar%p_rank == 0) write(*,'(3a)') &
         'ERROR: par%ext_geometry = ''', trim(par%ext_geometry), ''' (use ''sph'', ''cyl'', or ''rec'').'

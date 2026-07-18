@@ -7,7 +7,9 @@
 > compatibility.  Validated: default path bit-identical (point, external_sph,
 > tau scan; equal-share runners); sobol point-source `Direct0` bit-identical
 > across MPI task counts; scattered totals unbiased.  Excluded (setup error):
-> Stokes, `(a,g)`/tau scans, external rec/cyl, `radiation_angular_PDF_file`.
+> Stokes, `(a,g)`/tau scans, `radiation_angular_PDF_file`.  Quasi-random
+> entry mappings exist for all three external boundaries (`sph`, `rec`,
+> `cyl`), for both the external-only path and the composed one.
 > Note: the external direct image rides the `peeling_direct_external_sph2`
 > estimator, which draws its own pseudo-random line of sight (by design, not
 > a defect), so the external `Direct0` stays MPI-count dependent; its total
