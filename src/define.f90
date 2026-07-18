@@ -66,6 +66,9 @@ public
 ! maximum number of albedo/asymmetry-factor values in a single-run (a,g) scan
   integer, parameter :: MAX_SCAN = 32
 
+! maximum number of internal source components (par%nsource)
+  integer, parameter :: MAX_SRC = 16
+
 ! tinest = the smallest positive number
 ! eps    = the least positive number
 !          that added to 1 returns a number that is greater than 1
@@ -93,6 +96,7 @@ public
      integer       :: icell,jcell,kcell
      integer       :: icell_clump = 0    ! current/owner clump index (0 = vacuum; clump grid only)
      integer       :: icell_amr   = 0    ! current leaf index (0 = unknown/outside; amr grid only)
+     logical       :: is_external = .false.  ! .true. = launched on the external-field boundary
      integer       :: nscatt
      real(kind=wp) :: wgt
      logical       :: inside
@@ -164,6 +168,29 @@ public
      real(kind=wp) :: xs_point = 0.0_wp
      real(kind=wp) :: ys_point = 0.0_wp
      real(kind=wp) :: zs_point = 0.0_wp
+     !--- multiple internal source components.  When par%nsource > 1, each
+     !--- component i has its own luminosity src_lum(i), geometry
+     !--- src_geometry(i) ('point'|'uniform'|'uniform_xy'|'gaussian'|
+     !--- 'exponential') and geometry parameters (src_x/y/z for 'point',
+     !--- src_zscale for the disks).  Components are sampled in proportion to
+     !--- src_lum and par%luminosity is set to sum(src_lum); an unset
+     !--- src_lum(i) means the equal split of par%luminosity.
+     integer            :: nsource               = 1
+     character(len=16)  :: src_geometry(MAX_SRC) = 'point'
+     real(kind=wp)      :: src_lum(MAX_SRC)      = -999.0_wp
+     real(kind=wp)      :: src_x(MAX_SRC)        = 0.0_wp
+     real(kind=wp)      :: src_y(MAX_SRC)        = 0.0_wp
+     real(kind=wp)      :: src_z(MAX_SRC)        = 0.0_wp
+     real(kind=wp)      :: src_zscale(MAX_SRC)   = -999.0_wp
+     !--- isotropic external radiation field composed with the internal
+     !--- source(s) in one run.  ext_intensity is the mean intensity J at the
+     !--- boundary; the external luminosity is L_ext = pi*J*A_surface, and each
+     !--- photon is drawn internal-or-external in proportion to L_int : L_ext.
+     !--- ext_geometry ('sph'|'cyl'|'rec') selects the boundary; when unset it
+     !--- follows par%geometry / par%rmax.  Composition is skipped entirely for
+     !--- the external-only source_geometry = 'external_*' shorthand.
+     character(len=8)   :: ext_geometry  = ''
+     real(kind=wp)      :: ext_intensity = -999.0_wp
      !--- shared memory & master-slave algorithm
      integer       :: num_send_at_once   = 10000
      logical       :: use_shared_memory  = .false.

@@ -25,16 +25,24 @@ The output image is in units of `(luminosity unit) cm^-2 sr^-1`.
   - polychromatic `optical-depth` scan → adds a `tau` axis (Jonsson 2006);
     composes with the `(a,g)` scan into `scatt(x,y,a,g,tau)`.
 - **Stokes polarization** via a Mueller-matrix phase function.
+- **Source configurations** — a single internal source, **multiple internal
+  sources** (`par%nsource`, sampled in proportion to `src_lum`), an external
+  isotropic field, or internal sources **composed with an external field** in
+  one run (`L_tot = Σ L_i + π J A_surface`).
+- **Quasi-random launching** (`par%launch_sequence = 'sobol'`) — Owen-scrambled
+  Sobol coordinates for the emission direction and the external-sphere entry
+  point, indexed by the global photon number; transport draws stay
+  pseudo-random.  See `docs/QUASI_RANDOM_LAUNCH_MOCAFE.md`.
 - **HDF5 and FITS** output/input through a format-agnostic facade (`par%file_format`).
 - **MPI** parallelism (master–slave or equal-share), with MPI-3 shared memory
   for read-only grid/clump/octree arrays (one copy per node).
 
 The clumpy and AMR media are **dust only** at this stage (no gas velocity,
-temperature, or Lyman-α machinery).
+temperature, or Lyman-α radiative transfer).
 
 ## References
 
-- [Seon & Draine 2016, ApJ, 833, 201](https://ui.adsabs.harvard.edu/abs/2016ApJ...833..201S/abstract) & [Seon & Kim 2020, ApJS, 250, 9](https://ui.adsabs.harvard.edu/abs/2020ApJS..250....9S/abstract) — dust/Monte-Carlo radiative transfer by the author (general background; the shared MC machinery is ported from LaRT).
+- [Seon & Draine 2016, ApJ, 833, 201](https://ui.adsabs.harvard.edu/abs/2016ApJ...833..201S/abstract) & [Seon & Kim 2020, ApJS, 250, 9](https://ui.adsabs.harvard.edu/abs/2020ApJS..250....9S/abstract) — dust/Monte-Carlo radiative transfer by the author (general background; the shared Monte-Carlo core is ported from LaRT).
 - [Seon 2010, PKAS, 25, 177](https://koreascience.kr/journal/CMHHCI/v25n4.do) — the `(a,g)` single-run scan.
 - [Jonsson 2006, MNRAS, 372, 2](https://ui.adsabs.harvard.edu/abs/2006MNRAS.372....2J/abstract) — the polychromatic optical-depth scan (SUNRISE).
 - Amanatides & Woo 1987, *A Fast Voxel Traversal Algorithm for Ray Tracing*, Eurographics '87
@@ -43,6 +51,9 @@ temperature, or Lyman-α machinery).
 
 - **[README_HOWTO.md](README_HOWTO.md)** — build, run, every input parameter,
   the scans, clumpy/AMR modes, the converters, and the Python tools.
+- **`docs/MoCafe_v1.20_UserGuide.pdf`** — the full v1.20 user guide (install,
+  run, complete input reference, scans, clumpy/AMR modes, outputs, examples,
+  algorithm notes; LaTeX source `docs/MoCafe_v1.20_UserGuide.tex`).
 - `docs/MoCafe_Geometry.pdf` — observer geometry and image conventions.
 - `docs/output_definitions.pdf` — output image definitions.
 - `docs/MoCafe_agtau_scan.pdf`, `docs/MoCafe_clump.pdf`, `docs/MoCafe_amr.pdf`
@@ -55,4 +66,4 @@ Kwang-il Seon (KASI/UST)
 
 ---
 
-Last updated: 2026-07-18 19:16 KST
+Last updated: 2026-07-18 21:01 KST

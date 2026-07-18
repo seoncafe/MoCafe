@@ -7,7 +7,8 @@ contains
   use iofile_mod, only : io_file_extension
   use scan_mod,   only : scan_setup, scan_na, scan_ng, scan_alist, scan_glist, scan_g0, &
                          scan_nt, scan_tlist, scan_s, scan_taumax_ref
-  use qmc_mod,    only : qmc_setup
+  use qmc_mod,     only : qmc_setup
+  use sources_mod, only : setup_sources
   use mpi
   implicit none
 
@@ -223,6 +224,14 @@ contains
      case default
         par%distance2cm = kpc2cm
   end select
+
+  !--- multiple internal source components (par%nsource > 1) and the
+  !--- composition of an internal source with an external field.  Both run
+  !--- after par has been fully rewritten (geometry, rmax, distance2cm), and
+  !--- setup_sources runs first because setup_compose reads the internal
+  !--- luminosity it leaves in par%luminosity.
+  if (par%nsource > 1) call setup_sources()
+  call setup_compose()
 
   if (len_trim(par%out_file) == 0) then
      par%base_name = trim(get_base_input_name(model_infile))
@@ -448,5 +457,95 @@ contains
   endif
 
   end subroutine setup_procedure
+  !=================================================
+  subroutine setup_compose
+  !--- decide whether an internal source and an isotropic external radiation
+  !--- field are simulated together in one run, and fix the luminosity split.
+  use define
+  use compose_mod
+  use mpi
+  implicit none
+  real(kind=wp) :: L_int, L_ext, L_tot, A_surf
+  integer :: ierr
+
+  compose_ext  = .false.
+  int_lum_frac = 0.0_wp
+
+  !--- the 'external_*' shorthand is the external-only path: never composed.
+  if (trim(par%source_geometry(1:8)) == 'external') return
+  if (par%nsource < 1) return
+  if (.not. (par%ext_intensity > 0.0_wp)) return
+
+  !--- restrictions outside the scope of this version.
+  if (par%use_stokes) then
+     if (mpar%p_rank == 0) write(*,'(a)') &
+        'ERROR: composing an internal source with an external field is not supported with par%use_stokes.'
+     call MPI_FINALIZE(ierr);  stop
+  endif
+  if (par%use_ag_list .or. par%use_tau_list) then
+     if (mpar%p_rank == 0) write(*,'(a)') &
+        'ERROR: composing an internal source with an external field is not supported with the '// &
+        '(a,g)/tau scans (use_ag_list / use_tau_list).'
+     call MPI_FINALIZE(ierr);  stop
+  endif
+
+  !--- resolve the external-field boundary geometry (default from geometry/rmax).
+  if (len_trim(par%ext_geometry) == 0) then
+     if (trim(par%geometry) == 'cylinder') then
+        par%ext_geometry = 'cyl'
+     else if (par%rmax > 0.0_wp) then
+        par%ext_geometry = 'sph'
+     else
+        par%ext_geometry = 'rec'
+     endif
+  endif
+  select case (trim(par%ext_geometry))
+  case ('sph')
+     if (.not. (par%rmax > 0.0_wp)) then
+        if (mpar%p_rank == 0) write(*,'(a)') &
+           'ERROR: par%ext_geometry = ''sph'' requires par%rmax > 0.'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+  case ('cyl', 'rec')
+     !--- the quasi-random launch has no entry-point sampler for these
+     !--- boundaries in this version (same restriction as source_geometry).
+     if (trim(par%launch_sequence) == 'sobol') then
+        if (mpar%p_rank == 0) write(*,'(3a)') &
+           'ERROR: par%launch_sequence=''sobol'' supports par%ext_geometry=''sph'' only in this '// &
+           'version (got ''', trim(par%ext_geometry), ''').'
+        call MPI_FINALIZE(ierr);  stop
+     endif
+  case default
+     if (mpar%p_rank == 0) write(*,'(3a)') &
+        'ERROR: par%ext_geometry = ''', trim(par%ext_geometry), ''' (use ''sph'', ''cyl'', or ''rec'').'
+     call MPI_FINALIZE(ierr);  stop
+  end select
+
+  !--- internal luminosity (already fixed by setup_sources when nsource > 1).
+  L_int = par%luminosity
+
+  !--- external luminosity L_ext = pi * J * A_surface.
+  A_surf = ext_surface_area(par%ext_geometry)
+  L_ext  = pi * par%ext_intensity * A_surf
+  if (.not. (L_ext > 0.0_wp)) then
+     if (mpar%p_rank == 0) write(*,'(a)') &
+        'ERROR: composed external luminosity L_ext = pi*J*A is not positive (check par%ext_intensity).'
+     call MPI_FINALIZE(ierr);  stop
+  endif
+
+  L_tot          = L_int + L_ext
+  int_lum_frac   = L_int/L_tot
+  par%luminosity = L_tot
+  compose_ext    = .true.
+
+  if (mpar%p_rank == 0) then
+     write(*,'(a)')        '--- Compose: internal source + external field ---'
+     write(*,'(2a)')       'external boundary geometry: ', trim(par%ext_geometry)
+     write(*,'(a,es12.4)') 'L_internal                : ', L_int
+     write(*,'(a,es12.4)') 'L_external                : ', L_ext
+     write(*,'(a,es12.4)') 'L_total                   : ', L_tot
+     write(*,'(a,f9.5)')   'internal photon fraction  : ', int_lum_frac
+  endif
+  end subroutine setup_compose
   !=================================================
 end module setup_mod

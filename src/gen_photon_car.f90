@@ -6,10 +6,12 @@ contains
   use random
   use peelingoff_mod
   use external_radiation
-  use scan_mod,   only : scan_reset_photon
-  use clump_mod,  only : active_set_at_point
-  use octree_mod, only : amr_find_leaf
-  use qmc_mod,    only : qmc_uniforms, QMC_MAXDIM
+  use scan_mod,    only : scan_reset_photon
+  use clump_mod,   only : active_set_at_point
+  use octree_mod,  only : amr_find_leaf
+  use sources_mod, only : use_sources, gen_source_photon, gen_source_photon_qmc
+  use compose_mod, only : compose_ext, int_lum_frac
+  use qmc_mod,     only : qmc_uniforms, QMC_MAXDIM
   implicit none
 
   type(grid_type),   intent(inout) :: grid
@@ -27,16 +29,57 @@ contains
   !--- (direction) and uq(6),uq(7) (external-sphere entry point) are consumed;
   !--- uq(1:3) are reserved for the shared 7-dimension launch layout.
   logical       :: use_qmc
-  real(kind=wp) :: uq(QMC_MAXDIM)
+  real(kind=wp) :: uq(QMC_MAXDIM), uorigin
 
   !--- reset the per-photon fields that carry default initializers in
   !--- photon_type (formerly applied by intent(out) on every call).  photon%id
   !--- is set by the caller and must NOT be reset here.
   photon%icell_clump = 0
   photon%icell_amr   = 0
+  photon%is_external = .false.
 
   use_qmc = trim(par%launch_sequence) == 'sobol'
   if (use_qmc) call qmc_uniforms(photon%id - 1_int64, uq(1:7))
+
+  !--- compose: an internal source and an isotropic external field in one run.
+  !--- Draw the packet internal-or-external in proportion to L_int : L_ext
+  !--- (int_lum_frac = L_int/L_tot).  The external branch places the photon on
+  !--- the par%ext_geometry boundary and jumps to the shared cell-index / tail;
+  !--- the internal branch falls through to the normal generation below.
+  if (compose_ext) then
+     if (use_qmc) then
+        uorigin = uq(1)
+     else
+        uorigin = rand_number()
+     endif
+     if (uorigin >= int_lum_frac) then
+        photon%is_external = .true.
+        select case (trim(par%ext_geometry))
+        case ('cyl')
+           call external_illumination_cyl(photon,grid)
+        case ('rec')
+           call external_illumination_rec(photon,grid)
+        case default
+           if (use_qmc) then
+              call external_illumination_sph1_qmc(photon,grid,uq(6),uq(7),uq(4),uq(5))
+           else
+              call external_illumination_sph(photon,grid)
+           endif
+        end select
+        goto 100
+     endif
+  endif
+
+  !--- multiple internal source components: pick a luminosity-weighted
+  !--- component and set position/direction from it, then run the common tail.
+  if (use_sources) then
+     if (use_qmc) then
+        call gen_source_photon_qmc(grid, photon, uq)
+     else
+        call gen_source_photon(grid, photon)
+     endif
+     goto 900
+  endif
 
   !=== set up photon's position vector.
   select case(trim(par%source_geometry))
@@ -72,14 +115,17 @@ contains
      photon%z = par%source_zscale*rand_zexp(par%zmax/par%source_zscale)
      photon%wgt = 1.0_wp
   case ('external_cyl')
+     photon%is_external = .true.
      call external_illumination_cyl(photon,grid)
   case ('external_sph')
+     photon%is_external = .true.
      if (use_qmc) then
         call external_illumination_sph1_qmc(photon,grid,uq(6),uq(7),uq(4),uq(5))
      else
         call external_illumination_sph(photon,grid)
      endif
   case ('external_rec')
+     photon%is_external = .true.
      call external_illumination_rec(photon,grid)
   case default
      photon%x = par%xs_point
@@ -88,6 +134,7 @@ contains
      photon%wgt = 1.0_wp
   endselect
 
+100 continue
   !--- Cell Index
   photon%icell = floor((photon%x-grid%xmin)/grid%dx)+1
   photon%jcell = floor((photon%y-grid%ymin)/grid%dy)+1
@@ -97,8 +144,10 @@ contains
   if (photon%kcell == grid%nz+1 .and. photon%kz < 0.0_wp) photon%kcell = grid%nz
 
   !=== set up photon's propagation and direction vetor.
-  !--- isotropic emission
-  if (trim(par%source_geometry(1:8)) /= 'external') then
+  !--- isotropic emission (skipped for external photons, whose direction the
+  !--- external_illumination_* routine already set: source_geometry='external_*'
+  !--- for the external-only path, photon%is_external for a composed one).
+  if (trim(par%source_geometry(1:8)) /= 'external' .and. .not. photon%is_external) then
      if (use_qmc) then
         cost = 2.0_wp*uq(4)-1.0_wp
         phi  = twopi*uq(5)
@@ -137,6 +186,7 @@ contains
   photon%albedo = par%albedo
   photon%hgg    = par%hgg
 
+900 continue
   !--- clump medium: determine the birth clump (0 = vacuum) so the forced
   !--- first scattering and the direct peel-off see the correct starting cell.
   if (trim(par%grid_type) == 'clump') then
@@ -153,8 +203,21 @@ contains
   !--- reset per-photon scan accumulators (a,g and/or tau); no-op cost when off
   if (par%use_ag_list .or. par%use_tau_list) call scan_reset_photon()
 
-  !+++ peeled-off.
-  call peeling_direct_photon(photon,grid)
+  !+++ peeled-off.  In compose mode an external photon uses the external-boundary
+  !--- direct peel (par%ext_geometry); everything else uses the bound
+  !--- peeling_direct_photon (internal, or the external-only binding).
+  if (compose_ext .and. photon%is_external) then
+     select case (trim(par%ext_geometry))
+     case ('cyl')
+        call peeling_direct_external_cyl(photon,grid)
+     case ('rec')
+        call peeling_direct_external_rec(photon,grid)
+     case default
+        call peeling_direct_external_sph(photon,grid)
+     end select
+  else
+     call peeling_direct_photon(photon,grid)
+  endif
 
   return
   end subroutine gen_photon

@@ -108,6 +108,45 @@ For a dimensionless model with no density file, `distance_unit` is forced to
 | `source_zscale` | NaN | Scale height for `'gaussian'`/`'exponential'` sources |
 | `radiation_angular_PDF_file` | `''` | Angular PDF for external illumination |
 
+The scalar `source_geometry` above describes a **single** internal source or an
+external-only field.  Two further configurations are available.
+
+#### Multiple internal sources
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `nsource` | 1 | Number of internal sources (`> 1` activates the multi-source path) |
+| `src_geometry(i)` | `'point'` | Geometry of each source: `'point'`, `'uniform'`, `'uniform_xy'`, `'gaussian'`, `'exponential'` |
+| `src_lum(i)` | -999 | Luminosity of each source (equal split of `luminosity` if unset) |
+| `src_x/y/z(i)` | 0.0 | Position of each `'point'` source |
+| `src_zscale(i)` | -999 | Scale height of a `'gaussian'`/`'exponential'` source |
+
+Sources are drawn in proportion to their luminosity and `luminosity` becomes
+their sum.  Incompatible with `use_stokes` (the multi-source generator carries
+no Stokes vector).
+
+#### Composition: internal source(s) + external field
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `ext_geometry` | `''` | Boundary the external field enters through when it **composes** with internal sources: `'sph'`, `'cyl'`, `'rec'` (blank auto-selects from `geometry`/`rmax`) |
+| `ext_intensity` | -999 | Band mean intensity `J` of the isotropic external field; `> 0` switches the composition on |
+
+Composition activates when internal sources (`nsource >= 1`) coexist with
+`ext_intensity > 0` and `source_geometry` is *not* one of the `external_*`
+external-only shorthands.  Each photon is then drawn internal-vs-external in
+proportion to
+
+```
+L_tot = L_int + L_ext = Σ src_lum(i) + π · J · A_surface,
+```
+
+with `A_surface` the illuminated boundary area (`sph`: `4π(rmax·distance2cm)²`;
+`rec`: the six box faces; `cyl`: the barrel plus the two end caps), and the
+output is normalized to `L_tot`.  Because energy is additive, a composed run
+equals the internal-only run plus the external-only run.  Incompatible with
+`use_stokes` and with the `(a,g)`/tau scans.
+
 ### Dust & scattering
 
 | Parameter | Default | Description |

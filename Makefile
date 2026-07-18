@@ -104,6 +104,8 @@ OBJS	= \
 	write_mod_car.o \
 	peelingoff_mod.o \
 	external_radiation.o \
+	sources_mod.o \
+	compose_mod.o \
 	gen_photon_car.o \
 	run_simulation_mod.o \
 	sightline_tau_mod.o \
