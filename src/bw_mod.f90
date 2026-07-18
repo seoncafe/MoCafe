@@ -231,7 +231,8 @@ contains
   real(kind=wp) :: dtime
 
   do ip = mpar%p_rank+1, par%nphotons, mpar%nproc
-     call gen_photon(grid, photon)     ! sets position/dir/wavelength, Lpacket, direct peel
+     photon%id = ip
+     call gen_photon(grid, photon)  ! sets position/dir/wavelength, Lpacket, direct peel
      do while (photon%inside)
         tau = -log(rand_number())
         call raytrace_to_tau(photon, grid, tau/photon%s_ext)

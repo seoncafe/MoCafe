@@ -39,7 +39,8 @@ contains
   !--- stellar energy pass (once): tally J_star.
   jt_sum(:,:) = 0.0_wp;  jt_eabs = 0.0_wp
   do ip = mpar%p_rank+1, n_star, mpar%nproc
-     call gen_photon(grid, photon)        ! Lpacket = luminosity/nphotons
+     photon%id = ip
+     call gen_photon(grid, photon)    ! Lpacket = luminosity/nphotons
      call transport(photon, grid)
   enddo
   call jtally_reduce()                     ! jt_sum, jt_eabs now full (all ranks)

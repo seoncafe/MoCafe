@@ -10,17 +10,19 @@ module sources_mod
   use random,  only : random_alias_setup, rand_alias_choise, rand_number, rand_gauss, &
                       rand_zexp, rand_sech2, rand_r1exp
   use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo, sed_hgg, &
-                      planck_shape, read_spectrum_file, interp_clamped, convert_spectrum_units
+                      planck_shape, read_spectrum_file, interp_clamped, convert_spectrum_units, &
+                      cdf_search
   use random_bulge,  only : rand_sersic, rand_boxy, rand_bar, rand_xbar
   implicit none
   private
-  public :: setup_sources, gen_source_photon, use_sources
+  public :: setup_sources, gen_source_photon, gen_source_photon_qmc, use_sources
 
   logical :: use_sources = .false.
   integer :: nsrc = 0
   real(kind=wp), allocatable :: src_lum_cdf(:)          ! (nsrc) cumulative luminosity, normalized
   real(kind=wp), allocatable :: src_pdf(:,:)            ! (nlam, nsrc) spectrum alias PDF for each source
   integer,       allocatable :: src_alias(:,:)          ! (nlam, nsrc)
+  real(kind=wp), allocatable :: src_cdf(:,:)            ! (nlam, nsrc) cumulative spectrum (inverse-CDF path)
   real(kind=wp), allocatable :: src_lumfrac(:,:)        ! (nlam, nsrc) luminosity fraction per bin (for output)
   real(kind=wp), allocatable :: src_Lpacket(:)          ! (nsrc) energy per packet for this source
 
@@ -52,7 +54,7 @@ contains
   use_sources = .true.
   is_phys = trim(par%spectrum_type) /= 'shape'
 
-  allocate(src_lum_cdf(nsrc), src_pdf(sed_nlam,nsrc), src_alias(sed_nlam,nsrc))
+  allocate(src_lum_cdf(nsrc), src_pdf(sed_nlam,nsrc), src_alias(sed_nlam,nsrc), src_cdf(sed_nlam,nsrc))
   allocate(src_lumfrac(sed_nlam,nsrc), src_Lpacket(nsrc), lum(nsrc), pdf(sed_nlam))
   allocate(derived(nsrc));  derived(:) = .false.
 
@@ -120,6 +122,13 @@ contains
      src_lumfrac(:,is) = pdf(:)/lnorm
      src_pdf(:,is)     = src_lumfrac(:,is)
      call random_alias_setup(src_pdf(:,is), src_alias(:,is))
+     !--- cumulative spectrum for the quasi-random inverse-CDF wavelength
+     !--- sampler; the alias table above stays the default sampling path.
+     src_cdf(1,is) = src_lumfrac(1,is)
+     do il = 2, sed_nlam
+        src_cdf(il,is) = src_cdf(il-1,is) + src_lumfrac(il,is)
+     enddo
+     src_cdf(sed_nlam,is) = 1.0_wp
   enddo
   lsum = sum(lum)
   par%luminosity = lsum          ! total luminosity is the sum of components
@@ -217,7 +226,7 @@ contains
   subroutine gen_source_photon(grid, photon)
   implicit none
   type(grid_type),   intent(in)  :: grid
-  type(photon_type), intent(out) :: photon
+  type(photon_type), intent(inout) :: photon
   real(kind=wp) :: u, sint, cost, phi, rp, rs_max, tanp, bx, by, bz
   integer :: is, il, lo, hi, mid
 
@@ -339,5 +348,121 @@ contains
   photon%wgt     = 1.0_wp
   photon%Lpacket = src_Lpacket(is)
   end subroutine gen_source_photon
+
+  !---------------------------------------------------------------
+  !--- quasi-random variant of gen_source_photon: the component (uq(2)),
+  !--- direction (uq(4), uq(5)) and wavelength (uq(3), inverse CDF) come from the
+  !--- scrambled Sobol point; only a 'point' component has no position draw, so
+  !--- every other geometry keeps its Mersenne Twister position sampler
+  !--- (rejection / stateful) exactly as in gen_source_photon.
+  subroutine gen_source_photon_qmc(grid, photon, uq)
+  implicit none
+  type(grid_type),   intent(in)  :: grid
+  type(photon_type), intent(inout) :: photon
+  real(kind=wp),     intent(in)  :: uq(:)
+  real(kind=wp) :: sint, cost, phi, rp, rs_max, tanp, bx, by, bz
+  integer :: is, il
+
+  !--- select source by luminosity CDF (quasi-random dimension 2).
+  is = cdf_search(src_lum_cdf, uq(2))
+
+  !--- position from this source's geometry (unchanged from gen_source_photon;
+  !--- 'point' has no draw, the others keep Mersenne Twister sampling).
+  select case (trim(par%src_geometry(is)))
+  case ('uniform')
+     rp   = rand_number()**(1.0_wp/3.0_wp) * par%rmax
+     cost = 2.0_wp*rand_number()-1.0_wp;  sint = sqrt(1.0_wp-cost*cost)
+     phi  = twopi*rand_number()
+     photon%x = rp*sint*cos(phi);  photon%y = rp*sint*sin(phi);  photon%z = rp*cost
+  case ('gaussian')
+     photon%x = grid%xrange*rand_number()+grid%xmin
+     photon%y = grid%yrange*rand_number()+grid%ymin
+     photon%z = par%src_zscale(is)/sqrt(2.0_wp)*rand_gauss()
+  case ('exponential', 'sech', 'exp_spiral')
+     if (par%src_rscale(is) > 0.0_wp) then
+        if (trim(par%src_geometry(is)) == 'exp_spiral' .and. par%spiral_m > 0) then
+           tanp = tan(par%spiral_pitch*pi/180.0_wp)
+           do
+              rp  = par%src_rscale(is) * rand_r1exp(par%rmax/par%src_rscale(is))
+              phi = twopi*rand_number()
+              if (rp <= 0.0_wp) cycle
+              if ((1.0_wp+par%spiral_amp)*rand_number() <= &
+                  1.0_wp + par%spiral_amp*sin(par%spiral_m*(log(rp)/tanp - phi))) exit
+           enddo
+        else
+           rp  = par%src_rscale(is) * rand_r1exp(par%rmax/par%src_rscale(is))
+           phi = twopi*rand_number()
+        endif
+        photon%x = rp*cos(phi);  photon%y = rp*sin(phi)
+     else
+        photon%x = grid%xrange*rand_number()+grid%xmin
+        photon%y = grid%yrange*rand_number()+grid%ymin
+     endif
+     if (trim(par%src_geometry(is)) == 'sech') then
+        photon%z = par%src_zscale(is)*rand_sech2(par%zmax/par%src_zscale(is))
+     else
+        photon%z = par%src_zscale(is)*rand_zexp(par%zmax/par%src_zscale(is))
+     endif
+  case ('sersic')
+     rs_max = sqrt(par%zmax**2 + par%rmax**2)/par%src_reff(is)
+     do
+        rp   = par%src_reff(is) * rand_sersic(par%src_sersic_index(is), rs_max)
+        cost = 2.0_wp*rand_number()-1.0_wp;  sint = sqrt(1.0_wp-cost*cost)
+        phi  = twopi*rand_number()
+        photon%x = rp*sint*cos(phi)
+        photon%y = rp*sint*sin(phi)
+        photon%z = rp*cost*par%src_axial_ratio(is)
+        if (sqrt(photon%x**2+photon%y**2) <= par%rmax .and. &
+            abs(photon%z) <= par%zmax) exit
+     enddo
+  case ('boxy', 'bar', 'xbar')
+     do
+        select case (trim(par%src_geometry(is)))
+        case ('boxy')
+           call rand_boxy(bx, by, bz, 0.1_wp, 8.0_wp, 8.0_wp, 8.0_wp, &
+                          par%src_boxiness(is), par%src_sersic_index(is))
+        case ('bar')
+           call rand_bar(bx, by, bz, 0.1_wp, 8.0_wp, 8.0_wp, 8.0_wp, par%src_boxiness(is))
+        case default   ! 'xbar'
+           call rand_xbar(bx, by, bz, 8.0_wp, 8.0_wp, 8.0_wp, par%src_boxiness(is))
+        end select
+        photon%x = bx*par%src_reff(is)
+        photon%y = by*par%src_reff(is)
+        photon%z = bz*par%src_reff(is)*par%src_axial_ratio(is)
+        if (sqrt(photon%x**2+photon%y**2) <= par%rmax .and. &
+            abs(photon%z) <= par%zmax) exit
+     enddo
+  case default   ! 'point'
+     photon%x = par%src_x(is);  photon%y = par%src_y(is);  photon%z = par%src_z(is)
+  end select
+
+  photon%icell = floor((photon%x-grid%xmin)/grid%dx)+1
+  photon%jcell = floor((photon%y-grid%ymin)/grid%dy)+1
+  photon%kcell = floor((photon%z-grid%zmin)/grid%dz)+1
+
+  !--- isotropic direction from the quasi-random dimensions 4 (mu) and 5 (phi).
+  cost = 2.0_wp*uq(4)-1.0_wp;  sint = sqrt(1.0_wp-cost*cost)
+  phi  = twopi*uq(5)
+  photon%kx = sint*cos(phi);  photon%ky = sint*sin(phi);  photon%kz = cost
+
+  if (par%use_sed) then
+     !--- wavelength from this source's spectrum (inverse CDF, dimension 3).
+     il = cdf_search(src_cdf(:,is), uq(3))
+     photon%il      = il
+     photon%lambda  = sed_wave(il)
+     photon%s_ext   = sed_sext(il)
+     photon%albedo  = sed_albedo(il)
+     photon%hgg     = sed_hgg(il)
+  else
+     photon%albedo  = par%albedo
+     photon%hgg     = par%hgg
+     photon%s_ext   = 1.0_wp
+  endif
+
+  photon%nscatt  = 0
+  photon%inside  = .true.
+  photon%wgt     = 1.0_wp
+  photon%Lpacket = src_Lpacket(is)
+  end subroutine gen_source_photon_qmc
 
 end module sources_mod

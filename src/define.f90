@@ -85,6 +85,9 @@ public
 
 ! photon type
   type photon_type
+     !--- global photon number (set at emission, carried through the history;
+     !--- indexes the quasi-random Sobol launch point when launch_sequence='sobol').
+     integer(kind=int64) :: id = 0_int64
      real(kind=wp) :: x,y,z
      real(kind=wp) :: kx,ky,kz
      real(kind=wp) :: nx,ny,nz
@@ -196,6 +199,13 @@ public
      integer       :: num_send_at_once   = 10000
      logical       :: use_master_slave   = .true.
      logical       :: use_reduced_wgt    = .true.
+     !--- quasi-random (Owen-scrambled Sobol) photon launching.  'sobol' replaces
+     !--- the launch draws (origin/component/wavelength/direction/entry) by a
+     !--- scrambled Sobol point indexed by the global photon number; every
+     !--- post-launch transport draw stays on the Mersenne Twister.  qmc_seed
+     !--- selects the scramble; a different seed is an independent replicate.
+     character(len=16) :: launch_sequence = 'random'
+     integer           :: qmc_seed        = 12345
      !--- Dust-related parameters
      real(kind=wp) :: hgg           = 0.6761
      real(kind=wp) :: albedo        = 0.3253

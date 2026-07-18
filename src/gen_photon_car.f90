@@ -10,16 +10,40 @@ contains
   use clump_mod,   only : active_set_at_point
   use octree_mod,  only : amr_find_leaf
   use sed_mod,     only : sample_sed_lambda, sample_ext_lambda, &
+                          sample_sed_lambda_u, sample_ext_lambda_u, &
                           sed_wave, sed_sext, sed_albedo, sed_hgg
-  use sources_mod, only : use_sources, gen_source_photon
+  use sources_mod, only : use_sources, gen_source_photon, gen_source_photon_qmc
   use compose_mod, only : compose_ext, int_lum_frac, Lpacket_tot
+  use qmc_mod,     only : qmc_uniforms, QMC_MAXDIM
   implicit none
 
-  type(grid_type),   intent(inout) :: grid
-  type(photon_type), intent(out)   :: photon
+  type(grid_type),     intent(inout) :: grid
+  !--- photon is intent(inout) so that photon%id, set by the caller before
+  !--- this call (LaRT convention), survives; every per-photon field that the
+  !--- former intent(out) default-initialized is reset explicitly below.
+  type(photon_type),   intent(inout) :: photon
 
   ! local variables
   real(kind=wp) :: sint,cost,phi,sinp,cosp,rp,tanp
+  !--- quasi-random (Owen-scrambled Sobol) launch: uq holds the fixed-layout
+  !--- launch coordinates for the global photon number photon%id.  use_qmc =
+  !--- .false. leaves every original Mersenne Twister draw untouched
+  !--- (bit-identical).
+  logical       :: use_qmc
+  real(kind=wp) :: uq(QMC_MAXDIM), uorigin
+
+  !--- reset the per-photon fields that carry default initializers in
+  !--- photon_type (formerly applied by intent(out) on every call).
+  photon%is_external = .false.
+  photon%icell_clump = 0
+  photon%icell_amr   = 0
+  photon%il          = 0
+  photon%lambda      = 0.0_wp
+  photon%s_ext       = 1.0_wp
+  photon%Lpacket     = 1.0_wp
+
+  use_qmc = trim(par%launch_sequence) == 'sobol'
+  if (use_qmc) call qmc_uniforms(photon%id - 1_int64, uq(1:7))
 
   !--- compose (task C2): an internal source and an isotropic external field in
   !--- one run.  Draw the packet internal-or-external in proportion to
@@ -28,7 +52,12 @@ contains
   !--- cell-index / tail; the internal branch falls through to the normal
   !--- single-/multi-source generation below.
   if (compose_ext) then
-     if (rand_number() >= int_lum_frac) then
+     if (use_qmc) then
+        uorigin = uq(1)
+     else
+        uorigin = rand_number()
+     endif
+     if (uorigin >= int_lum_frac) then
         photon%is_external = .true.
         select case (trim(par%ext_geometry))
         case ('cyl')
@@ -36,7 +65,11 @@ contains
         case ('rec')
            call external_illumination_rec(photon,grid)
         case default
-           call external_illumination_sph(photon,grid)
+           if (use_qmc) then
+              call external_illumination_sph1_qmc(photon,grid,uq(6),uq(7),uq(4),uq(5))
+           else
+              call external_illumination_sph(photon,grid)
+           endif
         end select
         goto 100
      endif
@@ -46,7 +79,11 @@ contains
   !--- position/direction/wavelength from it, then run the common tail
   !--- (clump/amr birth cell, scan reset, direct peel-off).
   if (use_sources) then
-     call gen_source_photon(grid, photon)
+     if (use_qmc) then
+        call gen_source_photon_qmc(grid, photon, uq)
+     else
+        call gen_source_photon(grid, photon)
+     endif
      goto 900
   endif
 
@@ -111,7 +148,11 @@ contains
      call external_illumination_cyl(photon,grid)
   case ('external_sph')
      photon%is_external = .true.
-     call external_illumination_sph(photon,grid)
+     if (use_qmc) then
+        call external_illumination_sph1_qmc(photon,grid,uq(6),uq(7),uq(4),uq(5))
+     else
+        call external_illumination_sph(photon,grid)
+     endif
   case ('external_rec')
      photon%is_external = .true.
      call external_illumination_rec(photon,grid)
@@ -136,9 +177,14 @@ contains
   !--- external_illumination_* routine already set: source_geometry='external_*'
   !--- for the external-only path, photon%is_external for a composed one).
   if (trim(par%source_geometry(1:8)) /= 'external' .and. .not. photon%is_external) then
-     cost = 2.0_wp*rand_number()-1.0_wp
+     if (use_qmc) then
+        cost = 2.0_wp*uq(4)-1.0_wp
+        phi  = twopi*uq(5)
+     else
+        cost = 2.0_wp*rand_number()-1.0_wp
+        phi  = twopi*rand_number()
+     endif
      sint = sqrt(1.0_wp-cost*cost)
-     phi  = twopi*rand_number()
      cosp = cos(phi)
      sinp = sin(phi)
 
@@ -175,9 +221,17 @@ contains
      !--- external illumination samples the external-field spectrum; internal
      !--- (point/extended) sources sample the stellar source spectrum.
      if (photon%is_external) then
-        photon%il = sample_ext_lambda()
+        if (use_qmc) then
+           photon%il = sample_ext_lambda_u(uq(3))
+        else
+           photon%il = sample_ext_lambda()
+        endif
      else
-        photon%il = sample_sed_lambda()
+        if (use_qmc) then
+           photon%il = sample_sed_lambda_u(uq(3))
+        else
+           photon%il = sample_sed_lambda()
+        endif
      endif
      photon%lambda = sed_wave(photon%il)
      photon%s_ext  = sed_sext(photon%il)

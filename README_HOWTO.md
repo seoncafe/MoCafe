@@ -66,6 +66,8 @@ All parameters take the `par%` prefix in the namelist (`&parameters / par%... /`
 | `no_photons` | 1e5 | Number of photon packets |
 | `no_print` | 1e7 | Progress print interval (photons) |
 | `iseed` | 0 | RNG seed (0 → seeded from time/pid) |
+| `launch_sequence` | `'random'` | `'sobol'` replaces the launch draws (origin/component/wavelength/direction/entry) by an Owen-scrambled Sobol point indexed by the global photon number; transport draws stay on the Mersenne Twister.  See below |
+| `qmc_seed` | 12345 | Scramble seed for `'sobol'`; a different seed is an independent replicate |
 | `luminosity` | 1.0 | Source luminosity (output is per unit luminosity) |
 | `use_master_slave` | `.true.` | Master–slave MPI (vs. equal-share when `.false.`) |
 | `num_send_at_once` | 10000 | Photon batch size in master–slave mode |
@@ -477,6 +479,27 @@ only when individual cells are very thick (τ_cell ≫ 1) and near-pure-scatteri
 
 See `examples/dustemis/`, `examples/multipop/`, `examples/galaxy/`,
 `examples/milkyway/`, and the SEDust/mode benchmarks in `examples/benchmarks/`.
+
+---
+
+## Quasi-Random Photon Launching
+
+`launch_sequence = 'sobol'` replaces the *launch* draws of every packet — the
+compose origin, the source component, the wavelength bin (by a monotonic
+inverse CDF instead of the alias table), the emission direction, and the
+external-sphere entry point — by an Owen-scrambled Sobol point indexed by the
+global photon number.  Every draw after launch (forced first scattering,
+Henyey–Greenstein, free paths) stays on the Mersenne Twister, so the transport
+estimator is unchanged and unbiased.  Benefits: near-proportional packet
+counts in every wavelength bin (the count in a bin of probability `p` deviates
+from `pN` by order one instead of binomially), lower noise in the
+`Direct`/`Direct0` images, and a launch set that is **independent of the MPI
+task count** (the `Direct0` cube is bit-identical for any `-np`).  `qmc_seed`
+selects the scramble; use several seeds as independent replicates for error
+estimates.  Restrictions in this version: not combined with `use_stokes`, the
+`(a,g)`/tau scans, external rec/cyl illumination, or
+`radiation_angular_PDF_file`; dust-emission packets keep the Mersenne Twister.
+Design and validation: `docs/QUASI_RANDOM_LAUNCH_MOCAFE.md`.
 
 ---
 

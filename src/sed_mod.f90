@@ -26,6 +26,7 @@ module sed_mod
   real(kind=wp), allocatable :: sed_lum(:)      ! source luminosity fraction per bin (sum = 1)
   real(kind=wp), allocatable :: sed_src_pdf(:)  ! alias probability table
   integer,       allocatable :: sed_src_alias(:)
+  real(kind=wp), allocatable :: sed_src_cdf(:)  ! cumulative luminosity (quasi-random inverse-CDF path)
   real(kind=wp) :: sed_cext_ref = 0.0_wp        ! C_ext/H at par%lambda_ref
 
   !--- external-field spectrum (SED mode with external illumination).
@@ -33,6 +34,7 @@ module sed_mod
   real(kind=wp), allocatable :: sed_ext_lum(:)   ! external spectrum fraction per bin (sum = 1)
   real(kind=wp), allocatable :: sed_ext_pdf(:)   ! alias probability table
   integer,       allocatable :: sed_ext_alias(:)
+  real(kind=wp), allocatable :: sed_ext_cdf(:)   ! cumulative external intensity (inverse-CDF path)
 
   !--- unit-conversion constants for physical par%spectrum_type files.
   real(kind=wp), parameter :: c_um     = 2.99792458e14_wp  ! speed of light [um/s]
@@ -69,7 +71,7 @@ contains
   allocate(edge(sed_nlam+1))
   allocate(sed_wave(sed_nlam), sed_dwave(sed_nlam))
   allocate(sed_cext(sed_nlam), sed_albedo(sed_nlam), sed_hgg(sed_nlam), sed_sext(sed_nlam))
-  allocate(sed_lum(sed_nlam), sed_src_pdf(sed_nlam), sed_src_alias(sed_nlam))
+  allocate(sed_lum(sed_nlam), sed_src_pdf(sed_nlam), sed_src_alias(sed_nlam), sed_src_cdf(sed_nlam))
   dlnlam = log(par%lambda_max/par%lambda_min)/sed_nlam
   do il = 1, sed_nlam+1
      edge(il) = par%lambda_min * exp((il-1)*dlnlam)
@@ -164,6 +166,15 @@ contains
   sed_src_pdf(:) = sed_lum(:)
   call random_alias_setup(sed_src_pdf, sed_src_alias)
 
+  !--- monotone cumulative distribution for the quasi-random inverse-CDF
+  !--- wavelength sampler (sample_sed_lambda_u); the alias table above stays the
+  !--- default sampling path so its stream is unchanged.
+  sed_src_cdf(1) = sed_lum(1)
+  do il = 2, sed_nlam
+     sed_src_cdf(il) = sed_src_cdf(il-1) + sed_lum(il)
+  enddo
+  sed_src_cdf(sed_nlam) = 1.0_wp
+
   if (mpar%p_rank == 0) then
      write(*,'(a)')          '--- SED (multi-wavelength) mode ---'
      write(*,'(a,i6)')       'N wavelength bins         : ', sed_nlam
@@ -217,7 +228,7 @@ contains
   if (present(lum_out)) lum_out = 0.0_wp
 
   sed_ext_on = .true.
-  allocate(sed_ext_lum(sed_nlam), sed_ext_pdf(sed_nlam), sed_ext_alias(sed_nlam))
+  allocate(sed_ext_lum(sed_nlam), sed_ext_pdf(sed_nlam), sed_ext_alias(sed_nlam), sed_ext_cdf(sed_nlam))
   sed_ext_lum(:) = 0.0_wp
   is_phys        = trim(par%spectrum_type) /= 'shape'
   J_defined      = .false.
@@ -336,6 +347,14 @@ contains
   sed_ext_pdf(:) = sed_ext_lum(:)
   call random_alias_setup(sed_ext_pdf, sed_ext_alias)
 
+  !--- cumulative distribution for the quasi-random inverse-CDF sampler
+  !--- (sample_ext_lambda_u); the alias table stays the default path.
+  sed_ext_cdf(1) = sed_ext_lum(1)
+  do il = 2, sed_nlam
+     sed_ext_cdf(il) = sed_ext_cdf(il-1) + sed_ext_lum(il)
+  enddo
+  sed_ext_cdf(sed_nlam) = 1.0_wp
+
   if (mpar%p_rank == 0) then
      write(*,'(a)')          '--- external-field SED spectrum ---'
      write(*,'(2a)')         'external spectrum source  : ', trim(src_label)
@@ -392,6 +411,40 @@ contains
   integer :: il
   il = rand_alias_choise(sed_ext_pdf, sed_ext_alias)
   end function sample_ext_lambda
+
+  !---------------------------------------------------------------
+  !--- inverse-CDF wavelength-bin sampler for the quasi-random launch: return
+  !--- the smallest bin il with uf <= cdf(il).  uf is a uniform in (0,1).  The
+  !--- monotone inverse CDF keeps a stratified Sobol coordinate stratified in
+  !--- the wavelength bins (the alias table would scramble it).
+  function sample_sed_lambda_u(uf) result(il)
+  implicit none
+  real(kind=wp), intent(in) :: uf
+  integer :: il
+  il = cdf_search(sed_src_cdf, uf)
+  end function sample_sed_lambda_u
+
+  function sample_ext_lambda_u(uf) result(il)
+  implicit none
+  real(kind=wp), intent(in) :: uf
+  integer :: il
+  il = cdf_search(sed_ext_cdf, uf)
+  end function sample_ext_lambda_u
+
+  !---------------------------------------------------------------
+  !--- binary search: smallest index il with uf <= cdf(il) (cdf ascending,
+  !--- cdf(n) = 1).
+  pure function cdf_search(cdf, uf) result(il)
+  implicit none
+  real(kind=wp), intent(in) :: cdf(:), uf
+  integer :: il, lo, hi, mid
+  lo = 1;  hi = size(cdf)
+  do while (lo < hi)
+     mid = (lo + hi)/2
+     if (uf <= cdf(mid)) then;  hi = mid;  else;  lo = mid + 1;  endif
+  enddo
+  il = lo
+  end function cdf_search
 
   !---------------------------------------------------------------
   !--- Planck function B_lambda (arbitrary normalization), lambda in um.
