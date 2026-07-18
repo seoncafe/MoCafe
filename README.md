@@ -26,6 +26,17 @@ The scattered-light image is in units of `(luminosity unit) cm^-2 sr^-1`.
   - polychromatic `optical-depth` scan → adds a `tau` axis (Jonsson 2006);
     composes with the `(a,g)` scan into `scatt(x,y,a,g,tau)`.
 - **Stokes polarization** via a Mueller-matrix phase function.
+- **Source configurations** — single or multiple internal sources and an
+  external isotropic field, separately or **composed in one run**
+  (`L_tot = Σ L_i + π J A_surface`), in both the monochromatic and the SED
+  modes; source spectra as shapes or **absolute** tabulations
+  (`spectrum_type = 'per_um' / 'per_ang' / 'per_hz' / 'per_ev'`, luminosity
+  derived from the file integral).
+- **Quasi-random launching** (`launch_sequence = 'sobol'`) — Owen-scrambled
+  Sobol launch coordinates indexed by the global photon number: near-exact
+  packet allocation across wavelength bins, lower direct-image noise, and a
+  launch set independent of the MPI task count; transport draws stay
+  pseudo-random.
 - **HDF5 and FITS** output/input through a format-agnostic facade (`par%file_format`).
 - **MPI** parallelism (master–slave or equal-share), with MPI-3 shared memory
   for read-only grid/clump/octree arrays (one copy per node).
@@ -79,4 +90,4 @@ Kwang-il Seon (KASI/UST)
 
 ---
 
-Last updated: 2026-07-18 18:05 KST
+Last updated: 2026-07-18 19:16 KST
