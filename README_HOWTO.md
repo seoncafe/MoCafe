@@ -496,10 +496,15 @@ from `pN` by order one instead of binomially), lower noise in the
 `Direct`/`Direct0` images, and a launch set that is **independent of the MPI
 task count** (the `Direct0` cube is bit-identical for any `-np`).  `qmc_seed`
 selects the scramble; use several seeds as independent replicates for error
-estimates.  Restrictions in this version: not combined with `use_stokes`, the
-`(a,g)`/tau scans, external rec/cyl illumination, or
-`radiation_angular_PDF_file`; dust-emission packets keep the Mersenne Twister.
-Design and validation: `docs/QUASI_RANDOM_LAUNCH_MOCAFE.md`.
+estimates.  All three external-illumination boundaries (`sph`, `rec`, `cyl`)
+have quasi-random entry mappings, and the dust-emission packets are launched
+from a second, decorrelated scramble stream (the same set is reused across the
+Lucy iterations, which correlates them as common random numbers).
+Restrictions: not combined with `use_stokes`, the `(a,g)`/tau scans, or
+`radiation_angular_PDF_file`.  `python/qmc_replicates.py` runs a namelist over
+several scrambles and reports the replicate RMS and the effective
+photon-number gain.  Design and validation:
+`docs/QUASI_RANDOM_LAUNCH_MOCAFE.md`.
 
 ---
 

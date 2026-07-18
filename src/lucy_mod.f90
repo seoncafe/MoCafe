@@ -11,7 +11,9 @@ module lucy_mod
 !--- caller then runs the normal imaging pass (peel on) and writes the dust SED.
   use define
   use photon_mod,   only : gen_photon
-  use dustemis_mod, only : gen_dust_photon, compute_dustemis, Labs_total, dustemis_ready
+  use dustemis_mod, only : gen_dust_photon, gen_dust_photon_qmc, compute_dustemis, &
+                           Labs_total, dustemis_ready
+  use qmc_mod,      only : qmc_uniforms_stream, QMC_STREAM_DUSTEMIS
   use jtally_mod,   only : jt_on, jt_first, jt_sum, jt_eabs, jtally_reduce
   use peelingoff_mod, only : peel_enabled
   use mrw_mod,      only : mrw_on, mrw_try_step
@@ -31,6 +33,14 @@ contains
   real(kind=wp) :: eabs_star, Lstar_packet, Ldust_packet, Lprev, drel
   integer(kind=int64) :: n_star, n_dust, ip
   integer :: iter, ierr
+  !--- quasi-random dust-emission launch: ud holds the 7 launch coordinates of
+  !--- packet ip, drawn from the dust-emission scramble stream.  The scramble
+  !--- keys are set once at setup, so packet ip gets the same point in every
+  !--- iteration: common random numbers across the Lucy iterations.
+  logical       :: use_qmc
+  real(kind=wp) :: ud(7)
+
+  use_qmc = trim(par%launch_sequence) == 'sobol'
 
   peel_enabled = .false.          ! energy-only passes
   n_star = par%nphotons
@@ -60,7 +70,14 @@ contains
      !--- dust-photon energy pass: tally the dust contribution alone.
      jt_sum(:,:) = 0.0_wp;  jt_eabs = 0.0_wp
      do ip = mpar%p_rank+1, n_dust, mpar%nproc
-        call gen_dust_photon(grid, photon, Ldust_packet)
+        if (use_qmc) then
+           call qmc_uniforms_stream(ip - 1_int64, ud(1:7), QMC_STREAM_DUSTEMIS)
+           call gen_dust_photon_qmc(grid, photon, Ldust_packet, ud(1:7))
+        else
+           call gen_dust_photon(grid, photon, Ldust_packet)
+        endif
+        !--- set after generation: the generator declares photon intent(out).
+        photon%id = ip
         call transport(photon, grid)
      enddo
      call jtally_reduce()                  ! jt_sum = full dust J, jt_eabs = full dust absorbed

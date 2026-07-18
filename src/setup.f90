@@ -260,15 +260,6 @@ contains
            'field (par%radiation_angular_PDF_file).'
         call MPI_FINALIZE(ierr);  stop
      endif
-     if (trim(par%source_geometry(1:12)) == 'external_cyl' .or. &
-         trim(par%source_geometry(1:12)) == 'external_rec' .or. &
-         (compose_ext .and. (trim(par%ext_geometry) == 'cyl' .or. &
-                             trim(par%ext_geometry) == 'rec'))) then
-        if (mpar%p_rank == 0) write(*,'(a)') &
-           'ERROR: par%launch_sequence=''sobol'' supports external_sph only in this version '// &
-           '(external rec/cyl not yet supported).'
-        call MPI_FINALIZE(ierr);  stop
-     endif
      call qmc_setup(par%qmc_seed)
      if (mpar%p_rank == 0) then
         write(*,'(a)')    '--- quasi-random launch (Owen-scrambled Sobol) ---'

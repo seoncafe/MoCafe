@@ -37,14 +37,22 @@ module qmc_mod
   !--- number of embedded Sobol dimensions and the number consumed by the
   !--- launch.  QMC_MAXDIM covers the fixed stellar layout with room to spare
   !--- (12 is the largest Joe & Kuo (2008) new-joe-kuo-6 dimension embedded
-  !--- here); QMC_NDIM_USED = 7 is the fixed MoCafe launch layout
-  !--- (origin, component, wavelength, direction mu, direction phi, and two
-  !--- external-entry coordinates), with dimension 8 reserved.
+  !--- here); QMC_NDIM_USED = 9 is the fixed MoCafe stellar launch layout:
+  !---   1 origin (internal-vs-external in compose mode)
+  !---   2 source component
+  !---   3 wavelength
+  !---   4 direction mu           5 direction phi
+  !---   6 external entry: sph -> entry cos(theta); rec -> face; cyl -> cap-vs-side
+  !---   7 external entry: sph -> entry phi;        rec/cyl -> first coordinate
+  !---   8 external entry: rec/cyl -> second coordinate
+  !---   9 external entry: cyl -> top-vs-bottom end cap
+  !--- The dust-emission launch (stream 2) has its own 7-dimensional layout,
+  !--- documented at gen_dust_photon_qmc.
   integer, parameter, public :: QMC_MAXDIM     = 12
-  integer, parameter, public :: QMC_NDIM_USED  = 7
+  integer, parameter, public :: QMC_NDIM_USED  = 9
 
   !--- two decorrelated scramble streams sharing the same Sobol net: the stellar
-  !--- launch (stream 1) and the dust-emission packet launch (stream 2, future).
+  !--- launch (stream 1) and the dust-emission packet launch (stream 2).
   !--- Distinct keys for each dimension make the two streams independent
   !--- randomized replicates.
   integer, parameter, public :: QMC_STREAM_STELLAR = 1
@@ -124,7 +132,7 @@ contains
 
     !--- Owen scramble seeds for each dimension and stream, from (qmc_seed, dimension,
     !--- stream).  Stream 1 (stellar) keeps the base expression; stream 2
-    !--- (dust-emission, future) adds a distinct 32-bit stream constant,
+    !--- (dust-emission) adds a distinct 32-bit stream constant,
     !--- decorrelating the two streams while both remain balanced scrambles of
     !--- the same net.
     do d = 1, QMC_MAXDIM

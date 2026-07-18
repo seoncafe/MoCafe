@@ -10,9 +10,20 @@
 > bit-identical; sobol `Direct0` bit-identical across MPI task counts;
 > wavelength-bin deviations O(1) vs binomial (max 1.9 vs 139 at N=1e5);
 > scattered field unbiased (0.7 sigma over 4+4 replicates).  Excluded (setup
-> error): Stokes, `(a,g)`/tau scans, external rec/cyl,
-> `radiation_angular_PDF_file`.  Dust-emission packets stay on the Mersenne
-> Twister (step 6 below not taken).
+> error): Stokes, `(a,g)`/tau scans, `radiation_angular_PDF_file`.
+>
+> **Stage Q2 (2026-07-18): extended.**  Quasi-random entry mappings added for
+> the `rec` and `cyl` external boundaries (the sph-only restriction is gone),
+> and the dust-emission packets now launch from the second scramble stream
+> (`QMC_STREAM_DUSTEMIS`; cell, position, wavelength and direction are already
+> monotonic CDFs), reused across the Lucy iterations as common random numbers.
+> Validated: the five default-path examples stay bit-identical; sobol runs of
+> external rec/cyl complete; dust emission conserves its energy balance
+> (`L_emit/L_star` 0.4545 sobol vs 0.4570 random).  Measured on
+> `examples/sed_point` with `python/qmc_replicates.py` (4+4 replicates): the
+> effective photon-number gain is ~8600 for the `Direct` image and ~1 (no gain)
+> for the scattering-dominated total, with no bias (all mean differences
+> <0.5 sigma) --- exactly the split this analysis predicted.
 
 This note analyzes whether the randomized quasi-Monte Carlo (RQMC) launch
 scheme proposed for MoCHII (`MoCHII/docs/QUASI_RANDOM_LAUNCH.md`) is worth

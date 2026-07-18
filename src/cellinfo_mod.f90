@@ -104,6 +104,33 @@ contains
   end subroutine cell_random_position
 
   !---------------------------------------------------------------
+  !--- quasi-random variant of cell_random_position: the three position
+  !--- uniforms are supplied (from the scrambled Sobol point) instead of drawn
+  !--- from rand_number().  The sampled distribution is unchanged.
+  subroutine cell_random_position_u(grid, ic, photon, u1, u2, u3)
+  type(grid_type),   intent(in)    :: grid
+  integer,           intent(in)    :: ic
+  type(photon_type), intent(inout) :: photon
+  real(kind=wp),     intent(in)    :: u1, u2, u3
+  integer :: i, j, k, icell
+  real(kind=wp) :: h
+  if (trim(par%grid_type) == 'amr') then
+     icell = amr_grid%icell_of_leaf(ic)
+     h = amr_grid%ch(icell)
+     photon%x = amr_grid%cx(icell) + (2.0_wp*u1-1.0_wp)*h
+     photon%y = amr_grid%cy(icell) + (2.0_wp*u2-1.0_wp)*h
+     photon%z = amr_grid%cz(icell) + (2.0_wp*u3-1.0_wp)*h
+     photon%icell_amr = ic
+  else
+     call car_ijk(grid, ic, i, j, k)
+     photon%x = grid%xface(i) + grid%dx*u1
+     photon%y = grid%yface(j) + grid%dy*u2
+     photon%z = grid%zface(k) + grid%dz*u3
+     photon%icell = i;  photon%jcell = j;  photon%kcell = k
+  endif
+  end subroutine cell_random_position_u
+
+  !---------------------------------------------------------------
   !--- place a photon at the center of cell ic and set its cell/leaf index
   !--- (used by the emergent-SED ray tracing, which then walks via the
   !--- raytrace_to_edge procedure pointer).

@@ -21,7 +21,8 @@ module dustemis_mod
 !--- sidesteps the SEDust absolute-normalization convention.
   use define
   use cellinfo_mod, only : ncell_total, cell_rhokap, cell_volume, cell_center, &
-                           cell_random_position, cell_center_photon, car_ijk
+                           cell_random_position, cell_random_position_u, &
+                           cell_center_photon, car_ijk
   use dust_lib, only : dust_model_t, dust_emis_table_t, &
                        build_astrodust, build_dl07, build_zubko, &
                        dust_emission, dust_emission_single_teq, &
@@ -30,6 +31,7 @@ module dustemis_mod
   implicit none
   private
   public :: setup_dustemis, compute_dustemis, write_dustemis, gen_dust_photon
+  public :: gen_dust_photon_qmc
   public :: Labs_total, dustemis_ready
 
   type(dust_model_t)         :: dmodel
@@ -421,6 +423,82 @@ contains
   photon%wgt     = 1.0_wp
   photon%Lpacket = Lpacket
   end subroutine gen_dust_photon
+
+  !---------------------------------------------------------------
+  !--- quasi-random variant of gen_dust_photon.  Every rand_number() of the
+  !--- original is replaced, one for one, by a supplied uniform taken from the
+  !--- dust-emission scramble stream (QMC_STREAM_DUSTEMIS) of the Sobol net;
+  !--- the sampled distributions are unchanged.  The launch uses only monotone
+  !--- CDFs with a binary search (no alias table), so a low-discrepancy point
+  !--- maps monotonically onto the cell and wavelength axes.
+  !---
+  !--- Dimension layout (independent of the stellar layout):
+  !---   ud(1)     emitting cell        (cell_Lcdf)
+  !---   ud(2:4)   position inside the cell
+  !---   ud(5)     wavelength           (cell_cdfw)
+  !---   ud(6)     direction cosine,  ud(7) direction azimuth
+  !---
+  !--- The scramble keys are fixed once at setup, so every Lucy iteration reuses
+  !--- the same Sobol point for a given packet index: common random numbers
+  !--- across the Lucy iterations, which suppresses the iteration-to-iteration
+  !--- sampling jitter in the convergence history.
+  subroutine gen_dust_photon_qmc(grid, photon, Lpacket, ud)
+  use sed_mod, only : sed_wave, sed_sext, sed_albedo, sed_hgg
+  implicit none
+  type(grid_type),   intent(in)  :: grid
+  type(photon_type), intent(out) :: photon
+  real(kind=wp),     intent(in)  :: Lpacket
+  real(kind=wp),     intent(in)  :: ud(:)
+  real(kind=wp) :: u, cost, sint, phi
+  integer :: ic, lo, hi, mid, il
+
+  !--- select cell by binary search on the (normalized) cumulative luminosity.
+  u = ud(1)
+  lo = 1;  hi = ncell_tot
+  do while (lo < hi)
+     mid = (lo+hi)/2
+     if (u <= cell_Lcdf(mid)) then
+        hi = mid
+     else
+        lo = mid+1
+     endif
+  enddo
+  ic = lo
+
+  !--- uniform position within the cell (sets photon cell/leaf index).
+  call cell_random_position_u(grid, ic, photon, ud(2), ud(3), ud(4))
+
+  !--- wavelength from the cell emission CDF (binary search).
+  u = ud(5)
+  lo = 1;  hi = size(cell_cdfw,1)
+  do while (lo < hi)
+     mid = (lo+hi)/2
+     if (u <= cell_cdfw(mid,ic)) then
+        hi = mid
+     else
+        lo = mid+1
+     endif
+  enddo
+  il = lo
+  photon%il     = il
+  photon%lambda = sed_wave(il)
+  photon%s_ext  = sed_sext(il)
+  photon%albedo = sed_albedo(il)
+  photon%hgg    = sed_hgg(il)
+
+  !--- isotropic emission direction.
+  cost = 2.0_wp*ud(6) - 1.0_wp
+  sint = sqrt(1.0_wp - cost*cost)
+  phi  = twopi*ud(7)
+  photon%kx = sint*cos(phi)
+  photon%ky = sint*sin(phi)
+  photon%kz = cost
+
+  photon%nscatt  = 0
+  photon%inside  = .true.
+  photon%wgt     = 1.0_wp
+  photon%Lpacket = Lpacket
+  end subroutine gen_dust_photon_qmc
 
   !---------------------------------------------------------------
   !--- emergent dust thermal SED: raytrace each emitting cell to each

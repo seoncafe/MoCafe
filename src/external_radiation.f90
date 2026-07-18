@@ -554,6 +554,171 @@ subroutine external_illumination_rec(photon,grid)
    endif
 end subroutine external_illumination_rec
 !--------------------------------------------------
+!--- quasi-random variant of external_illumination_cyl.  Every rand_number()
+!--- of the original is replaced, one for one, by a supplied uniform from the
+!--- scrambled Sobol point; the sampled distributions are unchanged.
+!---   u_face : cap-vs-side entry surface
+!---   u_s1   : cap -> radius (sqrt), side -> azimuth
+!---   u_s2   : cap -> azimuth, side -> z
+!---   u_cap  : cap -> top-vs-bottom end (unused on the side surface)
+!---   u_mu   : incident polar cosine,  u_phi : incident azimuth
+!--- The Stokes path is rejected at setup for the quasi-random launch, so this
+!--- routine covers the plain unpolarized case.
+subroutine external_illumination_cyl_qmc(photon,grid,u_face,u_s1,u_s2,u_cap,u_mu,u_phi)
+   implicit none
+   type(photon_type), intent(inout) :: photon
+   type(grid_type),   intent(in)    :: grid
+   real(kind=wp),     intent(in)    :: u_face,u_s1,u_s2,u_cap,u_mu,u_phi
+   real(kind=wp) :: cost,sint,phi,cosp,sinp,rr
+   real(kind=wp) :: area1,area2,frac
+   real(kind=wp) :: kx,ky,kz,mx,my,mz,nx,ny,nz
+   !---
+   area1 = 2.0_wp*pi*par%rmax**2
+   area2 = 4.0_wp*pi*par%rmax*(2.0_wp*par%zmax)
+   frac  = area1/(area1 + area2)
+
+   !--- incident location
+   if (u_face < frac) then
+      rr  = sqrt(u_s1)*par%rmax
+      phi = twopi*u_s2
+      photon%x = rr*cos(phi)
+      photon%y = rr*sin(phi)
+
+      kx = 1.0
+      ky = 0.0
+      kz = 0.0
+      mx = 0.0
+      my = 1.0
+      mz = 0.0
+      nx = 0.0
+      ny = 0.0
+      select case(floor(2.0*u_cap))
+      case (0)
+         photon%z = grid%xface(grid%nx+1)
+         nz       = 1.0
+      case (1)
+         photon%z = grid%xface(1)
+         nz       = -1.0
+      end select
+   else
+      phi      = twopi*u_s1
+      cosp     = cos(phi)
+      sinp     = sin(phi)
+      photon%x = par%rmax * cosp
+      photon%y = par%rmax * sinp
+      photon%z = grid%zrange * u_s2 + grid%zmin
+
+      !--- reference vectors for isotropically incident ray
+      !--- theta = pi/2
+      kx = cosp
+      ky = sinp
+      kz = 0.0_wp
+      mx = 0.0_wp
+      my = 0.0_wp
+      mz = -1.0_wp
+      nx = -sinp
+      ny =  cosp
+      nz =  0.0_wp
+   endif
+
+   !--- propagation direction (pi/2 < theta < pi, i.e. -1 < cost < 0)
+   cost = -sqrt(u_mu)
+   sint = sqrt(1.0_wp-cost*cost)
+   phi  = twopi*u_phi
+   cosp = cos(phi)
+   sinp = sin(phi)
+
+   photon%kx = sint * (cosp * mx + sinp * nx) + cost * kx
+   photon%ky = sint * (cosp * my + sinp * ny) + cost * ky
+   photon%kz = sint * (cosp * mz + sinp * nz) + cost * kz
+
+   photon%wgt = 1.0_wp
+end subroutine external_illumination_cyl_qmc
+!--------------------------------------------------
+!--- quasi-random variant of external_illumination_rec.  Every rand_number()
+!--- of the original is replaced, one for one, by a supplied uniform from the
+!--- scrambled Sobol point; the sampled distributions are unchanged.
+!---   u_face     : which of the six faces the photon enters through
+!---   u_s1, u_s2 : the two coordinates on that face
+!---   u_mu       : incident polar cosine,  u_phi : incident azimuth
+!--- The Stokes path is rejected at setup for the quasi-random launch, so this
+!--- routine covers the plain unpolarized case.
+subroutine external_illumination_rec_qmc(photon,grid,u_face,u_s1,u_s2,u_mu,u_phi)
+   implicit none
+   type(photon_type), intent(inout) :: photon
+   type(grid_type),   intent(in)    :: grid
+   real(kind=wp),     intent(in)    :: u_face,u_s1,u_s2,u_mu,u_phi
+   real(kind=wp) :: cost,sint,phi,cosp,sinp
+   real(kind=wp) :: kx,ky,kz,mx,my,mz,nx,ny,nz
+   !--- propagation direction (pi/2 < theta < pi, i.e. -1 < cost < 0)
+   cost = -sqrt(u_mu)
+   sint = sqrt(1.0_wp-cost*cost)
+   phi  = twopi*u_phi
+   cosp = cos(phi)
+   sinp = sin(phi)
+
+   kx = 0.0
+   ky = 0.0
+   kz = 0.0
+   mx = 0.0
+   my = 0.0
+   mz = 0.0
+   nx = 0.0
+   ny = 0.0
+   nz = 0.0
+   !--- incident location
+   select case(floor(6.0*u_face + 1.0))
+   case (1)
+      photon%x = grid%xface(grid%nx+1)
+      photon%y = grid%yrange * u_s1 + grid%ymin
+      photon%z = grid%zrange * u_s2 + grid%zmin
+      kx = 1.0
+      my = 1.0
+      nz = 1.0
+   case (2)
+      photon%x = grid%xface(1)
+      photon%y = grid%yrange * u_s1 + grid%ymin
+      photon%z = grid%zrange * u_s2 + grid%zmin
+      kx = -1.0
+      my = 1.0
+      nz = 1.0
+   case (3)
+      photon%y = grid%yface(grid%ny+1)
+      photon%z = grid%zrange * u_s1 + grid%zmin
+      photon%x = grid%xrange * u_s2 + grid%xmin
+      ky = 1.0
+      mx = 1.0
+      nz = 1.0
+   case (4)
+      photon%y = grid%yface(1)
+      photon%z = grid%zrange * u_s1 + grid%zmin
+      photon%x = grid%xrange * u_s2 + grid%xmin
+      ky = -1.0
+      mx = 1.0
+      nz = 1.0
+   case (5)
+      photon%z = grid%zface(grid%nz+1)
+      photon%x = grid%xrange * u_s1 + grid%xmin
+      photon%y = grid%yrange * u_s2 + grid%ymin
+      kz = 1.0
+      mx = 1.0
+      ny = 1.0
+   case (6)
+      photon%z = grid%zface(1)
+      photon%x = grid%xrange * u_s1 + grid%xmin
+      photon%y = grid%yrange * u_s2 + grid%ymin
+      kz = -1.0
+      mx = 1.0
+      ny = 1.0
+   end select
+
+   photon%kx = sint * (cosp * mx + sinp * nx) + cost * kx
+   photon%ky = sint * (cosp * my + sinp * ny) + cost * ky
+   photon%kz = sint * (cosp * mz + sinp * nz) + cost * kz
+
+   photon%wgt = 1.0_wp
+end subroutine external_illumination_rec_qmc
+!--------------------------------------------------
 subroutine peeling_direct_external_sph1(photon,grid)
   implicit none
   type(photon_type), intent(in) :: photon

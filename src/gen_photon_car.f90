@@ -14,7 +14,7 @@ contains
                           sed_wave, sed_sext, sed_albedo, sed_hgg
   use sources_mod, only : use_sources, gen_source_photon, gen_source_photon_qmc
   use compose_mod, only : compose_ext, int_lum_frac, Lpacket_tot
-  use qmc_mod,     only : qmc_uniforms, QMC_MAXDIM
+  use qmc_mod,     only : qmc_uniforms, QMC_MAXDIM, QMC_NDIM_USED
   implicit none
 
   type(grid_type),     intent(inout) :: grid
@@ -43,7 +43,7 @@ contains
   photon%Lpacket     = 1.0_wp
 
   use_qmc = trim(par%launch_sequence) == 'sobol'
-  if (use_qmc) call qmc_uniforms(photon%id - 1_int64, uq(1:7))
+  if (use_qmc) call qmc_uniforms(photon%id - 1_int64, uq(1:QMC_NDIM_USED))
 
   !--- compose (task C2): an internal source and an isotropic external field in
   !--- one run.  Draw the packet internal-or-external in proportion to
@@ -61,9 +61,17 @@ contains
         photon%is_external = .true.
         select case (trim(par%ext_geometry))
         case ('cyl')
-           call external_illumination_cyl(photon,grid)
+           if (use_qmc) then
+              call external_illumination_cyl_qmc(photon,grid,uq(6),uq(7),uq(8),uq(9),uq(4),uq(5))
+           else
+              call external_illumination_cyl(photon,grid)
+           endif
         case ('rec')
-           call external_illumination_rec(photon,grid)
+           if (use_qmc) then
+              call external_illumination_rec_qmc(photon,grid,uq(6),uq(7),uq(8),uq(4),uq(5))
+           else
+              call external_illumination_rec(photon,grid)
+           endif
         case default
            if (use_qmc) then
               call external_illumination_sph1_qmc(photon,grid,uq(6),uq(7),uq(4),uq(5))
@@ -145,7 +153,11 @@ contains
      photon%wgt = 1.0_wp
   case ('external_cyl')
      photon%is_external = .true.
-     call external_illumination_cyl(photon,grid)
+     if (use_qmc) then
+        call external_illumination_cyl_qmc(photon,grid,uq(6),uq(7),uq(8),uq(9),uq(4),uq(5))
+     else
+        call external_illumination_cyl(photon,grid)
+     endif
   case ('external_sph')
      photon%is_external = .true.
      if (use_qmc) then
@@ -155,7 +167,11 @@ contains
      endif
   case ('external_rec')
      photon%is_external = .true.
-     call external_illumination_rec(photon,grid)
+     if (use_qmc) then
+        call external_illumination_rec_qmc(photon,grid,uq(6),uq(7),uq(8),uq(4),uq(5))
+     else
+        call external_illumination_rec(photon,grid)
+     endif
   case default
      photon%x = par%xs_point
      photon%y = par%ys_point
