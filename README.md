@@ -86,8 +86,6 @@ and the AMR octree (not the clumpy medium).
   — algorithm memos for the scans, the clumpy medium, and the AMR grid.
 - `docs/MoCafe_v2.00_Physics.pdf` — physics and algorithms (transport, peel-off,
   panchromatic transport, the radiation field, dust emission, quasi-random launching).
-- `docs/QUASI_RANDOM_LAUNCH_MOCAFE.md` — design, scope, and validation record of
-  the quasi-random (Owen-scrambled Sobol) launch option.
 
 ## Author
 
@@ -95,4 +93,4 @@ Kwang-il Seon (KASI/UST)
 
 ---
 
-Last updated: 2026-07-18 21:02 KST
+Last updated: 2026-07-18 21:18 KST
