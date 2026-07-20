@@ -183,6 +183,9 @@ contains
      !--- then either interpolate the table at this cell's intensity scaling U
      !--- (fast) or solve exactly.  Resample lamI back onto the MoCafe grid.
      call resample_to_sed(sed_wave, Jsi, lam_sed, Jsed)
+     !--- the table branch has no true Teq; -1 selects the colour-temperature
+     !--- diagnostic below (previously left uninitialized in that branch).
+     cell_Teq_true = -1.0_wp
      if (par%dust_fast_table .and. table_built) then
         block
           real(kind=wp) :: Ucell
