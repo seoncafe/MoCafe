@@ -2,7 +2,7 @@
 # Build the SEDust dust-emission library for MoCafe v2.00.
 #
 # This is a self-contained, Intel-built copy of the SEDust `dust_lib` layer
-# (source: /home/kiseon/MoCafe/Grain/SEDust, revision 583095f, 2026-07-16).
+# (source: /home/kiseon/MoCafe/Grain/SEDust_v1.00, revision 5eff6ca, 2026-07-21).
 # SEDust's `sed_mathlib` module is named so upstream to avoid a name clash
 # with MoCafe's own `mathlib` module.  Outputs sed/lib/libsedust.a and the
 # .mod files that MoCafe links against (Makefile variable SEDUST_INTEL).
