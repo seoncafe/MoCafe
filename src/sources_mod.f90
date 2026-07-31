@@ -2,16 +2,17 @@ module sources_mod
 !--- Multiple stellar source components (MoCafe v2.00, Stage 6).  Each
 !--- component has its own spectrum (Planck or 2-column file), luminosity,
 !--- geometry and geometry parameters.  Sources are sampled in proportion to
-!--- their luminosity; each carries its own wavelength-bin alias table so a
+!--- their luminosity; each carries its own continuous wavelength sampler so a
 !--- run mixes, e.g., a hot young population and a cool old population with
 !--- different spatial distributions.  When par%nsource == 1 this reduces to
 !--- the single-source SED path (sed_mod) and is not activated.
   use define
-  use random,  only : random_alias_setup, rand_alias_choise, rand_number, rand_gauss, &
+  use random,  only : rand_number, rand_gauss, &
                       rand_zexp, rand_sech2, rand_r1exp
-  use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo, sed_hgg, &
-                      planck_shape, read_spectrum_file, interp_clamped, convert_spectrum_units, &
-                      cdf_search
+  use sed_mod, only : sed_nlam, sed_edge, sed_bin_of, sed_sext_at, sed_albedo_at, sed_hgg_at, &
+                      read_spectrum_file, convert_spectrum_units, cdf_search
+  use spectrum_sampler_mod, only : spectrum_sampler_type, tabulated_spectrum_sampler, &
+                      planck_spectrum_sampler, sample_wavelength, band_luminosity_fraction
   use random_bulge,  only : rand_sersic, rand_boxy, rand_bar, rand_xbar
   implicit none
   private
@@ -20,9 +21,7 @@ module sources_mod
   logical :: use_sources = .false.
   integer :: nsrc = 0
   real(kind=wp), allocatable :: src_lum_cdf(:)          ! (nsrc) cumulative luminosity, normalized
-  real(kind=wp), allocatable :: src_pdf(:,:)            ! (nlam, nsrc) spectrum alias PDF for each source
-  integer,       allocatable :: src_alias(:,:)          ! (nlam, nsrc)
-  real(kind=wp), allocatable :: src_cdf(:,:)            ! (nlam, nsrc) cumulative spectrum (inverse-CDF path)
+  type(spectrum_sampler_type), allocatable :: src_spectrum(:)  ! (nsrc) continuous wavelength sampler
   real(kind=wp), allocatable :: src_lumfrac(:,:)        ! (nlam, nsrc) luminosity fraction per bin (for output)
   real(kind=wp), allocatable :: src_Lpacket(:)          ! (nsrc) energy per packet for this source
 
@@ -31,10 +30,10 @@ contains
   subroutine setup_sources()
   use mpi
   implicit none
-  real(kind=wp), allocatable :: lum(:), lam_f(:), lum_f(:), pdf(:)
+  real(kind=wp), allocatable :: lum(:), lam_f(:), lum_f(:)
   real(kind=wp) :: lsum, lnorm
   integer :: is, il, nsp, ierr
-  logical :: is_phys, absolute_is
+  logical :: is_phys, absolute_is, ok
   logical, allocatable :: derived(:)
 
   nsrc = par%nsource
@@ -44,7 +43,7 @@ contains
 
   !--- monochromatic (non-SED) multiple internal sources: luminosity-weighted
   !--- component selection + geometry-based position sampling only, with no
-  !--- wavelength/spectrum concept.  The SED-only arrays (src_pdf, src_alias,
+  !--- wavelength/spectrum concept.  The SED-only members (src_spectrum,
   !--- src_lumfrac) are left unallocated and never referenced on this path.
   if (.not. par%use_sed) then
      call setup_sources_mono()
@@ -54,11 +53,11 @@ contains
   use_sources = .true.
   is_phys = trim(par%spectrum_type) /= 'shape'
 
-  allocate(src_lum_cdf(nsrc), src_pdf(sed_nlam,nsrc), src_alias(sed_nlam,nsrc), src_cdf(sed_nlam,nsrc))
-  allocate(src_lumfrac(sed_nlam,nsrc), src_Lpacket(nsrc), lum(nsrc), pdf(sed_nlam))
+  allocate(src_lum_cdf(nsrc), src_spectrum(nsrc))
+  allocate(src_lumfrac(sed_nlam,nsrc), src_Lpacket(nsrc), lum(nsrc))
   allocate(derived(nsrc));  derived(:) = .false.
 
-  !--- spectrum of each source -> luminosity fraction per bin + alias table, and
+  !--- spectrum of each source -> continuous wavelength sampler + luminosity, and
   !--- the source luminosity.  For a physical-type (absolute) file spectrum the
   !--- luminosity is the file integral lnorm [erg/s] when src_lum is unset, or
   !--- src_lum when set (rescales the file).  For a 'shape' file or a Planck
@@ -76,28 +75,22 @@ contains
         if (mpar%p_rank /= 0) allocate(lam_f(nsp), lum_f(nsp))
         call MPI_BCAST(lam_f, nsp, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
         call MPI_BCAST(lum_f, nsp, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-        do il = 1, sed_nlam
-           if (sed_wave(il) < lam_f(1) .or. sed_wave(il) > lam_f(nsp)) then
-              pdf(il) = 0.0_wp
-           else
-              pdf(il) = interp_clamped(log(lam_f), lum_f, log(sed_wave(il)))*sed_dwave(il)
-           endif
-        enddo
+        call tabulated_spectrum_sampler(src_spectrum(is), lam_f, lum_f, &
+                                        par%lambda_min, par%lambda_max, sed_edge, ok)
         deallocate(lam_f, lum_f)
      else if (par%src_tstar(is) > 0.0_wp) then
-        do il = 1, sed_nlam
-           pdf(il) = planck_shape(sed_wave(il), par%src_tstar(is))*sed_dwave(il)
-        enddo
+        call planck_spectrum_sampler(src_spectrum(is), par%src_tstar(is), &
+                                     par%lambda_min, par%lambda_max, sed_edge, ok)
      else
         if (mpar%p_rank == 0) write(*,'(a,i0,a)') &
            'ERROR: source ', is, ' needs src_tstar or src_spectrum.'
         call MPI_FINALIZE(ierr);  stop
      endif
-     lnorm = sum(pdf)
-     if (.not. (lnorm > 0.0_wp)) then
+     if (.not. ok) then
         if (mpar%p_rank == 0) write(*,'(a,i0,a)') 'ERROR: source ', is, ' has zero luminosity on the grid.'
         call MPI_FINALIZE(ierr);  stop
      endif
+     lnorm = src_spectrum(is)%total
 
      !--- source luminosity.
      if (absolute_is) then
@@ -119,16 +112,10 @@ contains
         endif
      endif
 
-     src_lumfrac(:,is) = pdf(:)/lnorm
-     src_pdf(:,is)     = src_lumfrac(:,is)
-     call random_alias_setup(src_pdf(:,is), src_alias(:,is))
-     !--- cumulative spectrum for the quasi-random inverse-CDF wavelength
-     !--- sampler; the alias table above stays the default sampling path.
-     src_cdf(1,is) = src_lumfrac(1,is)
-     do il = 2, sed_nlam
-        src_cdf(il,is) = src_cdf(il-1,is) + src_lumfrac(il,is)
+     !--- luminosity fraction of each bin, an exact integral over the bin.
+     do il = 1, sed_nlam
+        src_lumfrac(il,is) = band_luminosity_fraction(src_spectrum(is), sed_edge(il), sed_edge(il+1))
      enddo
-     src_cdf(sed_nlam,is) = 1.0_wp
   enddo
   lsum = sum(lum)
   par%luminosity = lsum          ! total luminosity is the sum of components
@@ -155,7 +142,7 @@ contains
      write(*,'(a,es12.4)') 'total luminosity   : ', lsum
   endif
 
-  deallocate(lum, pdf, derived)
+  deallocate(lum, derived)
   end subroutine setup_sources
 
   !---------------------------------------------------------------
@@ -228,7 +215,7 @@ contains
   type(grid_type),   intent(in)  :: grid
   type(photon_type), intent(inout) :: photon
   real(kind=wp) :: u, sint, cost, phi, rp, rs_max, tanp, bx, by, bz
-  integer :: is, il, lo, hi, mid
+  integer :: is, lo, hi, mid
 
   !--- select source by luminosity CDF.
   u = rand_number()
@@ -329,12 +316,11 @@ contains
 
   if (par%use_sed) then
      !--- wavelength from this source's spectrum.
-     il = rand_alias_choise(src_pdf(:,is), src_alias(:,is))
-     photon%il      = il
-     photon%lambda  = sed_wave(il)
-     photon%s_ext   = sed_sext(il)
-     photon%albedo  = sed_albedo(il)
-     photon%hgg     = sed_hgg(il)
+     photon%lambda  = sample_wavelength(src_spectrum(is), rand_number())
+     photon%il      = sed_bin_of(photon%lambda)
+     photon%s_ext   = sed_sext_at(photon%lambda)
+     photon%albedo  = sed_albedo_at(photon%lambda)
+     photon%hgg     = sed_hgg_at(photon%lambda)
   else
      !--- monochromatic: grey dust properties, no wavelength.  s_ext is unused
      !--- by the monochromatic raytrace but set to the safe unit value.
@@ -361,7 +347,7 @@ contains
   type(photon_type), intent(inout) :: photon
   real(kind=wp),     intent(in)  :: uq(:)
   real(kind=wp) :: sint, cost, phi, rp, rs_max, tanp, bx, by, bz
-  integer :: is, il
+  integer :: is
 
   !--- select source by luminosity CDF (quasi-random dimension 2).
   is = cdf_search(src_lum_cdf, uq(2))
@@ -447,12 +433,11 @@ contains
 
   if (par%use_sed) then
      !--- wavelength from this source's spectrum (inverse CDF, dimension 3).
-     il = cdf_search(src_cdf(:,is), uq(3))
-     photon%il      = il
-     photon%lambda  = sed_wave(il)
-     photon%s_ext   = sed_sext(il)
-     photon%albedo  = sed_albedo(il)
-     photon%hgg     = sed_hgg(il)
+     photon%lambda  = sample_wavelength(src_spectrum(is), uq(3))
+     photon%il      = sed_bin_of(photon%lambda)
+     photon%s_ext   = sed_sext_at(photon%lambda)
+     photon%albedo  = sed_albedo_at(photon%lambda)
+     photon%hgg     = sed_hgg_at(photon%lambda)
   else
      photon%albedo  = par%albedo
      photon%hgg     = par%hgg

@@ -1,5 +1,5 @@
 module raytrace
-  use jtally_mod, only : jt_on, jt_first, jt_sum
+  use jtally_mod, only : jt_on, jt_first, jt_sum, jt_abs, jt_edge_cell, jt_step_cell
 contains
 
   subroutine raytrace_to_edge_car(photon0,grid,tau)
@@ -158,28 +158,6 @@ contains
   return
   end subroutine raytrace_to_edge_car
 
-  !--- analytic J tally in each cell of the (forced) first flight: contribution
-  !--- wgt * Int exp(-tau_lambda) dl over the cell (exact expectation of the
-  !--- unscattered pathlength; see jtally_mod).  Updates the running
-  !--- cell-entry attenuation expo = exp(-s_ext*tau).
-  subroutine jt_edge_cell(photon0, cid, seg, rhokap, expo)
-  use define
-  implicit none
-  type(photon_type), intent(in)    :: photon0
-  integer,           intent(in)    :: cid            ! linear cell id
-  real(kind=wp),     intent(in)    :: seg, rhokap
-  real(kind=wp),     intent(inout) :: expo
-  real(kind=wp) :: alpha, expo_out
-
-  alpha = rhokap * photon0%s_ext
-  if (alpha*seg > 0.0_wp) then
-     expo_out = expo * exp(-alpha*seg)
-     jt_sum(photon0%il,cid) = jt_sum(photon0%il,cid) + photon0%wgt*photon0%Lpacket*(expo - expo_out)/alpha
-     expo = expo_out
-  else
-     jt_sum(photon0%il,cid) = jt_sum(photon0%il,cid) + photon0%wgt*photon0%Lpacket*expo*seg
-  endif
-  end subroutine jt_edge_cell
 
   subroutine raytrace_to_tau_car(photon,grid,tau_in)
 !--- Find the coordinates and cell indices corresponding to an input optical depth tau_in.
@@ -211,8 +189,10 @@ contains
   !--- forced first flight (nscatt = 0) is tallied analytically in
   !--- raytrace_to_edge_car (see jtally_mod).
   logical       :: do_tally
+  integer       :: jt_cid
 
   do_tally = jt_on .and. photon%nscatt > 0
+  jt_cid   = 0
 
 !--- xp, yp, zp = the current photon coordinates.
   xp = photon%x
@@ -322,6 +302,7 @@ contains
   do while(photon%inside)
 
      rhokap = grid%rhokap(icell,jcell,kcell)
+     if (do_tally) jt_cid = (kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell
 
      idx_min = minloc([tx,ty,tz], dim=1)
 
@@ -333,15 +314,13 @@ contains
               d_overshoot = (tau - tau_in)/rhokap
               d  = d - d_overshoot
            endif
-           if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
-                         jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
+           if (do_tally) call jt_step_cell(photon, jt_cid, d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
-        if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
-                      jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
+        if (do_tally) call jt_step_cell(photon, jt_cid, d - dold)
         icell = icell + istep
         if (icell < 1 .or. icell > grid%nx) then
            photon%inside = .false.
@@ -356,15 +335,13 @@ contains
               d_overshoot = (tau - tau_in)/rhokap
               d  = d - d_overshoot
            endif
-           if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
-                         jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
+           if (do_tally) call jt_step_cell(photon, jt_cid, d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
-        if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
-                      jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
+        if (do_tally) call jt_step_cell(photon, jt_cid, d - dold)
         jcell = jcell + jstep
         if (jcell < 1 .or. jcell > grid%ny) then
            photon%inside = .false.
@@ -379,15 +356,13 @@ contains
               d_overshoot = (tau - tau_in)/rhokap
               d  = d - d_overshoot
            endif
-           if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
-                         jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
+           if (do_tally) call jt_step_cell(photon, jt_cid, d - dold)
            xp = xp + d * kx
            yp = yp + d * ky
            zp = zp + d * kz
            exit
         endif
-        if (do_tally) jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) = &
-                      jt_sum(photon%il,(kcell-1)*grid%nx*grid%ny+(jcell-1)*grid%nx+icell) + photon%wgt*photon%Lpacket*(d - dold)
+        if (do_tally) call jt_step_cell(photon, jt_cid, d - dold)
         kcell = kcell + kstep
         if (kcell < 1 .or. kcell > grid%nz) then
            photon%inside = .false.

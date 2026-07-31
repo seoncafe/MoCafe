@@ -46,8 +46,16 @@ module dustemis_mod
   logical                    :: table_built = .false.
   real(kind=wp)              :: Jref_bol = 0.0_wp     ! bolometric integral of J_ref (SI) for U scaling
   real(kind=wp), allocatable :: cell_Lemit(:)        ! emitted (=absorbed) L of each cell [erg/s]
-  real(kind=wp), allocatable :: cell_pdf(:,:)        ! (nl_mc, ncell) emission energy fraction per bin
-  real(kind=wp), allocatable :: cell_cdfw(:,:)       ! (nl_mc, ncell) cumulative of cell_pdf (wavelength sampling)
+  !--- (nl_mc+1, ncell) lambda*j_lambda at the wavelength-bin EDGES, normalized
+  !--- so the spectrum integrates to 1 over the grid.  Holding the edges rather
+  !--- than the bin centers makes each cell's emission spectrum a power law
+  !--- across every bin -- the reading tabulated spectra already get, and the
+  !--- one a dust spectrum actually follows over a bin spanning a decade of
+  !--- emissivity.  The energy of a bin is then an exact integral, and a photon
+  !--- draws a continuous wavelength inside the bin instead of sitting at its
+  !--- center.
+  real(kind=wp), allocatable :: cell_lamj_edge(:,:)
+  real(kind=wp), allocatable :: cell_cdfw(:,:)       ! (nl_mc, ncell) cumulative bin energy (wavelength sampling)
   real(kind=wp), allocatable :: cell_Teq(:)          ! luminosity-weighted equilibrium-ish T of each cell [K] (diagnostic)
   real(kind=wp), allocatable :: cell_Lcdf(:)         ! (ncell) cumulative of cell_Lemit (cell sampling), normalized
   real(kind=wp) :: Labs_total = 0.0_wp               ! total absorbed L over the grid [erg/s]
@@ -125,11 +133,12 @@ contains
   !--- compute each cell's emission from the reduced J tally.
   subroutine compute_dustemis(grid)
   use mpi
-  use sed_mod,    only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo
-  use jtally_mod, only : jt_sum
+  use sed_mod,    only : sed_nlam, sed_wave, sed_dwave, sed_edge, sed_sext, sed_albedo
+  use jtally_mod, only : jt_sum, jt_abs
+  use mathlib,    only : bin_integrals
   implicit none
   type(grid_type), intent(in) :: grid
-  real(kind=wp), allocatable :: Jcgs(:), Jsi(:), Jsed(:), lamI_sed(:), lamI_mc(:), emis(:)
+  real(kind=wp), allocatable :: Jcgs(:), Jsi(:), Jsed(:), lamI_sed(:), lamI_edge(:), lamj(:), jem_sed(:), emis(:)
   real(kind=wp) :: vol, dist2, jnorm, Labs, esum, lam_mean, csum, cell_Teq_true, rhk
   integer :: nl_mc, ic, il, ierr, ndone, nmine, est, emis_err
 
@@ -140,15 +149,17 @@ contains
   dist2 = par%distance2cm**2
 
   if (.not. allocated(cell_Lemit)) allocate(cell_Lemit(ncell_tot))
-  if (.not. allocated(cell_pdf))   allocate(cell_pdf(nl_mc, ncell_tot))
+  if (.not. allocated(cell_lamj_edge)) allocate(cell_lamj_edge(nl_mc+1, ncell_tot))
   if (.not. allocated(cell_cdfw))  allocate(cell_cdfw(nl_mc, ncell_tot))
   if (.not. allocated(cell_Teq))   allocate(cell_Teq(ncell_tot))
   if (.not. allocated(cell_Lcdf))  allocate(cell_Lcdf(ncell_tot))
   cell_Lemit(:)  = 0.0_wp
-  cell_pdf(:,:)  = 0.0_wp
+  cell_lamj_edge(:,:) = 0.0_wp
+  cell_cdfw(:,:) = 0.0_wp
   cell_Teq(:)    = 0.0_wp
 
-  allocate(Jcgs(nl_mc), Jsi(nl_mc), Jsed(nl_sed), lamI_sed(nl_sed), lamI_mc(nl_mc), emis(nl_mc))
+  allocate(Jcgs(nl_mc), Jsi(nl_mc), Jsed(nl_sed), lamI_sed(nl_sed), &
+           lamI_edge(nl_mc+1), lamj(nl_mc+1), jem_sed(nl_sed), emis(nl_mc))
 
   !--- fast path: build the emission table once from the current (stellar)
   !--- field, then interpolate per cell instead of solving exactly.
@@ -176,13 +187,16 @@ contains
      Jsi(:) = Jcgs(:)*1.0e3_wp                              ! -> W/m^2/sr/m
 
      !--- absorbed power in this cell [erg/s] (radiative equilibrium => emitted).
-     Labs = rhk * sum(jt_sum(:,ic)*sed_sext(:)*(1.0_wp - sed_albedo(:)))
+     !--- jt_abs already carries the cross sections at each photon's own
+     !--- wavelength, so no bin-averaged cross section enters here.
+     Labs = rhk * jt_abs(ic)
      if (Labs <= 0.0_wp) cycle
 
      !--- SEDust emission spectrum (shape): resample J onto the SEDust grid,
      !--- then either interpolate the table at this cell's intensity scaling U
      !--- (fast) or solve exactly.  Resample lamI back onto the MoCafe grid.
-     call resample_to_sed(sed_wave, Jsi, lam_sed, Jsed)
+     call mean_intensity_on_sed_grid(Jsi, Jsed)
+
      !--- the table branch has no true Teq; -1 selects the colour-temperature
      !--- diagnostic below (previously left uninitialized in that branch).
      cell_Teq_true = -1.0_wp
@@ -207,23 +221,37 @@ contains
         if (est /= 0) emis_err = est
         cell_Teq_true = -1.0_wp
      endif
-     call resample_from_sed(lam_sed, lamI_sed, sed_wave, lamI_mc)
+     !--- the emissivity is read at the bin EDGES, so the spectrum stays a
+     !--- piecewise-linear function of wavelength (see cell_lamj_edge).
+     !--- energy of each bin: integrate the SEDust-resolution spectrum over it.
+     !--- Reading the spectrum once at the bin center and multiplying by the bin
+     !--- width is a midpoint rule; integrating the resolved spectrum instead
+     !--- carries whatever structure (PAH features, the Wien flank) lies inside.
+     do il = 1, nl_sed
+        jem_sed(il) = max(lamI_sed(il), 0.0_wp)/lam_sed(il)     ! j_lambda
+     enddo
+     call bin_integrals(lam_sed, jem_sed, sed_edge, emis)
 
-     !--- emission energy fraction per MoCafe bin: j_lam ~ lamI/lam, energy ~ j_lam*dlam.
-     do il = 1, nl_mc
-        emis(il) = max(lamI_mc(il), 0.0_wp)/sed_wave(il) * sed_dwave(il)
+     !--- shape inside each bin, for placing the photon wavelength: lambda*j at
+     !--- the bin edges, read as a power law across the bin.  Only the ratio of
+     !--- the two ends enters the draw, so this never disturbs the bin energies.
+     call resample_from_sed(lam_sed, lamI_sed, sed_edge, lamI_edge)
+     do il = 1, nl_mc+1
+        lamj(il) = max(lamI_edge(il), 0.0_wp)                   ! lambda*j_lambda
      enddo
      esum = sum(emis)
      if (esum <= 0.0_wp) cycle
 
-     cell_Lemit(ic)  = Labs
-     cell_pdf(:,ic)  = emis(:)/esum
+
+     cell_Lemit(ic)       = Labs
+     cell_cdfw(:,ic)      = emis(:)/esum
+     cell_lamj_edge(:,ic) = lamj(:)
      if (cell_Teq_true > 0.0_wp) then
         !--- true equilibrium temperature from the single-Teq solver.
         cell_Teq(ic) = cell_Teq_true
      else
         !--- diagnostic "colour temperature": energy-weighted mean wavelength -> Wien.
-        lam_mean     = sum(sed_wave(:)*cell_pdf(:,ic))
+        lam_mean     = sum(sed_wave(:)*emis(:))/esum
         cell_Teq(ic) = 2897.77_wp/max(lam_mean, 1.0e-30_wp)   ! Wien [K], lam in um
      endif
   enddo
@@ -240,13 +268,14 @@ contains
 
   !--- combine partial results of each cell across ranks.
   call MPI_ALLREDUCE(MPI_IN_PLACE, cell_Lemit, ncell_tot,       MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
-  call MPI_ALLREDUCE(MPI_IN_PLACE, cell_pdf,   nl_mc*ncell_tot, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+  call MPI_ALLREDUCE(MPI_IN_PLACE, cell_lamj_edge, (nl_mc+1)*ncell_tot, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
+  call MPI_ALLREDUCE(MPI_IN_PLACE, cell_cdfw,      nl_mc*ncell_tot,     MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   call MPI_ALLREDUCE(MPI_IN_PLACE, cell_Teq,   ncell_tot,       MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   Labs_total = sum(cell_Lemit)
 
   !--- build sampling tables for dust-emission photons (Lucy iteration):
   !--- cell selection CDF (prob. proportional to cell_Lemit) and
-  !--- each cell's wavelength CDF (from cell_pdf).  Identical on every rank (inputs are
+  !--- each cell's wavelength CDF (from the bin integrals of cell_lamj_edge).  Identical on every rank (inputs are
   !--- ALLREDUCEd), so all ranks sample from the same distributions.
   csum = 0.0_wp
   do ic = 1, ncell_tot
@@ -263,7 +292,7 @@ contains
      if (cell_Lemit(ic) > 0.0_wp) then
         esum = 0.0_wp
         do il = 1, nl_mc
-           esum = esum + cell_pdf(il,ic)
+           esum = esum + cell_cdfw(il,ic)
            cell_cdfw(il,ic) = esum
         enddo
      endif
@@ -279,7 +308,7 @@ contains
      write(*,'(a,f10.5)')  'L_emit/L_star (>1 w/ self-abs)   : ', Labs_total/par%luminosity
   endif
 
-  deallocate(Jcgs, Jsi, Jsed, lamI_sed, lamI_mc, emis)
+  deallocate(Jcgs, Jsi, Jsed, lamI_sed, lamI_edge, lamj, jem_sed, emis)
   end subroutine compute_dustemis
 
   !---------------------------------------------------------------
@@ -290,7 +319,7 @@ contains
   subroutine build_dust_table(grid)
   use mpi
   use sed_mod,    only : sed_nlam, sed_wave, sed_dwave
-  use jtally_mod, only : jt_sum
+  use jtally_mod, only : jt_sum, jt_abs
   implicit none
   type(grid_type), intent(in) :: grid
   real(kind=wp), allocatable :: Jsi(:), Jsed(:), Jref_sed(:), Jsum(:), Ugrid(:)
@@ -310,7 +339,7 @@ contains
      do il = 1, nl_mc
         Jsi(il) = jt_sum(il,ic)*jnorm/sed_dwave(il)
      enddo
-     call resample_to_sed(sed_wave, Jsi, lam_sed, Jsed)
+     call mean_intensity_on_sed_grid(Jsi, Jsed)
      Jsum(:) = Jsum(:) + Jsed(:)
      ncnt = ncnt + 1
   enddo
@@ -331,7 +360,7 @@ contains
      do il = 1, nl_mc
         Jsi(il) = jt_sum(il,ic)*jnorm/sed_dwave(il)
      enddo
-     call resample_to_sed(sed_wave, Jsi, lam_sed, Jsed)
+     call mean_intensity_on_sed_grid(Jsi, Jsed)
      Ucell = sum(Jsed)/max(Jref_bol, tinest)
      if (Ucell > 0.0_wp) then
         Umin = min(Umin, Ucell);  Umax = max(Umax, Ucell)
@@ -371,12 +400,13 @@ contains
   !--- emission spectrum.  Sets photon%Lpacket so the pass injects L_dust_total.
   subroutine gen_dust_photon(grid, photon, Lpacket)
   use random,  only : rand_number
-  use sed_mod, only : sed_wave, sed_sext, sed_albedo, sed_hgg
+  use sed_mod, only : sed_edge, sed_sext_at, sed_albedo_at, sed_hgg_at
+  use spectrum_sampler_mod, only : sample_power_law_bin
   implicit none
   type(grid_type),   intent(in)  :: grid
   type(photon_type), intent(out) :: photon
   real(kind=wp),     intent(in)  :: Lpacket
-  real(kind=wp) :: u, cost, sint, phi
+  real(kind=wp) :: u, ulo, ubin, cost, sint, phi
   integer :: ic, lo, hi, mid, il
 
   !--- select cell by binary search on the (normalized) cumulative luminosity.
@@ -407,11 +437,19 @@ contains
      endif
   enddo
   il = lo
+  !--- continuous wavelength inside the bin: the leftover of the uniform that
+  !--- selected the bin is itself uniform there, so no extra draw is needed and
+  !--- a stratified quasi-random coordinate stays stratified.
+  ulo = 0.0_wp
+  if (il > 1) ulo = cell_cdfw(il-1,ic)
+  ubin = 0.0_wp
+  if (cell_cdfw(il,ic) > ulo) ubin = (u - ulo)/(cell_cdfw(il,ic) - ulo)
+  photon%lambda = sample_power_law_bin(sed_edge(il), sed_edge(il+1), &
+                                       cell_lamj_edge(il,ic), cell_lamj_edge(il+1,ic), ubin)
   photon%il     = il
-  photon%lambda = sed_wave(il)
-  photon%s_ext  = sed_sext(il)
-  photon%albedo = sed_albedo(il)
-  photon%hgg    = sed_hgg(il)
+  photon%s_ext  = sed_sext_at(photon%lambda)
+  photon%albedo = sed_albedo_at(photon%lambda)
+  photon%hgg    = sed_hgg_at(photon%lambda)
 
   !--- isotropic emission direction.
   cost = 2.0_wp*rand_number() - 1.0_wp
@@ -446,13 +484,14 @@ contains
   !--- across the Lucy iterations, which suppresses the iteration-to-iteration
   !--- sampling jitter in the convergence history.
   subroutine gen_dust_photon_qmc(grid, photon, Lpacket, ud)
-  use sed_mod, only : sed_wave, sed_sext, sed_albedo, sed_hgg
+  use sed_mod, only : sed_edge, sed_sext_at, sed_albedo_at, sed_hgg_at
+  use spectrum_sampler_mod, only : sample_power_law_bin
   implicit none
   type(grid_type),   intent(in)  :: grid
   type(photon_type), intent(out) :: photon
   real(kind=wp),     intent(in)  :: Lpacket
   real(kind=wp),     intent(in)  :: ud(:)
-  real(kind=wp) :: u, cost, sint, phi
+  real(kind=wp) :: u, ulo, ubin, cost, sint, phi
   integer :: ic, lo, hi, mid, il
 
   !--- select cell by binary search on the (normalized) cumulative luminosity.
@@ -483,11 +522,19 @@ contains
      endif
   enddo
   il = lo
+  !--- continuous wavelength inside the bin: the leftover of the uniform that
+  !--- selected the bin is itself uniform there, so no extra draw is needed and
+  !--- a stratified quasi-random coordinate stays stratified.
+  ulo = 0.0_wp
+  if (il > 1) ulo = cell_cdfw(il-1,ic)
+  ubin = 0.0_wp
+  if (cell_cdfw(il,ic) > ulo) ubin = (u - ulo)/(cell_cdfw(il,ic) - ulo)
+  photon%lambda = sample_power_law_bin(sed_edge(il), sed_edge(il+1), &
+                                       cell_lamj_edge(il,ic), cell_lamj_edge(il+1,ic), ubin)
   photon%il     = il
-  photon%lambda = sed_wave(il)
-  photon%s_ext  = sed_sext(il)
-  photon%albedo = sed_albedo(il)
-  photon%hgg    = sed_hgg(il)
+  photon%s_ext  = sed_sext_at(photon%lambda)
+  photon%albedo = sed_albedo_at(photon%lambda)
+  photon%hgg    = sed_hgg_at(photon%lambda)
 
   !--- isotropic emission direction.
   cost = 2.0_wp*ud(6) - 1.0_wp
@@ -534,7 +581,7 @@ contains
 
   !--- intrinsic (whole-grid) dust SED: sum of cell emission, no attenuation.
   do ic = 1, ncell_tot
-     if (cell_Lemit(ic) > 0.0_wp) sed_intrinsic(:) = sed_intrinsic(:) + cell_Lemit(ic)*cell_pdf(:,ic)
+     if (cell_Lemit(ic) > 0.0_wp) sed_intrinsic(:) = sed_intrinsic(:) + cell_Lemit(ic)*cell_bin_fraction_all(ic)
   enddo
 
   !--- emergent SED and a pixel-resolved dust-emission image: attenuate each
@@ -556,7 +603,7 @@ contains
         wcell = cell_Lemit(ic)/(fourpi*r2*par%distance2cm**2)
         do il = 1, nl_mc
            atten = exp(-sed_sext(il)*tau)
-           sed_emergent(il,kobs) = sed_emergent(il,kobs) + wcell*cell_pdf(il,ic)*atten
+           sed_emergent(il,kobs) = sed_emergent(il,kobs) + wcell*cell_bin_fraction(il,ic)*atten
         enddo
         !--- pixel-resolved image for observer 1 only.
         if (kobs == 1) then
@@ -568,7 +615,7 @@ contains
            if (ix >= 1 .and. ix <= observer(1)%nxim .and. iy >= 1 .and. iy <= observer(1)%nyim) then
               do il = 1, nl_mc
                  dust_image(ix,iy,il) = dust_image(ix,iy,il) + &
-                    wcell*cell_pdf(il,ic)*exp(-sed_sext(il)*tau)/observer(1)%steradian_pix
+                    wcell*cell_bin_fraction(il,ic)*exp(-sed_sext(il)*tau)/observer(1)%steradian_pix
               enddo
            endif
         endif
@@ -649,6 +696,63 @@ contains
 
   !---------------------------------------------------------------
   !--- log-log resample of y(xin) onto xout (both ascending), clamped.
+  !---------------------------------------------------------------
+  !--- Mean intensity on the SEDust wavelength grid, carrying the band energies
+  !--- the transport actually deposited.
+  !---
+  !--- The tally knows J only as a bin average: Jmc(il) is the mean over its bin,
+  !--- and Jmc(il)*dlam(il) is the energy the photons put there.  Reading that
+  !--- average as a point value at the bin center and interpolating -- which is
+  !--- what a plain resample does -- leaves each bin carrying a different energy
+  !--- than the transport deposited.  So the interpolated shape is kept, and each
+  !--- bin is rescaled to its own tallied energy.
+  !---
+  !--- A bin the photons never reached is left empty rather than filled in from
+  !--- its neighbours: interpolating would put radiation at a wavelength the
+  !--- transport says carries none.  The two reasons a bin can be empty are not
+  !--- distinguishable here -- radiation genuinely absent, or present but never
+  !--- sampled -- so a bin left empty by shot noise loses its heating, which
+  !--- cools the cell.  This bites where the photon statistics are thin: deep in
+  !--- optically thick regions, far from the sources, or at a low photon count,
+  !--- and worst in the ultraviolet, which both empties first and drives the
+  !--- stochastic heating.  The remedy there is more photons, not interpolation.
+  subroutine mean_intensity_on_sed_grid(Jmc, Jout)
+  use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_edge
+  use mathlib, only : bin_integrals
+  implicit none
+  real(kind=wp), intent(in)  :: Jmc(:)      ! (nl_mc) bin-averaged J on the MoCafe grid
+  real(kind=wp), intent(out) :: Jout(:)     ! (nl_sed) J on the SEDust grid
+  real(kind=wp) :: jb(sed_nlam), want, scale
+  integer :: il, j
+
+  call resample_to_sed(sed_wave, Jmc, lam_sed, Jout)
+  call bin_integrals(lam_sed, Jout, sed_edge, jb)
+
+  do il = 1, sed_nlam
+     want = Jmc(il)*sed_dwave(il)
+     if (want <= 0.0_wp) then
+        scale = 0.0_wp
+     else if (jb(il) > 0.0_wp) then
+        scale = want/jb(il)
+     else
+        scale = -1.0_wp                     ! interpolant empty: fill the bin flat
+     endif
+     do j = 1, nl_sed
+        if (lam_sed(j) < sed_edge(il))   cycle
+        if (lam_sed(j) > sed_edge(il+1)) cycle
+        if (scale >= 0.0_wp) then
+           Jout(j) = Jout(j)*scale
+        else
+           Jout(j) = Jmc(il)
+        endif
+     enddo
+  enddo
+  !--- outside the transfer grid the tally says nothing, so neither does J.
+  do j = 1, nl_sed
+     if (lam_sed(j) < sed_edge(1) .or. lam_sed(j) > sed_edge(sed_nlam+1)) Jout(j) = 0.0_wp
+  enddo
+  end subroutine mean_intensity_on_sed_grid
+
   subroutine resample_to_sed(xin, yin, xout, yout)
   implicit none
   real(kind=wp), intent(in)  :: xin(:), yin(:), xout(:)
@@ -690,5 +794,26 @@ contains
      endif
   enddo
   end subroutine loglog_interp
+
+  !---------------------------------------------------------------
+  !--- energy fraction of wavelength bin il in cell ic: the exact integral of
+  !--- the cell's piecewise-linear emissivity over that bin.
+  pure function cell_bin_fraction(il, ic) result(f)
+  implicit none
+  integer, intent(in) :: il, ic
+  real(kind=wp) :: f
+  f = cell_cdfw(il,ic)
+  if (il > 1) f = f - cell_cdfw(il-1,ic)
+  end function cell_bin_fraction
+
+  !--- the same for every bin of a cell.
+  pure function cell_bin_fraction_all(ic) result(f)
+  use sed_mod, only : sed_nlam
+  implicit none
+  integer, intent(in) :: ic
+  real(kind=wp) :: f(sed_nlam)
+  f(1) = cell_cdfw(1,ic)
+  f(2:sed_nlam) = cell_cdfw(2:sed_nlam,ic) - cell_cdfw(1:sed_nlam-1,ic)
+  end function cell_bin_fraction_all
 
 end module dustemis_mod

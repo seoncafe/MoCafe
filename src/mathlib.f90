@@ -6,7 +6,7 @@ implicit none
 private
 public minloc1, gauleg, dot_product, cross_product, &
        locate, interp, interp_eq, &
-       calc_Integral, calc_CDF
+       calc_Integral, calc_CDF, bin_integrals
 
 interface minloc1
    module procedure minloc_r32,minloc_r64,minloc_i32,minloc_i64
@@ -273,6 +273,73 @@ contains
 
   return
   end function calc_Integral
+!+++++++++++++++++++++++++++++++++++++
+
+!+++++++++++++++++++++++++++++++++++++
+  subroutine bin_integrals(x, y, edges, out)
+!------------
+! Integral of a tabulated function over each of a set of contiguous bins:
+!     out(i) = Int_{edges(i)}^{edges(i+1)} y(x) dx ,
+! exact for the piecewise-linear reading of the table (x, y), both ascending.
+! Summing out(:) therefore reproduces the integral over the whole range, which
+! reading the table at the bin centers and multiplying by the bin width does
+! not: that midpoint rule loses whatever structure the table carries inside a
+! bin.  Outside the tabulated range the function is taken as zero, so no energy
+! is invented where the table says nothing.
+!------------
+  real(kind=wp), intent(in)  :: x(:), y(:), edges(:)
+  real(kind=wp), intent(out) :: out(:)
+! local variables
+  integer       :: n, nb, i, j
+  real(kind=wp) :: lo, hi, xa, xb, ya, yb, t
+
+  n  = size(x)
+  nb = size(edges) - 1
+  out(:) = 0.0_wp
+  if (n < 2 .or. nb < 1 .or. size(y) < n .or. size(out) < nb) return
+
+  do i = 1, nb
+     lo = max(edges(i),   x(1))
+     hi = min(edges(i+1), x(n))
+     if (.not. (hi > lo)) cycle
+
+     !--- walk the table points inside (lo, hi), with interpolated end points.
+     xa = lo
+     ya = linear_at(x, y, lo)
+     do j = 1, n
+        if (x(j) <= lo) cycle
+        if (x(j) >= hi) exit
+        xb = x(j)
+        yb = y(j)
+        out(i) = out(i) + 0.5_wp*(ya + yb)*(xb - xa)
+        xa = xb
+        ya = yb
+     enddo
+     yb = linear_at(x, y, hi)
+     out(i) = out(i) + 0.5_wp*(ya + yb)*(hi - xa)
+  enddo
+  return
+
+  contains
+     pure function linear_at(xt, yt, xq) result(yq)
+     real(kind=wp), intent(in) :: xt(:), yt(:), xq
+     real(kind=wp) :: yq, tt
+     integer :: m, klo, khi, kmid
+     m = size(xt)
+     if (xq <= xt(1)) then
+        yq = yt(1);  return
+     else if (xq >= xt(m)) then
+        yq = yt(m);  return
+     endif
+     klo = 1;  khi = m
+     do while (khi - klo > 1)
+        kmid = (klo + khi)/2
+        if (xt(kmid) <= xq) then;  klo = kmid;  else;  khi = kmid;  endif
+     enddo
+     tt = (xq - xt(klo))/(xt(khi) - xt(klo))
+     yq = yt(klo) + tt*(yt(khi) - yt(klo))
+     end function linear_at
+  end subroutine bin_integrals
 !+++++++++++++++++++++++++++++++++++++
 
 !+++++++++++++++++++++++++++++++++++++

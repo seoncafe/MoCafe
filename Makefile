@@ -104,6 +104,7 @@ OBJS	= \
 	read_generic_amr.o \
 	mathlib.o \
 	healpix.o \
+	spectrum_sampler_mod.o \
 	sed_mod.o \
 	random_bulge.o \
 	sources_mod.o \

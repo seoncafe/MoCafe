@@ -236,7 +236,7 @@ or set `SEDUST_SRC=/your/SEDust`, to point at your own SEDust tree.
 | `use_sed` | `.false.` | Enable panchromatic (multi-wavelength) scattering transport |
 | `save_jlam` | `.false.` | Tally `J_λ(x,y,z)`; **opt-in**, required by the `'lucy'` dust emission |
 | `use_dustemis` | `.false.` | Add dust thermal emission (requires `use_sed`); **leave this and `save_jlam` off for scattering only** over the wavelength range |
-| `nlambda` | 128 | Number of log-spaced wavelength bins |
+| `nlambda` | 128 | Number of log-spaced wavelength bins. Binning only — a packet's wavelength is drawn continuously from the spectrum, and `s_ext`/albedo/`g` are read at that wavelength, so `nlambda` sets output resolution, not sampling fidelity |
 | `lambda_min`, `lambda_max` | 0.0912, 2000 | Wavelength range [µm] |
 | `lambda_ref` | 0.55 | Reference wavelength [µm]; `taumax`/`tauhomo` and the grid opacity are defined here |
 | `kext_file` | `''` | Table of `λ, albedo, ⟨cos⟩, C_ext/H` (e.g. `data/kext_astrodust_MW.dat`, from SEDust `calc_kext_*.x`) |
@@ -485,8 +485,8 @@ See `examples/dustemis/`, `examples/multipop/`, `examples/galaxy/`,
 ## Quasi-Random Photon Launching
 
 `launch_sequence = 'sobol'` replaces the *launch* draws of every packet — the
-compose origin, the source component, the wavelength bin (by a monotonic
-inverse CDF instead of the alias table), the emission direction, and the
+compose origin, the source component, the wavelength (by inverting the
+cumulative luminosity of the spectrum), the emission direction, and the
 external-sphere entry point — by an Owen-scrambled Sobol point indexed by the
 global photon number.  Every draw after launch (forced first scattering,
 Henyey–Greenstein, free paths) stays on the Mersenne Twister, so the transport

@@ -74,12 +74,15 @@ contains
      !--- To follow the previous convention, we need to change the sign of the three angles.
      do i=1, par%nobs
         if (.not. is_finite(par%gamma(i))) then
-           if (par%beta(i) > 0.0_wp .and. par%beta(i) <= 90.0_wp) then
-              par%gamma(i) = 90.0_wp
-           else if (par%beta(i) > 90.0_wp) then
-              par%gamma(i) = -90.0_wp
-           else
-              par%gamma(i) = 0.0_wp
+           !--- an unset beta is NaN and must not reach the comparisons; it
+           !--- leaves gamma at zero, as an out-of-range beta does.
+           par%gamma(i) = 0.0_wp
+           if (is_finite(par%beta(i))) then
+              if (par%beta(i) > 0.0_wp .and. par%beta(i) <= 90.0_wp) then
+                 par%gamma(i) = 90.0_wp
+              else if (par%beta(i) > 90.0_wp) then
+                 par%gamma(i) = -90.0_wp
+              endif
            endif
         endif
         cosa(i) = cos(par%alpha(i)*deg2rad)
@@ -122,12 +125,15 @@ contains
 
      do i=1, par%nobs
         if (.not. is_finite(par%gamma(i))) then
-           if (par%beta(i) > 0.0_wp .and. par%beta(i) <= 90.0_wp) then
-              par%gamma(i) = 90.0_wp
-           else if (par%beta(i) > 90.0_wp) then
-              par%gamma(i) = -90.0_wp
-           else
-              par%gamma(i) = 0.0_wp
+           !--- an unset beta is NaN and must not reach the comparisons; it
+           !--- leaves gamma at zero, as an out-of-range beta does.
+           par%gamma(i) = 0.0_wp
+           if (is_finite(par%beta(i))) then
+              if (par%beta(i) > 0.0_wp .and. par%beta(i) <= 90.0_wp) then
+                 par%gamma(i) = 90.0_wp
+              else if (par%beta(i) > 90.0_wp) then
+                 par%gamma(i) = -90.0_wp
+              endif
            endif
         endif
 

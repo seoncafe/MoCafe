@@ -98,7 +98,14 @@ contains
               else
                  tau = -log(rand_number())
               endif
-              call raytrace_to_tau(photon,grid,tau/photon%s_ext)
+              !--- tau = hugest means the packet does not interact.  Rescaling it to
+              !--- the reference wavelength would overflow, since s_ext falls to ~1e-5
+              !--- at the long-wavelength end, so pass it through unscaled.
+              if (tau < hugest) then
+                 call raytrace_to_tau(photon,grid,tau/photon%s_ext)
+              else
+                 call raytrace_to_tau(photon,grid,hugest)
+              endif
 
               if (photon%inside) then
                  !--- hand the free-path optical depth of this segment to the
@@ -160,7 +167,14 @@ contains
         else
            tau = -log(rand_number())
         endif
-        call raytrace_to_tau(photon,grid,tau/photon%s_ext)
+        !--- tau = hugest means the packet does not interact.  Rescaling it to
+        !--- the reference wavelength would overflow, since s_ext falls to ~1e-5
+        !--- at the long-wavelength end, so pass it through unscaled.
+        if (tau < hugest) then
+           call raytrace_to_tau(photon,grid,tau/photon%s_ext)
+        else
+           call raytrace_to_tau(photon,grid,hugest)
+        endif
 
         if (photon%inside) then
            !--- hand the free-path optical depth of this segment to the

@@ -25,10 +25,55 @@ module jtally_mod
   !--- (nlambda, ncell): Sum(Lpacket*wgt*dl).  ncell = nx*ny*nz ('car') or
   !--- nleaf ('amr'); the linear cell id is defined in cellinfo_mod.
   real(kind=wp), pointer :: jt_sum(:,:) => null()
+  !--- (ncell): Sum(Lpacket*wgt*dl * C_abs/C_ext_ref) with the cross sections
+  !--- taken at each photon's own wavelength.  The absorbed power of a cell is
+  !--- rhokap*jt_abs, exactly; forming it from jt_sum instead would have to use
+  !--- one cross section for a whole wavelength bin, which biases the dust
+  !--- luminosity and therefore the dust temperature.
+  real(kind=wp), pointer :: jt_abs(:) => null()
   integer :: jt_ncell = 0
   real(kind=wp) :: jt_eabs = 0.0_wp  ! independent absorbed-energy counter: Sum Lpacket*wgt*(1-albedo)
 
 contains
+  !---------------------------------------------------------------
+  !--- analytic J tally in each cell of the (forced) first flight: contribution
+  !--- wgt * Int exp(-tau_lambda) dl over the cell (exact expectation of the
+  !--- unscattered pathlength).  Updates the running cell-entry attenuation
+  !--- expo = exp(-s_ext*tau).
+  subroutine jt_edge_cell(photon0, cid, seg, rhokap, expo)
+  implicit none
+  type(photon_type), intent(in)    :: photon0
+  integer,           intent(in)    :: cid            ! linear cell id
+  real(kind=wp),     intent(in)    :: seg, rhokap
+  real(kind=wp),     intent(inout) :: expo
+  real(kind=wp) :: alpha, expo_out, dep
+
+  alpha = rhokap * photon0%s_ext
+  if (alpha*seg > 0.0_wp) then
+     expo_out = expo * exp(-alpha*seg)
+     dep      = photon0%wgt*photon0%Lpacket*(expo - expo_out)/alpha
+     expo     = expo_out
+  else
+     dep      = photon0%wgt*photon0%Lpacket*expo*seg
+  endif
+  jt_sum(photon0%il,cid) = jt_sum(photon0%il,cid) + dep
+  jt_abs(cid) = jt_abs(cid) + dep*photon0%s_ext*(1.0_wp - photon0%albedo)
+  end subroutine jt_edge_cell
+
+  !---------------------------------------------------------------
+  !--- pathlength J tally of one walked segment: the energy carried through the
+  !--- cell, and the share of it the dust absorbs at this photon's wavelength.
+  subroutine jt_step_cell(photon, cid, seg)
+  implicit none
+  type(photon_type), intent(in) :: photon
+  integer,           intent(in) :: cid            ! linear cell id
+  real(kind=wp),     intent(in) :: seg            ! path length in the cell
+  real(kind=wp) :: dep
+  dep = photon%wgt*photon%Lpacket*seg
+  jt_sum(photon%il,cid) = jt_sum(photon%il,cid) + dep
+  jt_abs(cid)           = jt_abs(cid)           + dep*photon%s_ext*(1.0_wp - photon%albedo)
+  end subroutine jt_step_cell
+
   !---------------------------------------------------------------
   subroutine jtally_setup(grid)
   use sed_mod,      only : sed_nlam
@@ -46,7 +91,9 @@ contains
         'WARNING: J_lambda tally is large; consider fewer wavelength bins or cells.'
   endif
   call create_mem(jt_sum, [sed_nlam, jt_ncell])
+  call create_mem(jt_abs, [jt_ncell])
   jt_sum(:,:) = 0.0_wp
+  jt_abs(:)   = 0.0_wp
   jt_eabs = 0.0_wp
   jt_on   = .true.
   end subroutine jtally_setup
@@ -68,6 +115,7 @@ contains
                         MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
      i0 = i0 + n
   enddo
+  call MPI_ALLREDUCE(MPI_IN_PLACE, jt_abs, jt_ncell, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   call MPI_ALLREDUCE(MPI_IN_PLACE, jt_eabs, 1, MPI_DOUBLE_PRECISION, MPI_SUM, MPI_COMM_WORLD, ierr)
   end subroutine jtally_reduce
 
@@ -79,7 +127,7 @@ contains
   !--- energy-conservation check, prints the absorbed luminosity from the
   !--- tally (A) against the independent event counter (B).
   subroutine jtally_write(grid)
-  use sed_mod,      only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo, sed_cext_ref
+  use sed_mod,      only : sed_nlam, sed_wave, sed_dwave, sed_cext_ref
   use cellinfo_mod, only : cell_rhokap, cell_volume, cell_center, car_ijk
   use iofile_mod
   use utility,      only : get_base_name
@@ -99,13 +147,13 @@ contains
   eabs_A = 0.0_wp
   do ic = 1, jt_ncell
      rhk = cell_rhokap(grid, ic)
-     if (rhk > 0.0_wp) eabs_A = eabs_A + rhk*sum(jt_sum(:,ic)*sed_sext(:)*(1.0_wp - sed_albedo(:)))
+     if (rhk > 0.0_wp) eabs_A = eabs_A + rhk*jt_abs(ic)
   enddo
   eabs_B = jt_eabs
   write(*,'(a)')        '--- J_lambda tally: energy conservation check ---'
   write(*,'(a,es14.6)') 'absorbed L (pathlength tally, A): ', eabs_A
   write(*,'(a,es14.6)') 'absorbed L (event counter,    B): ', eabs_B
-  if (eabs_B > 0.0_wp) write(*,'(a,f10.6)') 'ratio A/B                       : ', eabs_A/eabs_B
+  if (eabs_B > 0.0_wp) write(*,'(a,f12.8)') 'ratio A/B                       : ', eabs_A/eabs_B
 
   !--- convert Sum(Lpacket*wgt*dl) -> J_lambda [erg/s/cm^2/sr/um] per cell.
   do ic = 1, jt_ncell

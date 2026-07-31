@@ -13,7 +13,7 @@ module mrw_mod
 !--- opacity is taken at the photon wavelength (rho*kappa*s_ext).
   use define
   use random,       only : rand_number
-  use jtally_mod,   only : jt_on, jt_sum
+  use jtally_mod,   only : jt_on, jt_step_cell
   use cellinfo_mod, only : cell_id_of_photon, cell_rhokap
   use octree_mod,   only : amr_grid, amr_find_leaf
   implicit none
@@ -60,7 +60,7 @@ contains
   type(photon_type), intent(inout) :: photon
   type(grid_type),   intent(in)    :: grid
   real(kind=wp) :: asca, aabs, R0, dx0, dx1, dy0, dy1, dz0, dz1
-  real(kind=wp) :: xi, y, ct, deposit, ux, uy, uz, cost, sint, phi, alb, rhk, h
+  real(kind=wp) :: xi, y, ct, jt_seg, ux, uy, uz, cost, sint, phi, alb, rhk, h
   integer :: cid, icell
   logical :: is_amr
 
@@ -118,11 +118,11 @@ contains
   !--- weight decays by exp(-aabs*ct) over the diffusion path.
   ct = -log(max(y, tinest)) * 3.0_wp*asca*(R0/pi)**2
   if (aabs*ct > 1.0e-12_wp) then
-     deposit = photon%wgt*photon%Lpacket*(1.0_wp - exp(-aabs*ct))/aabs
+     jt_seg = (1.0_wp - exp(-aabs*ct))/aabs
   else
-     deposit = photon%wgt*photon%Lpacket*ct
+     jt_seg = ct
   endif
-  if (jt_on) jt_sum(photon%il,cid) = jt_sum(photon%il,cid) + deposit
+  if (jt_on) call jt_step_cell(photon, cid, jt_seg)
   photon%wgt = photon%wgt * exp(-aabs*ct)
 
   !--- move the photon to a random point on the sphere of radius R0 and give it

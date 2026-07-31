@@ -3,16 +3,25 @@ module sed_mod
 !--- Provides: a log-spaced wavelength grid; wavelength-dependent dust
 !--- properties C_ext(lambda), albedo(lambda), g(lambda) read from an
 !--- extinction table (e.g. SEDust calc_kext_astrodust.x output); and a
-!--- stellar source spectrum (Planck or 2-column file) sampled per photon
-!--- with an alias table.
+!--- stellar source spectrum (Planck or 2-column file) from which every photon
+!--- draws a continuous wavelength.
 !---
-!--- Transport of a photon at wavelength bin il uses the grey-rescaling
-!--- factor sed_sext(il) = C_ext(il)/C_ext(lambda_ref) (photon%s_ext):
+!--- The wavelength is sampled by inverting the analytic cumulative distribution
+!--- of the spectrum (spectrum_sampler_mod), not by drawing a bin index.  Pinning
+!--- a photon to a bin center would erase the spectral structure inside the bin
+!--- and freeze the dust cross sections at their bin-center values.  The bin
+!--- index sed_bin_of(lambda) is still carried by the photon, because the output
+!--- images and the radiation-field tally are binned in wavelength, but every
+!--- optical quantity is evaluated at the sampled wavelength itself.
+!---
+!--- Transport of a photon at wavelength lambda uses the grey-rescaling factor
+!--- sed_sext_at(lambda) = C_ext(lambda)/C_ext(lambda_ref) (photon%s_ext):
 !--- the grid rhokap is the opacity at the reference wavelength, and every
 !--- optical depth is scaled by s_ext (same mathematics as the Jonsson 2006
 !--- tau scan), so the raytrace routines (car/clump/amr) need no changes.
   use define
-  use random,  only : random_alias_setup, rand_alias_choise
+  use random, only : rand_number
+  use spectrum_sampler_mod
   implicit none
   public
 
@@ -24,17 +33,23 @@ module sed_mod
   real(kind=wp), allocatable :: sed_hgg(:)      ! asymmetry g(lambda)
   real(kind=wp), allocatable :: sed_sext(:)     ! C_ext(lambda)/C_ext(lambda_ref)
   real(kind=wp), allocatable :: sed_lum(:)      ! source luminosity fraction per bin (sum = 1)
-  real(kind=wp), allocatable :: sed_src_pdf(:)  ! alias probability table
-  integer,       allocatable :: sed_src_alias(:)
-  real(kind=wp), allocatable :: sed_src_cdf(:)  ! cumulative luminosity (quasi-random inverse-CDF path)
+  real(kind=wp), allocatable :: sed_edge(:)     ! bin edges [um], size sed_nlam+1
   real(kind=wp) :: sed_cext_ref = 0.0_wp        ! C_ext/H at par%lambda_ref
+  real(kind=wp) :: sed_dlnlam   = 0.0_wp        ! ln(lambda) spacing of the grid
+
+  !--- dust extinction table, kept so the cross sections can be evaluated at an
+  !--- arbitrary wavelength and not only at the bin centers.
+  integer :: sed_ntab = 0
+  real(kind=wp), allocatable :: sed_tab_lam(:), sed_tab_alb(:)
+  real(kind=wp), allocatable :: sed_tab_cos(:), sed_tab_cext(:)
+
+  !--- continuous wavelength samplers for the source and external spectra.
+  type(spectrum_sampler_type) :: sed_src_spectrum
+  type(spectrum_sampler_type) :: sed_ext_spectrum
 
   !--- external-field spectrum (SED mode with external illumination).
   logical :: sed_ext_on = .false.
   real(kind=wp), allocatable :: sed_ext_lum(:)   ! external spectrum fraction per bin (sum = 1)
-  real(kind=wp), allocatable :: sed_ext_pdf(:)   ! alias probability table
-  integer,       allocatable :: sed_ext_alias(:)
-  real(kind=wp), allocatable :: sed_ext_cdf(:)   ! cumulative external intensity (inverse-CDF path)
 
   !--- unit-conversion constants for physical par%spectrum_type files.
   real(kind=wp), parameter :: c_um     = 2.99792458e14_wp  ! speed of light [um/s]
@@ -46,12 +61,10 @@ contains
   use mpi
   implicit none
   ! local variables
-  real(kind=wp), allocatable :: tb_lam(:), tb_alb(:), tb_cos(:), tb_cext(:)
   real(kind=wp), allocatable :: sp_lam(:), sp_lum(:)
-  real(kind=wp), allocatable :: edge(:)
-  real(kind=wp) :: dlnlam, lum_sum
-  integer       :: ntab, nsp, il, ierr
-  logical       :: spec_is_absolute, spec_derived
+  real(kind=wp) :: lum_sum
+  integer       :: nsp, il, ierr
+  logical       :: spec_is_absolute, spec_derived, ok
 
   if (par%nlambda < 2) then
      if (mpar%p_rank == 0) write(*,'(a)') 'ERROR: par%nlambda must be >= 2 in SED mode.'
@@ -68,48 +81,54 @@ contains
 
   !--- log-spaced wavelength grid (bin edges and geometric bin centers).
   sed_nlam = par%nlambda
-  allocate(edge(sed_nlam+1))
+  allocate(sed_edge(sed_nlam+1))
   allocate(sed_wave(sed_nlam), sed_dwave(sed_nlam))
   allocate(sed_cext(sed_nlam), sed_albedo(sed_nlam), sed_hgg(sed_nlam), sed_sext(sed_nlam))
-  allocate(sed_lum(sed_nlam), sed_src_pdf(sed_nlam), sed_src_alias(sed_nlam), sed_src_cdf(sed_nlam))
-  dlnlam = log(par%lambda_max/par%lambda_min)/sed_nlam
+  allocate(sed_lum(sed_nlam))
+  sed_dlnlam = log(par%lambda_max/par%lambda_min)/sed_nlam
   do il = 1, sed_nlam+1
-     edge(il) = par%lambda_min * exp((il-1)*dlnlam)
+     sed_edge(il) = par%lambda_min * exp((il-1)*sed_dlnlam)
   enddo
+  sed_edge(sed_nlam+1) = par%lambda_max
   do il = 1, sed_nlam
-     sed_wave(il)  = sqrt(edge(il)*edge(il+1))
-     sed_dwave(il) = edge(il+1) - edge(il)
+     sed_wave(il)  = sqrt(sed_edge(il)*sed_edge(il+1))
+     sed_dwave(il) = sed_edge(il+1) - sed_edge(il)
   enddo
 
-  !--- read the dust extinction table (rank 0) and broadcast.
-  if (mpar%p_rank == 0) call read_kext_table(trim(par%kext_file), tb_lam, tb_alb, tb_cos, tb_cext, ntab)
-  call MPI_BCAST(ntab, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-  if (mpar%p_rank /= 0) allocate(tb_lam(ntab), tb_alb(ntab), tb_cos(ntab), tb_cext(ntab))
-  call MPI_BCAST(tb_lam,  ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-  call MPI_BCAST(tb_alb,  ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-  call MPI_BCAST(tb_cos,  ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-  call MPI_BCAST(tb_cext, ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+  !--- read the dust extinction table (rank 0) and broadcast.  The table is kept
+  !--- for the whole run: the cross sections are evaluated at each photon's
+  !--- sampled wavelength, not only at the bin centers.
+  if (mpar%p_rank == 0) call read_kext_table(trim(par%kext_file), sed_tab_lam, sed_tab_alb, &
+                                             sed_tab_cos, sed_tab_cext, sed_ntab)
+  call MPI_BCAST(sed_ntab, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+  if (mpar%p_rank /= 0) allocate(sed_tab_lam(sed_ntab), sed_tab_alb(sed_ntab), &
+                                 sed_tab_cos(sed_ntab), sed_tab_cext(sed_ntab))
+  call MPI_BCAST(sed_tab_lam,  sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+  call MPI_BCAST(sed_tab_alb,  sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+  call MPI_BCAST(sed_tab_cos,  sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+  call MPI_BCAST(sed_tab_cext, sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
 
-  !--- interpolate onto the RT wavelength grid: C_ext log-log, albedo/g
-  !--- linear in ln(lambda); clamp outside the table range.
+  !--- bin-center values of the dust properties, kept for the dust-emission
+  !--- arrays and the output writers.  Photons use sed_*_at(lambda) instead.
   do il = 1, sed_nlam
-     sed_cext(il)   = exp(interp_clamped(log(tb_lam), log(tb_cext), log(sed_wave(il))))
-     sed_albedo(il) = interp_clamped(log(tb_lam), tb_alb, log(sed_wave(il)))
-     sed_hgg(il)    = interp_clamped(log(tb_lam), tb_cos, log(sed_wave(il)))
+     sed_cext(il)   = sed_cext_at(sed_wave(il))
+     sed_albedo(il) = sed_albedo_at(sed_wave(il))
+     sed_hgg(il)    = sed_hgg_at(sed_wave(il))
   enddo
-  sed_cext_ref  = exp(interp_clamped(log(tb_lam), log(tb_cext), log(par%lambda_ref)))
+  sed_cext_ref  = sed_cext_at(par%lambda_ref)
   sed_sext(:)   = sed_cext(:)/sed_cext_ref
   !--- the grid opacity (rhokap) is defined at the reference wavelength.
   par%cext_dust = sed_cext_ref
-  par%albedo    = interp_clamped(log(tb_lam), tb_alb, log(par%lambda_ref))
-  par%hgg       = interp_clamped(log(tb_lam), tb_cos, log(par%lambda_ref))
+  par%albedo    = sed_albedo_at(par%lambda_ref)
+  par%hgg       = sed_hgg_at(par%lambda_ref)
   par%lambda0   = par%lambda_ref
 
   !--- source spectrum.  With multiple source components (par%nsource > 1) the
   !--- spectra for each source are set up in sources_mod, so the global single-source
   !--- spectrum is optional here: build a flat placeholder and skip the checks.
+  ok = .false.
   if (par%nsource > 1 .and. len_trim(par%source_spectrum) == 0 .and. par%tstar <= 0.0_wp) then
-     sed_lum(:) = sed_dwave(:)
+     call flat_spectrum_over_grid(sed_src_spectrum, ok)
   else if (len_trim(par%source_spectrum) > 0) then
      if (mpar%p_rank == 0) then
         call read_spectrum_file(trim(par%source_spectrum), sp_lam, sp_lum, nsp)
@@ -119,35 +138,36 @@ contains
      if (mpar%p_rank /= 0) allocate(sp_lam(nsp), sp_lum(nsp))
      call MPI_BCAST(sp_lam, nsp, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
      call MPI_BCAST(sp_lum, nsp, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-     do il = 1, sed_nlam
-        !--- outside the tabulated spectrum: zero luminosity (no clamping).
-        if (sed_wave(il) < sp_lam(1) .or. sed_wave(il) > sp_lam(nsp)) then
-           sed_lum(il) = 0.0_wp
-        else
-           sed_lum(il) = interp_clamped(log(sp_lam), sp_lum, log(sed_wave(il))) * sed_dwave(il)
-        endif
-     enddo
+     !--- the support is the overlap of the grid with the tabulated range: the
+     !--- spectrum carries no luminosity where it is not tabulated.
+     call tabulated_spectrum_sampler(sed_src_spectrum, sp_lam, sp_lum, &
+                                     par%lambda_min, par%lambda_max, sed_edge, ok)
      deallocate(sp_lam, sp_lum)
   else if (par%tstar > 0.0_wp) then
-     do il = 1, sed_nlam
-        sed_lum(il) = planck_shape(sed_wave(il), par%tstar) * sed_dwave(il)
-     enddo
+     call planck_spectrum_sampler(sed_src_spectrum, par%tstar, &
+                                  par%lambda_min, par%lambda_max, sed_edge, ok)
   else if (trim(par%source_geometry(1:8)) == 'external') then
      !--- external illumination: the internal (point/extended) source spectrum
      !--- is unused; the external-field spectrum is set in setup_sed_external.
      !--- Build a flat placeholder so the checks below stay valid.
-     sed_lum(:) = sed_dwave(:)
+     call flat_spectrum_over_grid(sed_src_spectrum, ok)
   else
      if (mpar%p_rank == 0) write(*,'(a)') &
         'ERROR: SED mode requires a source spectrum: par%source_spectrum (file) or par%tstar (Planck, K).'
      call MPI_FINALIZE(ierr);  stop
   endif
 
-  lum_sum = sum(sed_lum)
-  if (.not. (lum_sum > 0.0_wp)) then
+  if (.not. ok) then
      if (mpar%p_rank == 0) write(*,'(a)') 'ERROR: source spectrum has zero luminosity on the wavelength grid.'
      call MPI_FINALIZE(ierr);  stop
   endif
+
+  !--- luminosity fraction of each bin, an exact integral of the spectrum over
+  !--- the bin: the bin edges are nodes of the sampler.
+  do il = 1, sed_nlam
+     sed_lum(il) = band_luminosity_fraction(sed_src_spectrum, sed_edge(il), sed_edge(il+1))
+  enddo
+  lum_sum = sed_src_spectrum%total
 
   !--- absolute (physical-type) file spectrum: lum_sum is the [erg/s] luminosity
   !--- integrated over the wavelength grid.  Derive par%luminosity from it when
@@ -159,21 +179,6 @@ contains
      par%luminosity = lum_sum
      spec_derived   = .true.
   endif
-
-  sed_lum(:) = sed_lum(:)/lum_sum
-
-  !--- alias table for luminosity-weighted wavelength-bin sampling.
-  sed_src_pdf(:) = sed_lum(:)
-  call random_alias_setup(sed_src_pdf, sed_src_alias)
-
-  !--- monotone cumulative distribution for the quasi-random inverse-CDF
-  !--- wavelength sampler (sample_sed_lambda_u); the alias table above stays the
-  !--- default sampling path so its stream is unchanged.
-  sed_src_cdf(1) = sed_lum(1)
-  do il = 2, sed_nlam
-     sed_src_cdf(il) = sed_src_cdf(il-1) + sed_lum(il)
-  enddo
-  sed_src_cdf(sed_nlam) = 1.0_wp
 
   if (mpar%p_rank == 0) then
      write(*,'(a)')          '--- SED (multi-wavelength) mode ---'
@@ -190,9 +195,8 @@ contains
      write(*,'(2a)')          'spectrum_type             : ', trim(par%spectrum_type)
      if (spec_derived) &
         write(*,'(a,es12.4)') 'derived luminosity (erg/s): ', par%luminosity
+     write(*,'(a,i8)')        'spectrum sampling nodes   : ', size(sed_src_spectrum%lam)
   endif
-
-  deallocate(tb_lam, tb_alb, tb_cos, tb_cext, edge)
 
   !--- external illumination: build the external-field spectrum and, when the
   !--- mean intensity J is known, the absolute luminosity pi*J*A_surface.
@@ -220,7 +224,7 @@ contains
   real(kind=wp), allocatable :: sp_lam(:), sp_lum(:)
   real(kind=wp) :: ext_sum, J_band, J_use, A_surf, lum_J, Lx, Ly, Lz
   integer       :: nsp, il, ierr
-  logical       :: is_phys, J_defined, planck_ext, is_compose
+  logical       :: is_phys, J_defined, planck_ext, is_compose, ok
   character(len=32) :: src_label
 
   is_compose = .false.
@@ -228,13 +232,14 @@ contains
   if (present(lum_out)) lum_out = 0.0_wp
 
   sed_ext_on = .true.
-  allocate(sed_ext_lum(sed_nlam), sed_ext_pdf(sed_nlam), sed_ext_alias(sed_nlam), sed_ext_cdf(sed_nlam))
+  allocate(sed_ext_lum(sed_nlam))
   sed_ext_lum(:) = 0.0_wp
   is_phys        = trim(par%spectrum_type) /= 'shape'
   J_defined      = .false.
   J_band         = 0.0_wp
   J_use          = 0.0_wp
   planck_ext     = .false.
+  ok             = .false.
 
   if (len_trim(par%ext_spectrum) > 0) then
      !--- explicit external spectrum file (columns in par%spectrum_type units).
@@ -246,18 +251,14 @@ contains
      if (mpar%p_rank /= 0) allocate(sp_lam(nsp), sp_lum(nsp))
      call MPI_BCAST(sp_lam, nsp, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
      call MPI_BCAST(sp_lum, nsp, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-     do il = 1, sed_nlam
-        if (sed_wave(il) < sp_lam(1) .or. sed_wave(il) > sp_lam(nsp)) then
-           sed_ext_lum(il) = 0.0_wp
-        else
-           sed_ext_lum(il) = interp_clamped(log(sp_lam), sp_lum, log(sed_wave(il))) * sed_dwave(il)
-        endif
-     enddo
+     call tabulated_spectrum_sampler(sed_ext_spectrum, sp_lam, sp_lum, &
+                                     par%lambda_min, par%lambda_max, sed_edge, ok)
      deallocate(sp_lam, sp_lum)
      src_label = 'ext_spectrum file'
-     if (is_phys) then
-        !--- file columns are J_lambda densities: the bin integral is the band J.
-        J_band = sum(sed_ext_lum)
+     if (is_phys .and. ok) then
+        !--- file columns are J_lambda densities: their integral over the grid is
+        !--- the band mean intensity J.
+        J_band = sed_ext_spectrum%total
         if (par%ext_intensity < -900.0_wp) then
            J_use = J_band          ! derive J from the file integral
         else
@@ -269,19 +270,19 @@ contains
      endif
   else if (par%ext_tstar > 0.0_wp) then
      !--- Planck external field (a shape); J from par%ext_intensity if set.
-     do il = 1, sed_nlam
-        sed_ext_lum(il) = planck_shape(sed_wave(il), par%ext_tstar) * sed_dwave(il)
-     enddo
+     call planck_spectrum_sampler(sed_ext_spectrum, par%ext_tstar, &
+                                  par%lambda_min, par%lambda_max, sed_edge, ok)
      planck_ext = .true.
      src_label  = 'ext_tstar Planck'
      if (par%ext_intensity > -900.0_wp) then
         J_use = par%ext_intensity;  J_defined = .true.
      endif
   else
-     !--- fall back to the global source spectrum (already built as sed_lum, a
-     !--- normalized shape); J only from par%ext_intensity.
+     !--- reuse the global source spectrum as the external shape; J only from
+     !--- par%ext_intensity.
      if (len_trim(par%source_spectrum) > 0 .or. par%tstar > 0.0_wp) then
-        sed_ext_lum(:) = sed_lum(:)
+        sed_ext_spectrum = sed_src_spectrum
+        ok             = sampler_is_ready(sed_ext_spectrum)
         src_label      = 'global source spectrum'
         if (par%ext_intensity > -900.0_wp) then
            J_use = par%ext_intensity;  J_defined = .true.
@@ -294,12 +295,16 @@ contains
      endif
   endif
 
-  ext_sum = sum(sed_ext_lum)
-  if (.not. (ext_sum > 0.0_wp)) then
+  if (.not. ok) then
      if (mpar%p_rank == 0) write(*,'(a)') &
         'ERROR: external SED spectrum has zero intensity on the wavelength grid.'
      call MPI_FINALIZE(ierr);  stop
   endif
+  ext_sum = sed_ext_spectrum%total
+  !--- intensity fraction of each bin, an exact integral over the bin.
+  do il = 1, sed_nlam
+     sed_ext_lum(il) = band_luminosity_fraction(sed_ext_spectrum, sed_edge(il), sed_edge(il+1))
+  enddo
 
   !--- surface area (cm^2) of the illuminated boundary; the luminosity entering
   !--- the grid for an isotropic external field of mean intensity J is pi*J*A.
@@ -341,19 +346,6 @@ contains
         'mean intensity J (set par%ext_intensity, or a physical par%spectrum_type + par%ext_spectrum file).'
      call MPI_FINALIZE(ierr);  stop
   endif
-
-  !--- normalize the external spectrum to a PDF and build the alias table.
-  sed_ext_lum(:) = sed_ext_lum(:)/ext_sum
-  sed_ext_pdf(:) = sed_ext_lum(:)
-  call random_alias_setup(sed_ext_pdf, sed_ext_alias)
-
-  !--- cumulative distribution for the quasi-random inverse-CDF sampler
-  !--- (sample_ext_lambda_u); the alias table stays the default path.
-  sed_ext_cdf(1) = sed_ext_lum(1)
-  do il = 2, sed_nlam
-     sed_ext_cdf(il) = sed_ext_cdf(il-1) + sed_ext_lum(il)
-  enddo
-  sed_ext_cdf(sed_nlam) = 1.0_wp
 
   if (mpar%p_rank == 0) then
      write(*,'(a)')          '--- external-field SED spectrum ---'
@@ -397,39 +389,98 @@ contains
   end function ext_surface_area
 
   !---------------------------------------------------------------
-  !--- sample a wavelength-bin index from the source spectrum.
-  function sample_sed_lambda() result(il)
+  !--- draw a wavelength from the source spectrum [um].
+  function sample_sed_wavelength() result(lam)
   implicit none
-  integer :: il
-  il = rand_alias_choise(sed_src_pdf, sed_src_alias)
-  end function sample_sed_lambda
+  real(kind=wp) :: lam
+  lam = sample_wavelength(sed_src_spectrum, rand_number())
+  end function sample_sed_wavelength
 
   !---------------------------------------------------------------
-  !--- sample a wavelength-bin index from the external-field spectrum.
-  function sample_ext_lambda() result(il)
+  !--- draw a wavelength from the external-field spectrum [um].
+  function sample_ext_wavelength() result(lam)
   implicit none
-  integer :: il
-  il = rand_alias_choise(sed_ext_pdf, sed_ext_alias)
-  end function sample_ext_lambda
+  real(kind=wp) :: lam
+  lam = sample_wavelength(sed_ext_spectrum, rand_number())
+  end function sample_ext_wavelength
 
   !---------------------------------------------------------------
-  !--- inverse-CDF wavelength-bin sampler for the quasi-random launch: return
-  !--- the smallest bin il with uf <= cdf(il).  uf is a uniform in (0,1).  The
-  !--- monotone inverse CDF keeps a stratified Sobol coordinate stratified in
-  !--- the wavelength bins (the alias table would scramble it).
-  function sample_sed_lambda_u(uf) result(il)
+  !--- the same draws from a caller-supplied uniform, for the quasi-random
+  !--- launch.  Inverting a monotone cumulative distribution maps a stratified
+  !--- Sobol coordinate onto a stratified wavelength, which is why the launch
+  !--- takes this route rather than any order-scrambling sampler.
+  function sample_sed_wavelength_u(uf) result(lam)
   implicit none
   real(kind=wp), intent(in) :: uf
-  integer :: il
-  il = cdf_search(sed_src_cdf, uf)
-  end function sample_sed_lambda_u
+  real(kind=wp) :: lam
+  lam = sample_wavelength(sed_src_spectrum, uf)
+  end function sample_sed_wavelength_u
 
-  function sample_ext_lambda_u(uf) result(il)
+  function sample_ext_wavelength_u(uf) result(lam)
   implicit none
   real(kind=wp), intent(in) :: uf
+  real(kind=wp) :: lam
+  lam = sample_wavelength(sed_ext_spectrum, uf)
+  end function sample_ext_wavelength_u
+
+  !---------------------------------------------------------------
+  !--- index of the wavelength bin holding lambda.  The grid is log-spaced with
+  !--- constant sed_dlnlam, so the bin follows in closed form; lambda_max lands
+  !--- in the last bin rather than one past it.
+  pure function sed_bin_of(lam) result(il)
+  implicit none
+  real(kind=wp), intent(in) :: lam
   integer :: il
-  il = cdf_search(sed_ext_cdf, uf)
-  end function sample_ext_lambda_u
+  il = floor(log(lam/par%lambda_min)/sed_dlnlam) + 1
+  if (il < 1)        il = 1
+  if (il > sed_nlam) il = sed_nlam
+  end function sed_bin_of
+
+  !---------------------------------------------------------------
+  !--- dust cross sections at an arbitrary wavelength, read from the extinction
+  !--- table with the model the grid values use: C_ext log-log, albedo and g
+  !--- linear in ln(lambda), clamped outside the tabulated range.
+  pure function sed_cext_at(lam) result(cext)
+  implicit none
+  real(kind=wp), intent(in) :: lam
+  real(kind=wp) :: cext
+  cext = exp(interp_clamped(log(sed_tab_lam), log(sed_tab_cext), log(lam)))
+  end function sed_cext_at
+
+  pure function sed_sext_at(lam) result(sext)
+  implicit none
+  real(kind=wp), intent(in) :: lam
+  real(kind=wp) :: sext
+  sext = sed_cext_at(lam)/sed_cext_ref
+  end function sed_sext_at
+
+  pure function sed_albedo_at(lam) result(alb)
+  implicit none
+  real(kind=wp), intent(in) :: lam
+  real(kind=wp) :: alb
+  alb = interp_clamped(log(sed_tab_lam), sed_tab_alb, log(lam))
+  end function sed_albedo_at
+
+  pure function sed_hgg_at(lam) result(g)
+  implicit none
+  real(kind=wp), intent(in) :: lam
+  real(kind=wp) :: g
+  g = interp_clamped(log(sed_tab_lam), sed_tab_cos, log(lam))
+  end function sed_hgg_at
+
+  !---------------------------------------------------------------
+  !--- a spectrum flat in wavelength across the whole grid, used where the
+  !--- luminosity of this component carries no spectral information.
+  subroutine flat_spectrum_over_grid(sampler, ok)
+  implicit none
+  type(spectrum_sampler_type), intent(out) :: sampler
+  logical, intent(out) :: ok
+  real(kind=wp) :: lam2(2), dens2(2)
+  lam2  = [par%lambda_min, par%lambda_max]
+  dens2 = [1.0_wp, 1.0_wp]
+  call tabulated_spectrum_sampler(sampler, lam2, dens2, &
+                                  par%lambda_min, par%lambda_max, sed_edge, ok)
+  end subroutine flat_spectrum_over_grid
 
   !---------------------------------------------------------------
   !--- binary search: smallest index il with uf <= cdf(il) (cdf ascending,
@@ -445,21 +496,6 @@ contains
   enddo
   il = lo
   end function cdf_search
-
-  !---------------------------------------------------------------
-  !--- Planck function B_lambda (arbitrary normalization), lambda in um.
-  pure function planck_shape(lam_um, T) result(b)
-  implicit none
-  real(kind=wp), intent(in) :: lam_um, T
-  real(kind=wp) :: b, x
-  real(kind=wp), parameter :: hc_over_k = 1.43877687750393e4_wp  ! [um K]
-  x = hc_over_k/(lam_um*T)
-  if (x > 700.0_wp) then
-     b = 0.0_wp
-  else
-     b = 1.0_wp/(lam_um**5 * (exp(x) - 1.0_wp))
-  endif
-  end function planck_shape
 
   !---------------------------------------------------------------
   !--- linear interpolation with clamping at the table ends.

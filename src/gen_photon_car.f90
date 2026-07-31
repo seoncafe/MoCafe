@@ -9,9 +9,9 @@ contains
   use scan_mod,    only : scan_reset_photon
   use clump_mod,   only : active_set_at_point
   use octree_mod,  only : amr_find_leaf
-  use sed_mod,     only : sample_sed_lambda, sample_ext_lambda, &
-                          sample_sed_lambda_u, sample_ext_lambda_u, &
-                          sed_wave, sed_sext, sed_albedo, sed_hgg
+  use sed_mod,     only : sample_sed_wavelength, sample_ext_wavelength, &
+                          sample_sed_wavelength_u, sample_ext_wavelength_u, &
+                          sed_bin_of, sed_sext_at, sed_albedo_at, sed_hgg_at
   use sources_mod, only : use_sources, gen_source_photon, gen_source_photon_qmc
   use compose_mod, only : compose_ext, int_lum_frac, Lpacket_tot
   use qmc_mod,     only : qmc_uniforms, QMC_MAXDIM, QMC_NDIM_USED
@@ -30,6 +30,7 @@ contains
   !--- .false. leaves every original Mersenne Twister draw untouched
   !--- (bit-identical).
   logical       :: use_qmc
+  logical       :: radial_disk
   real(kind=wp) :: uq(QMC_MAXDIM), uorigin
 
   !--- reset the per-photon fields that carry default initializers in
@@ -126,7 +127,10 @@ contains
   case ('exponential', 'sech', 'exp_spiral')
      !--- radially exponential disk when source_rscale is set, else plane-uniform;
      !--- vertically exp or sech^2; 'exp_spiral' adds log-spiral arms by rejection.
-     if (par%source_rscale > 0.0_wp) then
+     !--- An unset scale length is NaN and must not reach the comparison.
+     radial_disk = .false.
+     if (is_finite(par%source_rscale)) radial_disk = par%source_rscale > 0.0_wp
+     if (radial_disk) then
         if (trim(par%source_geometry) == 'exp_spiral' .and. par%spiral_m > 0) then
            tanp = tan(par%spiral_pitch*pi/180.0_wp)
            do
@@ -238,21 +242,23 @@ contains
      !--- (point/extended) sources sample the stellar source spectrum.
      if (photon%is_external) then
         if (use_qmc) then
-           photon%il = sample_ext_lambda_u(uq(3))
+           photon%lambda = sample_ext_wavelength_u(uq(3))
         else
-           photon%il = sample_ext_lambda()
+           photon%lambda = sample_ext_wavelength()
         endif
      else
         if (use_qmc) then
-           photon%il = sample_sed_lambda_u(uq(3))
+           photon%lambda = sample_sed_wavelength_u(uq(3))
         else
-           photon%il = sample_sed_lambda()
+           photon%lambda = sample_sed_wavelength()
         endif
      endif
-     photon%lambda = sed_wave(photon%il)
-     photon%s_ext  = sed_sext(photon%il)
-     photon%albedo = sed_albedo(photon%il)
-     photon%hgg    = sed_hgg(photon%il)
+     !--- the wavelength is continuous; the bin index only addresses the output
+     !--- image planes and the radiation-field tally.
+     photon%il     = sed_bin_of(photon%lambda)
+     photon%s_ext  = sed_sext_at(photon%lambda)
+     photon%albedo = sed_albedo_at(photon%lambda)
+     photon%hgg    = sed_hgg_at(photon%lambda)
      !--- physical energy carried by a stellar packet [erg/s].  The Lucy
      !--- driver overrides this per energy pass (star_Lpacket); this default
      !--- covers the standalone save_jlam path (one stellar pass).

@@ -14,7 +14,7 @@ module lucy_mod
   use dustemis_mod, only : gen_dust_photon, gen_dust_photon_qmc, compute_dustemis, &
                            Labs_total, dustemis_ready
   use qmc_mod,      only : qmc_uniforms_stream, QMC_STREAM_DUSTEMIS
-  use jtally_mod,   only : jt_on, jt_first, jt_sum, jt_eabs, jtally_reduce
+  use jtally_mod,   only : jt_on, jt_first, jt_sum, jt_abs, jt_eabs, jtally_reduce
   use peelingoff_mod, only : peel_enabled
   use mrw_mod,      only : mrw_on, mrw_try_step
   use random,       only : rand_number
@@ -29,7 +29,7 @@ contains
   implicit none
   type(grid_type), intent(inout) :: grid
   type(photon_type) :: photon
-  real(kind=wp), allocatable :: jt_star(:,:)
+  real(kind=wp), allocatable :: jt_star(:,:), jt_abs_star(:)
   real(kind=wp) :: eabs_star, Lstar_packet, Ldust_packet, Lprev, drel
   integer(kind=int64) :: n_star, n_dust, ip
   integer :: iter, ierr
@@ -47,16 +47,17 @@ contains
   n_dust = int(par%dust_no_photons, int64)
 
   !--- stellar energy pass (once): tally J_star.
-  jt_sum(:,:) = 0.0_wp;  jt_eabs = 0.0_wp
+  jt_sum(:,:) = 0.0_wp;  jt_abs(:) = 0.0_wp;  jt_eabs = 0.0_wp
   do ip = mpar%p_rank+1, n_star, mpar%nproc
      photon%id = ip
      call gen_photon(grid, photon)    ! Lpacket = luminosity/nphotons
      call transport(photon, grid)
   enddo
   call jtally_reduce()                     ! jt_sum, jt_eabs now full (all ranks)
-  allocate(jt_star(size(jt_sum,1), size(jt_sum,2)))
-  jt_star   = jt_sum
-  eabs_star = jt_eabs
+  allocate(jt_star(size(jt_sum,1), size(jt_sum,2)), jt_abs_star(size(jt_abs)))
+  jt_star     = jt_sum
+  jt_abs_star = jt_abs
+  eabs_star   = jt_eabs
 
   call compute_dustemis(grid)              ! emission from stellar J
   Lprev = Labs_total
@@ -68,7 +69,7 @@ contains
      Ldust_packet = Labs_total/dble(n_dust)
 
      !--- dust-photon energy pass: tally the dust contribution alone.
-     jt_sum(:,:) = 0.0_wp;  jt_eabs = 0.0_wp
+     jt_sum(:,:) = 0.0_wp;  jt_abs(:) = 0.0_wp;  jt_eabs = 0.0_wp
      do ip = mpar%p_rank+1, n_dust, mpar%nproc
         if (use_qmc) then
            call qmc_uniforms_stream(ip - 1_int64, ud(1:7), QMC_STREAM_DUSTEMIS)
@@ -84,6 +85,7 @@ contains
 
      !--- total field = stellar + dust; recompute emission.
      jt_sum  = jt_sum + jt_star
+     jt_abs  = jt_abs + jt_abs_star
      jt_eabs = jt_eabs + eabs_star
      call compute_dustemis(grid)
 
@@ -97,7 +99,7 @@ contains
      endif
   enddo
 
-  deallocate(jt_star)
+  deallocate(jt_star, jt_abs_star)
   peel_enabled = .true.           ! restore for the imaging pass
   !--- disable further tallying: jt_sum already holds the converged total J
   !--- (the imaging pass must not overwrite it).
@@ -153,7 +155,14 @@ contains
      else
         tau = -log(rand_number())
      endif
-     call raytrace_to_tau(photon, grid, tau/photon%s_ext)
+     !--- tau = hugest means the packet does not interact.  Rescaling it to the
+     !--- reference wavelength would overflow, since s_ext falls to ~1e-5 at the
+     !--- long-wavelength end, so pass it through unscaled.
+     if (tau < hugest) then
+        call raytrace_to_tau(photon, grid, tau/photon%s_ext)
+     else
+        call raytrace_to_tau(photon, grid, hugest)
+     endif
      if (photon%inside) then
         call scattering(photon, grid)
         !--- Russian roulette: unbiasedly terminate low-weight photons so

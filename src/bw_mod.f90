@@ -16,7 +16,10 @@ module bw_mod
   use utility,      only : time_stamp
   use cellinfo_mod, only : ncell_total, cell_rhokap, cell_volume, cell_center, &
                            cell_id_of_photon, car_ijk
-  use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_sext, sed_albedo, sed_cext, sed_cext_ref
+  use sed_mod, only : sed_nlam, sed_wave, sed_dwave, sed_edge, sed_sext, sed_albedo, sed_cext, sed_cext_ref, &
+                      sed_cext_at, sed_albedo_at, sed_sext_at, sed_hgg_at
+  use mathlib, only : gauleg
+  use spectrum_sampler_mod, only : sample_power_law_bin
   implicit none
   private
   public :: setup_bw, bw_reemit, bw_finalize, bw_Tmap, bw_write, run_bw
@@ -26,6 +29,9 @@ module bw_mod
   real(kind=wp), allocatable :: Tgrid(:)       ! (NT) temperature grid [K]
   real(kind=wp), allocatable :: kappB(:)       ! (NT) integral C_abs*B_lam(T) dlam [erg/s/sr/H]
   real(kind=wp), allocatable :: cdf_emit(:,:)  ! (nl, NT) cumulative emission spectrum vs T
+  !--- (nl+1, NT) lambda*C_abs*dB/dT at the bin EDGES: the shape a reemitted
+  !--- photon's wavelength is drawn from inside its bin, read as a power law.
+  real(kind=wp), allocatable :: emit_lamf_edge(:,:)
   real(kind=wp), allocatable :: cell_A(:)      ! (ncell) absorbed power (rank-local) [erg/s]
   real(kind=wp), allocatable :: cell_T(:)      ! (ncell) current dust temperature [K]
   integer :: nx=0, ny=0, nz=0, ncell_tot=0
@@ -34,15 +40,41 @@ module bw_mod
 
   real(kind=wp), parameter :: hc2_cgs = 1.1910429723971884e-5_wp  ! 2 h c^2 [erg cm^2 / s]
   real(kind=wp), parameter :: hck_cgs = 1.4387768775039337_wp     ! h c / k_B [cm K]
+  integer,       parameter :: NGAUSS  = 8      ! nodes per bin for the emission integrals
 
 contains
   !---------------------------------------------------------------
+  !---------------------------------------------------------------
+  !--- Absorption-weighted Planck terms at one wavelength [um] and temperature:
+  !---   bterm = C_abs(lambda) * B_lambda(T)          [erg/s/cm^2/sr/cm per H]
+  !---   dterm = C_abs(lambda) * dB_lambda/dT         (shape only; the factor
+  !---           1/T common to every wavelength is dropped)
+  !--- The cross section is read at this wavelength, not at a bin center.
+  subroutine planck_absorption(lam_um, T, bterm, dterm)
+  implicit none
+  real(kind=wp), intent(in)  :: lam_um, T
+  real(kind=wp), intent(out) :: bterm, dterm
+  real(kind=wp) :: lam_cm, x, ex, cabs, blam
+
+  bterm = 0.0_wp;  dterm = 0.0_wp
+  if (.not. (lam_um > 0.0_wp) .or. .not. (T > 0.0_wp)) return
+  lam_cm = lam_um*1.0e-4_wp
+  x      = hck_cgs/(lam_cm*T)
+  if (x >= 700.0_wp) return
+  ex   = exp(x)
+  cabs = sed_cext_at(lam_um)*(1.0_wp - sed_albedo_at(lam_um))
+  blam = hc2_cgs/lam_cm**5/(ex - 1.0_wp)
+  bterm = cabs*blam
+  dterm = bterm*(x*ex/(ex - 1.0_wp))
+  end subroutine planck_absorption
+
   subroutine setup_bw(grid)
   use mpi
   implicit none
   type(grid_type), intent(in) :: grid
-  real(kind=wp) :: Tlo, Thi, dlnT, T, lam_cm, x, ex, psum
-  integer :: il, it
+  real(kind=wp) :: Tlo, Thi, dlnT, T, psum
+  real(kind=wp) :: gx(NGAUSS), gw(NGAUSS), u0, u1, uu, lam_um, kb, ke, bterm, dterm
+  integer :: il, it, ig
 
   nl = sed_nlam
   NT = par%sed_NT
@@ -51,7 +83,7 @@ contains
   ncell_tot = ncell_total(grid)
   bw_d2c = par%distance2cm**2 / sed_cext_ref
 
-  allocate(kabs(nl), Tgrid(NT), kappB(NT), cdf_emit(nl, NT))
+  allocate(kabs(nl), Tgrid(NT), kappB(NT), cdf_emit(nl, NT), emit_lamf_edge(nl+1, NT))
   allocate(cell_A(ncell_tot), cell_T(ncell_tot))
   cell_A(:) = 0.0_wp;  cell_T(:) = Tlo
 
@@ -60,27 +92,38 @@ contains
 
   !--- temperature grid and the kappB(T) = int C_abs B_lam dlam table, plus the
   !--- temperature-correction emission CDF (proportional to C_abs*dB/dT).
+  !--- Both C_abs*B and C_abs*dB/dT are known functions of wavelength, so each
+  !--- bin gets its integral rather than one reading at the bin center times the
+  !--- bin width: kappB(T) sets the temperature a cell settles at, and cdf_emit
+  !--- sets which wavelength a reemitted photon leaves with.  The integration
+  !--- runs in ln(lambda), where the grid is uniform and the integrand smooth.
   dlnT = log(Thi/Tlo)/dble(NT-1)
+  call gauleg(-1.0_wp, 1.0_wp, gx, gw)
   do it = 1, NT
      T = Tlo*exp(dble(it-1)*dlnT)
      Tgrid(it) = T
      kappB(it) = 0.0_wp
      psum = 0.0_wp
      do il = 1, nl
-        lam_cm = sed_wave(il)*1.0e-4_wp
-        x = hck_cgs/(lam_cm*T)
-        if (x < 700.0_wp) then
-           ex = exp(x)
-           !--- C_abs * B_lam(T) * dlam  [erg/s/sr/H]; B_lam in erg/s/cm^2/sr/cm,
-           !--- dlam converted um->cm.
-           kappB(it) = kappB(it) + kabs(il)*(hc2_cgs/lam_cm**5/(ex-1.0_wp))*(sed_dwave(il)*1.0e-4_wp)
-           !--- emission PDF shape ~ C_abs * dB_lam/dT * dlam
-           !--- dB/dT ~ B * x*ex/((ex-1)T); keep only the shape (T-const drops).
-           cdf_emit(il,it) = kabs(il)*(hc2_cgs/lam_cm**5/(ex-1.0_wp))*(x*ex/(ex-1.0_wp))*(sed_dwave(il)*1.0e-4_wp)
-        else
-           cdf_emit(il,it) = 0.0_wp
-        endif
-        psum = psum + cdf_emit(il,it)
+        u0 = log(sed_edge(il));  u1 = log(sed_edge(il+1))
+        kb = 0.0_wp;  ke = 0.0_wp
+        do ig = 1, NGAUSS
+           !--- Gauss-Legendre node mapped onto [u0, u1]; the extra lambda comes
+           !--- from dlam = lambda dln(lambda).
+           uu     = 0.5_wp*(u1 - u0)*gx(ig) + 0.5_wp*(u1 + u0)
+           lam_um = exp(uu)
+           call planck_absorption(lam_um, T, bterm, dterm)
+           kb = kb + gw(ig)*bterm*lam_um*1.0e-4_wp
+           ke = ke + gw(ig)*dterm*lam_um*1.0e-4_wp
+        enddo
+        kappB(it)       = kappB(it) + 0.5_wp*(u1 - u0)*kb
+        cdf_emit(il,it) = 0.5_wp*(u1 - u0)*ke
+        psum            = psum + cdf_emit(il,it)
+     enddo
+     !--- bin-edge values of lambda*C_abs*dB/dT, the within-bin draw's shape.
+     do il = 1, nl+1
+        call planck_absorption(sed_edge(il), T, bterm, dterm)
+        emit_lamf_edge(il,it) = dterm*sed_edge(il)
      enddo
      !--- cumulative (normalized) emission distribution at this T.
      if (psum > 0.0_wp) then
@@ -111,7 +154,7 @@ contains
   type(photon_type), intent(inout) :: photon
   type(grid_type),   intent(in)    :: grid
   integer :: ic, it, lo, hi, mid, il
-  real(kind=wp) :: N_H, target_kappB, u, cost, sint, phi
+  real(kind=wp) :: N_H, target_kappB, u, ulo, ubin, cost, sint, phi
 
   ic = cell_id_of_photon(photon, grid)
   cell_A(ic) = cell_A(ic) + photon%Lpacket
@@ -154,10 +197,17 @@ contains
      endif
   enddo
   il = lo
+  !--- continuous wavelength inside the bin: the leftover of the uniform that
+  !--- picked the bin is itself uniform there, so no extra draw is needed.
+  ulo = 0.0_wp
+  if (il > 1) ulo = cdf_emit(il-1,it)
+  ubin = 0.0_wp
+  if (cdf_emit(il,it) > ulo) ubin = (u - ulo)/(cdf_emit(il,it) - ulo)
+  photon%lambda = sample_power_law_bin(sed_edge(il), sed_edge(il+1), &
+                                       emit_lamf_edge(il,it), emit_lamf_edge(il+1,it), ubin)
   photon%il     = il
-  photon%lambda = sed_wave(il)
-  photon%s_ext  = sed_sext(il)
-  photon%albedo = sed_albedo(il)
+  photon%s_ext  = sed_sext_at(photon%lambda)
+  photon%albedo = sed_albedo_at(photon%lambda)
   photon%hgg    = 0.0_wp     ! isotropic scattering after reemission is not tracked; g reset
 
   !--- isotropic reemission direction.
@@ -235,7 +285,14 @@ contains
      call gen_photon(grid, photon)  ! sets position/dir/wavelength, Lpacket, direct peel
      do while (photon%inside)
         tau = -log(rand_number())
-        call raytrace_to_tau(photon, grid, tau/photon%s_ext)
+        !--- tau = hugest means the packet does not interact.  Rescaling it to the
+        !--- reference wavelength would overflow, since s_ext falls to ~1e-5 at the
+        !--- long-wavelength end, so pass it through unscaled.
+        if (tau < hugest) then
+           call raytrace_to_tau(photon, grid, tau/photon%s_ext)
+        else
+           call raytrace_to_tau(photon, grid, hugest)
+        endif
         if (.not. photon%inside) exit
         xi = rand_number()
         if (xi < photon%albedo) then
