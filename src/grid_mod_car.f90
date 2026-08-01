@@ -23,6 +23,7 @@ contains
   real(kind=wp) :: dens
   real(kind=wp) :: xx,yy,zz,rr
   real(kind=wp) :: rmin_positive
+  logical :: plummer_scale_set
   character(len=128) :: dens_out
 
   integer :: ierr
@@ -139,6 +140,11 @@ contains
   endif
 
   if (mpar%h_rank == 0) then
+    !--- a Plummer profile needs a radial scale length; an unset one is NaN and
+    !--- must not reach the comparison in the geometry branch below.
+    plummer_scale_set = .false.
+    if (is_finite(par%density_rscale)) plummer_scale_set = par%density_rscale > 0.0_wp
+
     ! Cylindrical Geometry
     if (trim(par%geometry) == 'cylinder') then
        if (is_finite(par%density_zscale)) then
@@ -158,6 +164,14 @@ contains
        enddo
     ! Spherical Geometry
     else if (trim(par%geometry) == 'sphere') then
+       !--- the cell nearest the origin, and the origin cell itself, are located
+       !--- while the density is filled in; a negative power law diverges at the
+       !--- origin, so that cell takes the density of its nearest neighbor.
+       !--- These are set here rather than inside the loop, so they are defined
+       !--- whichever branch the loop takes.
+       icen = -1;  jcen = -1;  kcen = -1
+       idx1 =  1;  idx2 =  1;  idx3 =  1
+       rmin_positive = sqrt(par%xmax**2 + par%ymax**2 + par%zmax**2)
        do k=1,grid%nz
          zz = (grid%zface(k)+grid%zface(k+1))/2.0_wp
          do j=1,grid%ny
@@ -173,12 +187,6 @@ contains
                    grid%rhokap(i,j,k) = grid%rhokap(i,j,k)*rr**(par%density_powerlaw_index)
                 endif
                 if (par%density_powerlaw_index < 0.0_wp) then
-                   if (i==1 .and. j==1 .and. k==1) then
-                      icen = -1
-                      jcen = -1
-                      kcen = -1
-                      rmin_positive = sqrt(par%xmax**2 + par%ymax**2 + par%zmax**2)
-                   endif
                    if (rr > 0.0_wp .and. rr < rmin_positive) then
                       idx1 = i
                       idx2 = j
@@ -195,10 +203,13 @@ contains
            enddo
          enddo
        enddo
-       if (par%density_powerlaw_index < 0.0_wp .and. icen > 0 .and. jcen > 0 .and. kcen > 0) then
-          grid%rhokap(icen,jcen,kcen) = grid%rhokap(idx1,idx2,idx3)
+       !--- an unset power-law index is NaN, which must not reach the comparison.
+       if (is_finite(par%density_powerlaw_index)) then
+          if (par%density_powerlaw_index < 0.0_wp .and. icen > 0 .and. jcen > 0 .and. kcen > 0) then
+             grid%rhokap(icen,jcen,kcen) = grid%rhokap(idx1,idx2,idx3)
+          endif
        endif
-    else if (trim(par%geometry) == 'Plummer' .and. par%density_rscale > 0.0_wp) then
+    else if (trim(par%geometry) == 'Plummer' .and. plummer_scale_set) then
        if (.not. is_finite(par%density_powerlaw_index)) par%density_powerlaw_index = 1.8
        do k=1,grid%nz
          zz = (grid%zface(k)+grid%zface(k+1))/2.0_wp

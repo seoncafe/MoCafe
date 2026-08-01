@@ -3,7 +3,7 @@
  par%hgg=0.6592
  par%albedo=0.3899
  par%scatt_mat_file='../data/mueller_V.dat'
- par%calculate_stokes = .true.
+ par%use_stokes = .true.
  par%taumax=1.0
  par%distance_unit=''
  par%out_file='test1.fits.gz'
