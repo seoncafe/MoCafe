@@ -23,18 +23,17 @@ module dustemis_mod
   use cellinfo_mod, only : ncell_total, cell_rhokap, cell_volume, cell_center, &
                            cell_random_position, cell_random_position_u, &
                            cell_center_photon, car_ijk
-  use dust_lib, only : dust_model_t, dust_emis_table_t, &
-                       build_astrodust, build_dl07, build_zubko, &
+  use dust_lib, only : dust_emis_table_t, &
                        dust_emission, dust_emission_single_teq, &
                        dust_build_table, dust_emission_interp, &
                        dust_nlam, dust_lambda
+  use grain_model_mod, only : dmodel, build_grain_model
   implicit none
   private
   public :: setup_dustemis, compute_dustemis, write_dustemis, gen_dust_photon
   public :: gen_dust_photon_qmc
   public :: Labs_total, dustemis_ready
 
-  type(dust_model_t)         :: dmodel
   integer                    :: nl_sed = 0            ! SEDust wavelength grid length
   real(kind=wp), allocatable :: lam_sed(:)           ! SEDust lambda grid [um]
   !--- fast-path emission table (par%dust_fast_table): emission spectrum vs the
@@ -66,56 +65,12 @@ contains
   !---------------------------------------------------------------
   subroutine setup_dustemis(grid)
   use mpi
-  use ifport, only : chdir, getcwd
   implicit none
   type(grid_type), intent(in) :: grid
-  integer :: ierr, cstat, st
-  character(len=512) :: cwd_save
-  st = 0
 
-  !--- SEDust reads its dielectric tables via paths hard-coded relative to its
-  !--- sed/ directory ('../data/dielectric/...'), so build the model from
-  !--- par%sed_workdir (default SEDust/sed) and restore the working directory.
-  !--- par%sed_qtable / par%sed_sizedist are given as absolute paths.
-  !--- chdir/getcwd are the Intel IFPORT integer functions (return 0 on success).
-  cstat = getcwd(cwd_save)
-  if (len_trim(par%sed_workdir) > 0) then
-     cstat = chdir(trim(par%sed_workdir))
-     if (cstat /= 0 .and. mpar%p_rank == 0) write(*,'(3a)') &
-        'WARNING: could not chdir to par%sed_workdir = ''', trim(par%sed_workdir), &
-        ''' (SEDust dielectric files may not be found).'
-  endif
-
-  select case (trim(par%dust_model_sed))
-  case ('astrodust')
-     call build_astrodust(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
-                          par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st)
-  case ('dl07')
-     call build_dl07(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
-                     par%sed_dl07_sdindex, par%sed_dl07_uisrf, &
-                     par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st)
-  case ('zubko')
-     call build_zubko(dmodel, trim(par%sed_zubko_config), trim(par%sed_zubko_dir), &
-                      par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st)
-  case default
-     cstat = chdir(trim(cwd_save))
-     if (mpar%p_rank == 0) write(*,'(3a)') &
-        'ERROR: par%dust_model_sed = ''', trim(par%dust_model_sed), &
-        ''' unknown (use ''astrodust'', ''dl07'', or ''zubko'').'
-     call MPI_FINALIZE(ierr);  stop
-  end select
-
-  cstat = chdir(trim(cwd_save))
-
-  !--- SEDust reports a missing or malformed input through status instead of
-  !--- stopping itself, so a bad par%sed_* path fails cleanly on every rank
-  !--- here rather than aborting mid-build.
-  if (st /= 0) then
-     if (mpar%p_rank == 0) write(*,'(3a,i0,a)') &
-        'ERROR: SEDust failed to build the ''', trim(par%dust_model_sed), &
-        ''' dust model (status=', st, '); check the par%sed_* input paths.'
-     call MPI_FINALIZE(ierr);  stop
-  endif
+  !--- the same model object that supplied the transport cross sections in
+  !--- sed_mod; already built there, so this returns at once.
+  call build_grain_model()
 
   nl_sed = dust_nlam(dmodel)
   lam_sed = dust_lambda(dmodel)          ! allocatable assignment

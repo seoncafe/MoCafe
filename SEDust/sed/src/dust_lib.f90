@@ -39,15 +39,25 @@ module dust_lib
    ! dust_emission, so an RT host takes its opacity from the same model object
    ! and on the same wavelength grid (m%lam) as its emission, rather than
    ! parsing data/kext_astrodust_MW.dat and interpolating off that file's grid:
-   !   call dust_extinction(m, Cext, Cabs, Csca [, gbar] [, status])
+   !   call dust_extinction(m, Cext, Cabs, Csca [, gbar] [, albedo] [, status])
    ! All three required outputs are (m%NLAM) cross sections per H atom
    ! [cm^2/H], integrated over the size distribution of every population:
    ! Cext = Cabs + Csca. Optional gbar is the scattering-weighted asymmetry
    ! <cos>, sum dn*Csca*g / sum dn*Csca, and is 0 at wavelengths where nothing
-   ! scatters. Populations without scattering optics (the PAHs) contribute zero
-   ! to those terms and enter through absorption only. status is 0 on success
-   ! and 1 if an output array is not of size m%NLAM; when it is omitted such a
-   ! call stops the run.
+   ! scatters; optional albedo is Csca/Cext, 0 where Cext underflows.
+   !
+   ! Every model carries its scattering optics, so the four builders all return
+   ! a physical albedo:
+   !   astrodust  Csca and <cos> from the random-orientation T-matrix Q table
+   !   dl07       Mie on the D03 astrosilicate and graphite dielectric
+   !              functions (q_silicate_full / q_graphite_full); the PAH
+   !              component scatters negligibly and enters through absorption
+   !   zubko      Q_sca and <cos> columns of the model's own DustEM tables
+   !   from_files same, for whatever tables the descriptor names
+   ! A population that genuinely does not scatter leaves its optics unallocated
+   ! and contributes zero to those terms. status is 0 on success and 1 if an
+   ! output array is not of size m%NLAM; when it is omitted such a call stops
+   ! the run.
    !
    ! dust_build_table and dust_emission_interp take the same optional final
    ! status argument (0 = success); when present a bad argument is reported

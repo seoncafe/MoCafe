@@ -21,7 +21,7 @@ The hydro variable indices come from `hydro_file_descriptor.txt` when present
 (density and metallicity are detected by name); otherwise pass
 `--density-index` / `--metallicity-index` explicitly.
 
-MoCafe's dust opacity is chosen by `par%dust_model` in `ramses.in`:
+MoCafe's dust opacity is chosen by `par%dust_density_law` in `ramses.in`:
 `global_dgr` (nH only), `laursen09` (metallicity + xHI), or `from_file`
 (`--emit-ndust`).  See `ramses.in` for a template and `docs/MoCafe_amr.pdf`
 for the algorithm.

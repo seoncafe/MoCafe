@@ -16,7 +16,7 @@ Velocity and temperature are **not** used (dust only): the converter reads the
 `Density` → `nH`, `GFM_Metallicity` → `metallicity`, and
 `NeutralHydrogenAbundance` → `xHI`, and (with `--emit-ndust`) precomputes
 `ndust` via Laursen+09.  MoCafe's dust opacity then comes from
-`par%dust_model`:
+`par%dust_density_law`:
 - `global_dgr` — `nH·cext·DGR` (needs only `nH`),
 - `laursen09`  — `(Z/Z_ref)(nHI+f_ion·nHII)·cext` (uses `metallicity`+`xHI`),
 - `from_file`  — `ndust·cext` (needs `--emit-ndust`).

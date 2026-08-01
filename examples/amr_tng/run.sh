@@ -32,5 +32,5 @@ python3 $CONV "$CUTOUT" -o tng_amr.h5       --grid-type amr --level-min 3 \
         --level-max 6 --boxsize 60 --emit-ndust
 
 #--- (2) run MoCafe (central source illuminating the galaxy dust)
-mpirun -np $NTHREADS $EXEC tng.in        # uniform grid, dust_model=laursen09
-mpirun -np $NTHREADS $EXEC tng_amr.in    # adaptive grid, dust_model=global_dgr
+mpirun -np $NTHREADS $EXEC tng.in        # uniform grid, dust_density_law=laursen09
+mpirun -np $NTHREADS $EXEC tng_amr.in    # adaptive grid, dust_density_law=global_dgr

@@ -3,7 +3,7 @@
  par%use_sed         = .true.
  par%save_jlam       = .true.
  par%use_dustemis    = .true.
- par%dust_model_sed  = 'astrodust'
+ par%dust_model  = 'astrodust'
  par%dust_niter      = 10
  par%dust_no_photons = 2.0e5
  par%dust_tol        = 3.0e-3

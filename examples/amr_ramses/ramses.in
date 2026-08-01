@@ -13,7 +13,7 @@
 
  par%grid_type       = 'amr'
  par%amr_file        = 'ramses.fits'
- par%dust_model      = 'global_dgr' ! 'laursen09' (metallicity+xHI) | 'from_file' (ndust)
+ par%dust_density_law      = 'global_dgr' ! 'laursen09' (metallicity+xHI) | 'from_file' (ndust)
  par%DGR             = 1.0e-2
  par%distance_unit   = 'kpc'
 

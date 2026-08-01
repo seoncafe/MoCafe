@@ -9,7 +9,7 @@
  par%save_direc0     = .true.
  par%grid_type       = 'amr'
  par%amr_file        = 'amr_sphere_refined.fits'
- par%dust_model      = 'global_dgr'
+ par%dust_density_law      = 'global_dgr'
  par%DGR             = 1.0e-2
  par%distance_unit   = ''
  par%nxim = 129

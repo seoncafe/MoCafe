@@ -4,7 +4,7 @@ module physics_amr_mod
 !
 ! Only the metallicity->dust relation (Laursen+09) is kept; the CIE neutral
 ! fraction (T->xHI) and the Case-B Lyman-alpha emissivity are deferred with
-! temperature (AMR_CLUMPS_PLAN.md Part A / Section 6).  For dust_model =
+! temperature (AMR_CLUMPS_PLAN.md Part A / Section 6).  For dust_density_law =
 ! 'laursen09' MoCafe therefore requires an explicit xHI column in the file.
 !---------------------------------------------------------------------------
   use define, only: wp

@@ -219,9 +219,13 @@ public
      !--- SED (multi-wavelength) mode (MoCafe v2.00, Stage 1).  When
      !--- use_sed = .true., a single run transports photons over a log-spaced
      !--- wavelength grid [lambda_min, lambda_max] (um) with nlambda bins.
-     !--- Dust properties C_ext/albedo/g vs lambda are read from kext_file
-     !--- (e.g. SEDust calc_kext_astrodust.x output: lambda, albedo, <cos>,
-     !--- C_ext/H columns; '#' comments).  The source spectrum is either a
+     !--- Dust properties C_ext/albedo/g vs lambda come from the grain model
+     !--- named by dust_model, integrated over its size distribution, so
+     !--- that the transport and the dust emission refer to the same grains.
+     !--- Setting kext_file overrides that with an explicit table (lambda,
+     !--- albedo, <cos>, C_ext/H columns; '#' comments), which is consistent
+     !--- with the emission only if it came from the same model.
+     !--- The source spectrum is either a
      !--- 2-column file source_spectrum (lambda[um], L_lambda[arb]) or a
      !--- Planck function with temperature tstar (K).  The grid opacity and
      !--- par%taumax/tauhomo refer to the reference wavelength lambda_ref.
@@ -275,7 +279,7 @@ public
      !--- stochastic + PAH; iterable); 'bw01' = Bjorkman & Wood 2001 immediate
      !--- reemission (approximate, equilibrium mixture-mean opacity, no PAH).
      character(len=8)   :: dust_emission_method = 'lucy'
-     character(len=16)  :: dust_model_sed   = 'astrodust'
+     character(len=16)  :: dust_model   = 'astrodust'
      !--- SEDust optics/size-distribution paths, resolved relative to
      !--- par%sed_workdir (build_astrodust is called from there so that
      !--- SEDust's own '../data/dielectric/...' relative reads resolve too).
@@ -289,13 +293,13 @@ public
      integer            :: sed_NT           = 200
      real(kind=wp)      :: sed_Tlo          = 2.7_wp
      real(kind=wp)      :: sed_Thi          = 5.0e3_wp
-     !--- DL07 (Draine & Li 2007; dust_model_sed='dl07') reuses sed_qtable and
+     !--- DL07 (Draine & Li 2007; dust_model='dl07') reuses sed_qtable and
      !--- sed_sizedist (same files as astrodust).  sed_dl07_sdindex = WD01
      !--- size-distribution index (7 = MW R_V=3.1, b_C=6e-5); sed_dl07_uisrf =
      !--- reference radiation-field scaling U (1 = MMP83 diffuse ISM).
      integer            :: sed_dl07_sdindex = 7
      real(kind=wp)      :: sed_dl07_uisrf   = 1.0_wp
-     !--- Zubko (ZDA 2004 BARE-GR-S; dust_model_sed='zubko'): the ZDA config
+     !--- Zubko (ZDA 2004 BARE-GR-S; dust_model='zubko'): the ZDA config
      !--- file and the DustEM optics/calorimetry directory, resolved from
      !--- sed_workdir (defaults point at the copied SEDust/data/zubko).
      character(len=256) :: sed_zubko_config = '../data/zubko/ZDA_BARE_GR_S_Config.dat'
@@ -383,12 +387,12 @@ public
      !--- AMR_CLUMPS_PLAN.md Part A.  Leaf data are read from a generic AMR
      !--- file (FITS/HDF5/text) produced by the Python builders/converters;
      !--- amr_type='ramses' is rejected (convert to 'generic' first).  The
-     !--- dust opacity of each leaf follows dust_model: 'global_dgr'
+     !--- dust opacity of each leaf follows dust_density_law: 'global_dgr'
      !--- (nH*cext_dust*DGR), 'from_file' (ndust column), or 'laursen09'
      !--- ((Z/Z_ref)*(nHI+f_ion*nHII), requires an xHI column).
      character(len=32)  :: amr_type   = 'generic'
      character(len=128) :: amr_file   = ''
-     character(len=32)  :: dust_model = 'global_dgr'
+     character(len=32)  :: dust_density_law = 'global_dgr'
      real(kind=wp)      :: DGR        = 1.0e-2_wp
      real(kind=wp)      :: Z_global   = 0.0134_wp
      real(kind=wp)      :: Z_ref      = 0.0134_wp

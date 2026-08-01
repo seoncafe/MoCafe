@@ -4,7 +4,7 @@
  par%save_jlam       = .true.
  par%dust_fast_table = .true.
  par%use_dustemis    = .true.
- par%dust_model_sed  = 'astrodust'
+ par%dust_model  = 'astrodust'
  par%dust_niter      = 1
  par%dust_no_photons = 1.0e5
  par%luminosity      = 3.828e33

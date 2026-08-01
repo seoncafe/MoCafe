@@ -105,6 +105,7 @@ OBJS	= \
 	mathlib.o \
 	healpix.o \
 	spectrum_sampler_mod.o \
+	grain_model_mod.o \
 	sed_mod.o \
 	random_bulge.o \
 	sources_mod.o \

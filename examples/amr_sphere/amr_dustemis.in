@@ -10,7 +10,7 @@
  par%luminosity      = 3.828e33
  par%grid_type       = 'amr'
  par%amr_file        = 'amr_sphere_uniform.fits'
- par%dust_model      = 'global_dgr'
+ par%dust_density_law      = 'global_dgr'
  par%DGR             = 1.0e-2
  par%nlambda         = 60
  par%lambda_min      = 0.0912

@@ -1,10 +1,16 @@
 module sed_mod
 !--- Multi-wavelength (SED) infrastructure for MoCafe v2.00 (Stage 1).
 !--- Provides: a log-spaced wavelength grid; wavelength-dependent dust
-!--- properties C_ext(lambda), albedo(lambda), g(lambda) read from an
-!--- extinction table (e.g. SEDust calc_kext_astrodust.x output); and a
-!--- stellar source spectrum (Planck or 2-column file) from which every photon
-!--- draws a continuous wavelength.
+!--- properties C_ext(lambda), albedo(lambda), g(lambda); and a stellar source
+!--- spectrum (Planck or 2-column file) from which every photon draws a
+!--- continuous wavelength.
+!---
+!--- The cross sections come from the grain model named by par%dust_model,
+!--- integrated over its size distribution by grain_model_mod.  They then refer
+!--- to the same grains that radiate the absorbed energy back out in
+!--- dustemis_mod, which is what makes the energy balance of a cell physical.
+!--- An explicit table file (par%kext_file) overrides the model when set; the
+!--- two agree only if the file was produced from the same model.
 !---
 !--- The wavelength is sampled by inverting the analytic cumulative distribution
 !--- of the spectrum (spectrum_sampler_mod), not by drawing a bin index.  Pinning
@@ -22,6 +28,7 @@ module sed_mod
   use define
   use random, only : rand_number
   use spectrum_sampler_mod
+  use grain_model_mod, only : grain_extinction_table
   implicit none
   public
 
@@ -64,7 +71,7 @@ contains
   real(kind=wp), allocatable :: sp_lam(:), sp_lum(:)
   real(kind=wp) :: lum_sum
   integer       :: nsp, il, ierr
-  logical       :: spec_is_absolute, spec_derived, ok
+  logical       :: spec_is_absolute, spec_derived, ok, from_grain_model
 
   if (par%nlambda < 2) then
      if (mpar%p_rank == 0) write(*,'(a)') 'ERROR: par%nlambda must be >= 2 in SED mode.'
@@ -74,10 +81,12 @@ contains
      if (mpar%p_rank == 0) write(*,'(a)') 'ERROR: require 0 < lambda_min < lambda_max in SED mode.'
      call MPI_FINALIZE(ierr);  stop
   endif
-  if (len_trim(par%kext_file) == 0) then
-     if (mpar%p_rank == 0) write(*,'(a)') 'ERROR: SED mode requires par%kext_file (lambda, albedo, <cos>, C_ext/H table).'
-     call MPI_FINALIZE(ierr);  stop
-  endif
+  !--- The transport cross sections come either from the named grain model
+  !--- (par%dust_model, the default) or from an explicit table file.
+  !--- Deriving them from the model keeps the absorbed power and the reemitted
+  !--- spectrum on the same grains and on the same wavelength grid; a file is
+  !--- read only when par%kext_file is set, which then overrides the model.
+  from_grain_model = len_trim(par%kext_file) == 0
 
   !--- log-spaced wavelength grid (bin edges and geometric bin centers).
   sed_nlam = par%nlambda
@@ -95,18 +104,33 @@ contains
      sed_dwave(il) = sed_edge(il+1) - sed_edge(il)
   enddo
 
-  !--- read the dust extinction table (rank 0) and broadcast.  The table is kept
-  !--- for the whole run: the cross sections are evaluated at each photon's
-  !--- sampled wavelength, not only at the bin centers.
-  if (mpar%p_rank == 0) call read_kext_table(trim(par%kext_file), sed_tab_lam, sed_tab_alb, &
-                                             sed_tab_cos, sed_tab_cext, sed_ntab)
-  call MPI_BCAST(sed_ntab, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
-  if (mpar%p_rank /= 0) allocate(sed_tab_lam(sed_ntab), sed_tab_alb(sed_ntab), &
-                                 sed_tab_cos(sed_ntab), sed_tab_cext(sed_ntab))
-  call MPI_BCAST(sed_tab_lam,  sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-  call MPI_BCAST(sed_tab_alb,  sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-  call MPI_BCAST(sed_tab_cos,  sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
-  call MPI_BCAST(sed_tab_cext, sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+  !--- the dust extinction table, kept for the whole run: the cross sections are
+  !--- evaluated at each photon's sampled wavelength, not only at the bin centers.
+  if (from_grain_model) then
+     !--- size-integrated C_ext/albedo/<cos> of the named model.  Every rank
+     !--- builds the model from the same files, so no broadcast is needed.
+     call grain_extinction_table(sed_tab_lam, sed_tab_alb, sed_tab_cos, sed_tab_cext, sed_ntab)
+  else
+     !--- explicit table (rank 0 reads and broadcasts).
+     if (mpar%p_rank == 0) call read_kext_table(trim(par%kext_file), sed_tab_lam, sed_tab_alb, &
+                                                sed_tab_cos, sed_tab_cext, sed_ntab)
+     call MPI_BCAST(sed_ntab, 1, MPI_INTEGER, 0, MPI_COMM_WORLD, ierr)
+     if (mpar%p_rank /= 0) allocate(sed_tab_lam(sed_ntab), sed_tab_alb(sed_ntab), &
+                                    sed_tab_cos(sed_ntab), sed_tab_cext(sed_ntab))
+     call MPI_BCAST(sed_tab_lam,  sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+     call MPI_BCAST(sed_tab_alb,  sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+     call MPI_BCAST(sed_tab_cos,  sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+     call MPI_BCAST(sed_tab_cext, sed_ntab, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierr)
+  endif
+
+  if (mpar%p_rank == 0) then
+     if (from_grain_model) then
+        write(*,'(3a,i0,a)') 'Dust optics               : ', trim(par%dust_model), &
+                             ' (SEDust, ', sed_ntab, ' wavelengths)'
+     else
+        write(*,'(2a)')      'Dust optics               : ', trim(par%kext_file)
+     endif
+  endif
 
   !--- bin-center values of the dust properties, kept for the dust-emission
   !--- arrays and the output writers.  Photons use sed_*_at(lambda) instead.

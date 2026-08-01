@@ -298,28 +298,9 @@ contains
               'ERROR: dust_emission_method=''lucy'' requires par%save_jlam = .true.'
            call MPI_FINALIZE(ierr);  stop
         endif
-        select case (trim(par%dust_model_sed))
-        case ('astrodust', 'dl07')
-           if (len_trim(par%sed_qtable) == 0 .or. len_trim(par%sed_sizedist) == 0) then
-              if (mpar%p_rank == 0) write(*,'(3a)') &
-                 'ERROR: dust_model_sed=''', trim(par%dust_model_sed), &
-                 ''' requires par%sed_qtable and par%sed_sizedist.'
-              call MPI_FINALIZE(ierr);  stop
-           endif
-        case ('zubko')
-           if (len_trim(par%sed_zubko_config) == 0 .or. len_trim(par%sed_zubko_dir) == 0) then
-              if (mpar%p_rank == 0) write(*,'(a)') &
-                 'ERROR: dust_model_sed=''zubko'' requires par%sed_zubko_config and par%sed_zubko_dir.'
-              call MPI_FINALIZE(ierr);  stop
-           endif
-        case default
-           if (mpar%p_rank == 0) write(*,'(3a)') &
-              'ERROR: par%dust_model_sed = ''', trim(par%dust_model_sed), &
-              ''' unknown (use ''astrodust'', ''dl07'', or ''zubko'').'
-           call MPI_FINALIZE(ierr);  stop
-        end select
      case ('bw01')
-        !--- Bjorkman & Wood needs only the mixture opacity (par%kext_file).
+        !--- Bjorkman & Wood needs only the mixture opacity, which comes from
+        !--- the same place as the transport cross sections.
      case default
         if (mpar%p_rank == 0) write(*,'(3a)') &
            'ERROR: par%dust_emission_method = ''', trim(par%dust_emission_method), &
@@ -328,6 +309,33 @@ contains
      end select
      if (par%luminosity <= 1.0_wp .and. mpar%p_rank == 0) write(*,'(a)') &
         'WARNING: par%luminosity <= 1; set it to the physical stellar luminosity [erg/s] for absolute dust temperatures.'
+  endif
+
+  !--- Inputs of the named grain model.  It is built whenever the transport
+  !--- takes its cross sections from it (par%kext_file blank) or the Lucy
+  !--- iteration needs its emission, so both cases are checked here.
+  if (par%use_sed .and. (len_trim(par%kext_file) == 0 .or. &
+      (par%use_dustemis .and. trim(par%dust_emission_method) == 'lucy'))) then
+     select case (trim(par%dust_model))
+     case ('astrodust', 'dl07')
+        if (len_trim(par%sed_qtable) == 0 .or. len_trim(par%sed_sizedist) == 0) then
+           if (mpar%p_rank == 0) write(*,'(3a)') &
+              'ERROR: dust_model=''', trim(par%dust_model), &
+              ''' requires par%sed_qtable and par%sed_sizedist.'
+           call MPI_FINALIZE(ierr);  stop
+        endif
+     case ('zubko')
+        if (len_trim(par%sed_zubko_config) == 0 .or. len_trim(par%sed_zubko_dir) == 0) then
+           if (mpar%p_rank == 0) write(*,'(a)') &
+              'ERROR: dust_model=''zubko'' requires par%sed_zubko_config and par%sed_zubko_dir.'
+           call MPI_FINALIZE(ierr);  stop
+        endif
+     case default
+        if (mpar%p_rank == 0) write(*,'(3a)') &
+           'ERROR: par%dust_model = ''', trim(par%dust_model), &
+           ''' unknown (use ''astrodust'', ''dl07'', or ''zubko'').'
+        call MPI_FINALIZE(ierr);  stop
+     end select
   endif
 
   !--- Scan modes: (a,g) -- Seon 2010, PKAS, 25, 177; tau (polychromatic) -- Jonsson

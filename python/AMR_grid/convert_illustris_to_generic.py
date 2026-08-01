@@ -225,7 +225,7 @@ def main(argv=None):
     grid.write(args.output)
     print("Hint: MoCafe namelist -> par%grid_type='amr', par%amr_file='"
           + args.output + "',")
-    print("      par%dust_model='laursen09' (metallicity+xHI) | 'from_file' "
+    print("      par%dust_density_law='laursen09' (metallicity+xHI) | 'from_file' "
           "(--emit-ndust) | 'global_dgr' (nH only); par%distance_unit='kpc'.")
 
 

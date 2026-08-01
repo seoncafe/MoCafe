@@ -362,7 +362,7 @@ def main(argv=None):
                  origin=(0.0, 0.0, 0.0), metallicity=Z, xHI=xHI, ndust=ndust)
     print("Hint: MoCafe namelist -> par%grid_type='amr', par%amr_file='"
           + args.output + "', par%distance_unit='" + args.output_unit + "',")
-    print("      par%dust_model='global_dgr' | 'laursen09' (needs metallicity+xHI) "
+    print("      par%dust_density_law='global_dgr' | 'laursen09' (needs metallicity+xHI) "
           "| 'from_file' (--emit-ndust).")
 
 

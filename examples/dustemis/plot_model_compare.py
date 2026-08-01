@@ -3,7 +3,7 @@
 (astrodust, DL07, Zubko) as computed by MoCafe.
 
 Reads the `_dustsed` outputs of three otherwise-identical runs that differ only
-in par%dust_model_sed, and overlays lambda*L_lambda.  Each run absorbs the same
+in par%dust_model, and overlays lambda*L_lambda.  Each run absorbs the same
 stellar power, so the total emitted luminosity is identical and the curves
 differ only in spectral shape (PAH bands, silicate features, FIR peak, submm
 slope).

@@ -239,7 +239,7 @@ or set `SEDUST_SRC=/your/SEDust`, to point at your own SEDust tree.
 | `nlambda` | 128 | Number of log-spaced wavelength bins. Binning only — a packet's wavelength is drawn continuously from the spectrum, and `s_ext`/albedo/`g` are read at that wavelength, so `nlambda` sets output resolution, not sampling fidelity |
 | `lambda_min`, `lambda_max` | 0.0912, 2000 | Wavelength range [µm] |
 | `lambda_ref` | 0.55 | Reference wavelength [µm]; `taumax`/`tauhomo` and the grid opacity are defined here |
-| `kext_file` | `''` | Table of `λ, albedo, ⟨cos⟩, C_ext/H` (e.g. `data/kext_astrodust_MW.dat`, from SEDust `calc_kext_*.x`) |
+| `kext_file` | `''` | **Override.** Explicit table of `λ, albedo, ⟨cos⟩, C_ext/H`. Leave blank (default) and the cross sections come from the `dust_model` grain model itself, on that model's own wavelength grid. Set it only to force a different table, and only if it came from the same model — a mismatch silently breaks the absorbed-power/reemission balance |
 | `source_spectrum` | `''` | Two-column source spectrum `λ, L_λ` (single source); column units set by `spectrum_type` |
 | `spectrum_type` | `'shape'` | Column units of every source spectrum file (see below) |
 | `tstar` | -999 | Planck source temperature [K] (single source), if no `source_spectrum` |
@@ -336,7 +336,7 @@ On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are arrays indexed by leaf plus 
 |-----------|---------|-------------|
 | `use_dustemis` | `.false.` | Compute dust emission (requires `use_sed`) |
 | `dust_emission_method` | `'lucy'` | `'lucy'` (SEDust) or `'bw01'` (Bjorkman & Wood) |
-| `dust_model_sed` | `'astrodust'` | SEDust grain model: `'astrodust'` (Hensley & Draine 2023), `'dl07'` (Draine & Li 2007), or `'zubko'` (Zubko et al. 2004 BARE-GR-S) |
+| `dust_model` | `'astrodust'` | SEDust grain model: `'astrodust'` (Hensley & Draine 2023), `'dl07'` (Draine & Li 2007), or `'zubko'` (Zubko et al. 2004 BARE-GR-S) |
 | `sed_qtable`, `sed_sizedist` | `SEDust/` | Optics / size-distribution paths for `astrodust` and `dl07` (relative to `sed_workdir`) |
 | `sed_dl07_sdindex`, `sed_dl07_uisrf` | 7, 1.0 | `dl07` only: WD01 size-distribution index (7 = MW R_V=3.1) and reference field scaling U |
 | `sed_zubko_config`, `sed_zubko_dir` | `../data/zubko/...` | `zubko` only: ZDA config file and DustEM data directory (relative to `sed_workdir`; committed under `SEDust/data/zubko/`) |
@@ -368,7 +368,7 @@ Set `dust_emission_method = 'bw01'`.  Approximate, equilibrium, mixture
 mean-opacity, **no iteration**: fixed-energy packets scatter and
 absorb+immediately-reemit, each absorption raising the local temperature and
 resampling the wavelength from the temperature-correction spectrum.  Needs
-only the `kext_file` (no SEDust).  No PAH/stochastic features.  Writes
+only the mixture opacity, no stochastic solve.  No PAH features.  Writes
 `<base>_bwdust` (equilibrium `Tdust` and absorbed-power maps); the emergent
 dust emission lands in the observer `Scattered` SED image.
 
@@ -464,7 +464,7 @@ only when individual cells are very thick (τ_cell ≫ 1) and near-pure-scatteri
  par%nlambda     = 100
  par%lambda_min  = 0.0912
  par%lambda_max  = 2000.0
- par%kext_file   = 'data/kext_astrodust_MW.dat'
+ par%dust_model  = 'astrodust'      ! optics and emission from one model
  par%tstar       = 1.0e4
  par%taumax      = 5.0
  par%source_geometry = 'point'
@@ -613,7 +613,7 @@ the `_jlam`/`_dustsed`/`_bwdust` outputs become arrays indexed by leaf plus a
 |-----------|---------|-------------|
 | `amr_type` | `'generic'` | Only `'generic'`; `'ramses'` is rejected (convert first) |
 | `amr_file` | `''` | Generic AMR file (`.h5`, `.hdf5`, `.fits`, `.fits.gz`, `.dat`) |
-| `dust_model` | `'global_dgr'` | Dust opacity model for each leaf (below) |
+| `dust_density_law` | `'global_dgr'` | Dust opacity model for each leaf (below) |
 | `DGR` | 1e-2 | Dust-to-gas ratio for `global_dgr` |
 | `Z_global` | 0.0134 | Uniform metallicity for `laursen09` when no `metallicity` column |
 | `Z_ref` | 0.0134 | Reference solar metallicity |
@@ -639,7 +639,7 @@ name; an index fallback handles legacy files):
 
 ### AMR dust models
 
-| `dust_model` | Needs (columns) | Opacity of each leaf |
+| `dust_density_law` | Needs (columns) | Opacity of each leaf |
 |--------------|-----------------|------------------|
 | `global_dgr` | `nH` | `nH·cext_dust·DGR·distance2cm` |
 | `from_file` | `ndust` | `ndust·cext_dust·distance2cm` |

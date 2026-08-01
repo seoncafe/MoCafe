@@ -36,12 +36,14 @@ module sed_astrodust_mod
    use enthalpy_astrodust_mod, only: enthalpy_S1, enthalpy_S2
    use enthalpy,              only: enthalpy_DL01
    use qpah,                  only: qpah_dl07, qpah_ld01, &
-                                    nc_coeff, nc_integer, qpah_use_d03_graphite
+                                    nc_coeff, nc_integer, qpah_use_d03_graphite, &
+                                    xi_A_T_um, xi_FGMIN
    use pah_ld01_mod,          only: q_pah_ld01, use_ld01_pah_xsec
    use stoch_qm_mod,          only: qm_solve_grain, qm_verbose
    ! DL07 (silicate + carbonaceous) model support
    use grain_dist_mod,        only: grain_dist_dl07, gd_apply_d03_reduction
-   use q_silicate_mod,        only: q_silicate_abs
+   use q_silicate_mod,        only: q_silicate_abs, q_silicate_full
+   use q_graphite_mod,        only: q_graphite_full
    use pah_ioniz_mod,         only: pah_ionfrac
    use dust_model_mod,        only: dust_model_t, grain_pop_t, free_dust_model
    use zubko_io,              only: zda_comp_t, read_zda_config, zda_gofa, &
@@ -155,6 +157,14 @@ module sed_astrodust_mod
    ! arrays above are reused as charge-resolved scratch inside sed_solve_dl07.
    real(wp), allocatable :: Cabs_cneu(:,:), Cabs_cion(:,:)   ! [cm^2] (NLAM, NA)
    real(wp), allocatable :: dn_cneu(:), dn_cion(:)           ! [1/H per bin] (NA)
+   ! Scattering of the DL07 carbonaceous grains.  Charge changes the PAH
+   ! absorption features only, and the PAH component is a molecule that
+   ! scatters negligibly, so the two charge states share one scattering
+   ! description: that of the graphite fraction xi_gra of the PAH-to-graphite
+   ! transition.  Computed from the graphite dielectric function by Mie theory
+   ! (q_graphite_full), on the same random-orientation average as the
+   ! absorption, rather than interpolated off a precomputed Q table.
+   real(wp), allocatable :: Csca_car(:,:), gsca_car(:,:)     ! [cm^2], - (NLAM, NA)
    ! Charge-resolved kappB / kappCMB for the astrodust path (sed_init / sed_solve_pah /
    ! sed_solve_qm_batch), where both charge states must be available at once
    ! (the QM batch runs them in one parallel region, so they cannot share the
@@ -494,6 +504,7 @@ contains
 
       integer  :: i, ja, jw, jt
       real(wp) :: a_um, t, da, qabs1, Q_neu, Q_ion
+      real(wp) :: geo, qext1, qsca1, gsca1
       real(wp), allocatable :: fion(:), lna(:)
       logical  :: rok
       ! Draine's size grid: A(KA) = 1e-8*10^(0.55+(KA-1)*0.05) cm,
@@ -526,12 +537,15 @@ contains
             log_T_first, log_H_first, log_kappB_first, &
             dn_pah, Cabs_pah, kappB_pah_first, H_pah_first, kappCMB_pah, &
             log_H_pah_first, log_kappB_pah_first)
-      ! DL07 optics carry no astrodust asymmetry table; drop anything a previous
-      ! astrodust init left behind rather than leave a stale array on the wrong grid.
-      if (allocated(gsca_ad)) deallocate(gsca_ad)
+      ! Drop anything a previous astrodust init left behind rather than leave a
+      ! stale array on the wrong grid; the DL07 scattering optics below are
+      ! computed on this model's own size/wavelength grids.
+      if (allocated(gsca_ad))  deallocate(gsca_ad)
+      if (allocated(Csca_car)) deallocate(Csca_car, gsca_car)
       allocate(lam(NLAM), aeff(NA), T_first(NT), dn_ad(NA))
       allocate(Cabs(NLAM, NA), Csca(NLAM, NA), kappB_first(NT, NA), &
                H_first(NT, NA, NSTAGE), kappCMB(NA))
+      allocate(gsca_ad(NLAM, NA), Csca_car(NLAM, NA), gsca_car(NLAM, NA))
       allocate(log_T_first(NT), log_H_first(NT, NA, NSTAGE), &
                log_kappB_first(NT, NA))
       allocate(dn_pah(NA), Cabs_pah(NLAM, NA), kappB_pah_first(NT, NA), &
@@ -559,12 +573,17 @@ contains
       end do
 
       ! ---- Silicate population (dust slot) ----
+      ! Mie on the D03 astrosilicate dielectric function keeps every return, so
+      ! the scattering cross section and its asymmetry come from the same
+      ! calculation as the absorption rather than from a tabulated albedo.
       do ja = 1, NA
          a_um = aeff(ja)
+         geo  = PI * (a_um * UM2CM)**2
          do jw = 1, NLAM
-            call q_silicate_abs(a_um, lam(jw), qabs1)
-            Cabs(jw, ja) = qabs1 * PI * (a_um * UM2CM)**2
-            Csca(jw, ja) = 0.0_wp
+            call q_silicate_full(a_um, lam(jw), qext1, qsca1, qabs1, gsca1)
+            Cabs(jw, ja)    = qabs1 * geo
+            Csca(jw, ja)    = qsca1 * geo
+            gsca_ad(jw, ja) = gsca1
          end do
          dn_ad(ja) = grain_dist_dl07(sd_index, 'sil', a_um) * bin_da(ja, lna)
       end do
@@ -591,11 +610,21 @@ contains
       end do
       do ja = 1, NA
          a_um = aeff(ja)
+         geo  = PI * (a_um * UM2CM)**2
          do jw = 1, NLAM
             call qpah_dl07(0, a_um, lam(jw), Q_neu)
             call qpah_dl07(1, a_um, lam(jw), Q_ion)
-            Cabs_cneu(jw, ja) = Q_neu * PI * (a_um * UM2CM)**2
-            Cabs_cion(jw, ja) = Q_ion * PI * (a_um * UM2CM)**2
+            Cabs_cneu(jw, ja) = Q_neu * geo
+            Cabs_cion(jw, ja) = Q_ion * geo
+            ! Scattering of the carbonaceous grain.  Charge shifts the PAH
+            ! absorption features only, and a PAH is a molecule whose Rayleigh
+            ! scattering is negligible, so both charge states scatter as the
+            ! graphite sphere does -- random-orientation Mie (1/3 || + 2/3 perp)
+            ! on the graphite dielectric function, the same treatment
+            ! calc_kext_dl07 uses.
+            call q_graphite_full(a_um, lam(jw), qext1, qsca1, qabs1, gsca1)
+            Csca_car(jw, ja) = qsca1 * geo
+            gsca_car(jw, ja) = gsca1
          end do
          ! full carbonaceous number per bin (graphite-split + PAH-split),
          ! partitioned into neutral / cation by the ionization fraction.
@@ -1703,12 +1732,19 @@ contains
       log_kappB_cion = log(max(kappB_cion, tiny(0.0_wp)))
 
       allocate(m%pops(3))
+      ! Both the silicate and the two carbonaceous charge states scatter, so all
+      ! three populations carry their scattering optics into dust_extinction.
+      ! The charge states share one scattering description (the graphite sphere);
+      ! they differ in dn and in absorption only.
       call set_pop(m%pops(1), 'sil', 1, dn_ad, Cabs, kappB_first, H_first(:,:,1), &
-                   log_H_first(:,:,1), log_kappB_first, kappCMB)
+                   log_H_first(:,:,1), log_kappB_first, kappCMB, &
+                   Csca_in=Csca, gsca_in=gsca_ad)
       call set_pop(m%pops(2), 'pah', 2, dn_cneu, Cabs_cneu, kappB_cneu, H_pah_first, &
-                   log_H_pah_first, log_kappB_cneu, kappCMB_cneu)
+                   log_H_pah_first, log_kappB_cneu, kappCMB_cneu, &
+                   Csca_in=Csca_car, gsca_in=gsca_car)
       call set_pop(m%pops(3), 'pah', 2, dn_cion, Cabs_cion, kappB_cion, H_pah_first, &
-                   log_H_pah_first, log_kappB_cion, kappCMB_cion)
+                   log_H_pah_first, log_kappB_cion, kappCMB_cion, &
+                   Csca_in=Csca_car, gsca_in=gsca_car)
    end subroutine build_dl07
 
 
@@ -1737,7 +1773,7 @@ contains
       type(zda_comp_t)      :: comps(ZDA_MAXCOMP)
       integer               :: ncomp, ic, jt, ja, jw, nsize, nwave, ntc
       real(wp)              :: rho, vol_fac, mass, dlna, uspec, t, wdev
-      real(wp), allocatable :: a_opt(:), lam_opt(:), qa(:,:), qs(:,:)
+      real(wp), allocatable :: a_opt(:), lam_opt(:), qa(:,:), qs(:,:), gg(:,:)
       real(wp), allocatable :: Tcal(:), Ucal(:), Ccal(:), Hcol(:)
       logical               :: rok
       character(len=16)     :: cn(3)
@@ -1773,13 +1809,17 @@ contains
       do ic = 1, 3
          ! Cross-section file name from the config ('Cross Sections=...').
          optf = trim(comps(ic)%xsec)//'.dat'
+         ! The ZDA model is defined by these tables -- they are Zubko's own
+         ! multilayer-sphere solution, so the scattering side is read from the
+         ! same file as the absorption (Q_sca and <cos> columns) rather than
+         ! recomputed from a dielectric function this model does not supply.
          if (present(status)) then
             call read_zubko_optics(trim(data_dir)//trim(optf), nsize, nwave, &
-                                   a_opt, lam_opt, qa, qs, rho, ok=rok)
+                                   a_opt, lam_opt, qa, qs, rho, ok=rok, gpar=gg)
             if (.not. rok) then;  status = 3;  return;  end if
          else
             call read_zubko_optics(trim(data_dir)//trim(optf), nsize, nwave, &
-                                   a_opt, lam_opt, qa, qs, rho)
+                                   a_opt, lam_opt, qa, qs, rho, gpar=gg)
          end if
 
          ! The endpoint dln(a) below reads a_opt(2), so demand at least 2 radii.
@@ -1835,10 +1875,14 @@ contains
          ! --- component-by-component working set in the module globals (scratch) ---
          NA = nsize
          if (allocated(Cabs)) deallocate(Cabs, kappB_first, kappCMB)
+         if (allocated(Csca)) deallocate(Csca, gsca_ad)
          allocate(Cabs(NLAM, nsize), kappB_first(NT, nsize), kappCMB(nsize))
+         allocate(Csca(NLAM, nsize), gsca_ad(NLAM, nsize))
          do ja = 1, nsize
             do jw = 1, NLAM
-               Cabs(jw, ja) = qa(jw, ja) * PI * (a_opt(ja)*UM2CM)**2   ! cm^2
+               Cabs(jw, ja)    = qa(jw, ja) * PI * (a_opt(ja)*UM2CM)**2   ! cm^2
+               Csca(jw, ja)    = qs(jw, ja) * PI * (a_opt(ja)*UM2CM)**2   ! cm^2
+               gsca_ad(jw, ja) = gg(jw, ja)
             end do
          end do
          call build_kappB()         ! Cabs, lam, T_first, NA -> kappB_first
@@ -1867,6 +1911,8 @@ contains
             m%pops(ic)%grain_type = gt(ic)
             m%pops(ic)%out_channel = ic
             m%pops(ic)%Cabs    = Cabs
+            m%pops(ic)%Csca    = Csca
+            m%pops(ic)%gsca    = gsca_ad
             m%pops(ic)%kappB   = kappB_first
             m%pops(ic)%log_kappB = log(max(kappB_first, tiny(0.0_wp)))
             m%pops(ic)%H       = Hmat
@@ -1898,7 +1944,7 @@ contains
 
          m%pops(ic)%aeff = a_opt        ! [um] radii of this component (needed by 'qm')
 
-         deallocate(a_opt, lam_opt, qa, qs, Tcal, Ucal, Ccal)
+         deallocate(a_opt, lam_opt, qa, qs, gg, Tcal, Ucal, Ccal)
       end do
    end subroutine build_zubko
 
@@ -1967,7 +2013,7 @@ contains
       real(wp)           :: t, rho, mass, vf, dlna, uspec, fa, loga, wdev
       logical            :: rok
       character(len=256) :: line
-      real(wp), allocatable :: a_opt(:), lam_opt(:), qa(:,:), qs(:,:)
+      real(wp), allocatable :: a_opt(:), lam_opt(:), qa(:,:), qs(:,:), gg(:,:)
       real(wp), allocatable :: a_dn(:), f_dn(:), la_dn(:), lf_dn(:), Tc(:), Uc(:), Cc(:)
 
       if (present(status)) status = 0
@@ -2034,11 +2080,11 @@ contains
       do ip = 1, npop
          if (present(status)) then
             call read_zubko_optics(trim(data_dir)//trim(p_opt(ip)), nsize, nwave, &
-                                   a_opt, lam_opt, qa, qs, rho, ok=rok)
+                                   a_opt, lam_opt, qa, qs, rho, ok=rok, gpar=gg)
             if (.not. rok) then;  status = 5;  return;  end if
          else
             call read_zubko_optics(trim(data_dir)//trim(p_opt(ip)), nsize, nwave, &
-                                   a_opt, lam_opt, qa, qs, rho)
+                                   a_opt, lam_opt, qa, qs, rho, gpar=gg)
          end if
          if (p_rho(ip) > 0.0_wp) rho = p_rho(ip)         ! descriptor rho overrides file
 
@@ -2092,10 +2138,14 @@ contains
 
          NA = nsize
          if (allocated(Cabs)) deallocate(Cabs, kappB_first, kappCMB)
+         if (allocated(Csca)) deallocate(Csca, gsca_ad)
          allocate(Cabs(NLAM, nsize), kappB_first(NT, nsize), kappCMB(nsize))
+         allocate(Csca(NLAM, nsize), gsca_ad(NLAM, nsize))
          do ja = 1, nsize
             do jw = 1, NLAM
-               Cabs(jw, ja) = qa(jw, ja) * PI * (a_opt(ja)*UM2CM)**2
+               Cabs(jw, ja)    = qa(jw, ja) * PI * (a_opt(ja)*UM2CM)**2
+               Csca(jw, ja)    = qs(jw, ja) * PI * (a_opt(ja)*UM2CM)**2
+               gsca_ad(jw, ja) = gg(jw, ja)
             end do
          end do
          call build_kappB();  call build_kappCMB()
@@ -2145,6 +2195,8 @@ contains
             m%pops(ip)%out_channel = p_ch(ip)
             m%pops(ip)%dn = dn
             m%pops(ip)%Cabs = Cabs
+            m%pops(ip)%Csca = Csca
+            m%pops(ip)%gsca = gsca_ad
             m%pops(ip)%kappB = kappB_first
             m%pops(ip)%log_kappB = log(max(kappB_first, tiny(0.0_wp)))
             m%pops(ip)%H = Hmat
@@ -2155,7 +2207,7 @@ contains
 
          m%pops(ip)%aeff = a_opt        ! [um] radii of this population (needed by 'qm')
 
-         deallocate(a_opt, lam_opt, qa, qs, a_dn, f_dn, la_dn, lf_dn, Tc, Uc, Cc)
+         deallocate(a_opt, lam_opt, qa, qs, gg, a_dn, f_dn, la_dn, lf_dn, Tc, Uc, Cc)
       end do
    end subroutine build_from_files
 
@@ -2258,11 +2310,15 @@ contains
    !
    ! Units: all cross sections [cm^2/H]; gbar dimensionless.
    ! REQUIRES: m is the most recently built model (its grids == the globals).
-   subroutine dust_extinction(m, Cext, Cabs, Csca, gbar, status)
+   subroutine dust_extinction(m, Cext, Cabs, Csca, gbar, albedo, status)
       type(dust_model_t), intent(in)  :: m
       real(wp),           intent(out) :: Cext(:), Cabs(:), Csca(:)   ! (NLAM) [cm^2/H]
       ! Scattering-weighted asymmetry; 0 where nothing scatters.
       real(wp), optional, intent(out) :: gbar(:)                     ! (NLAM)
+      ! Scattering albedo C_sca/C_ext; 0 where the medium is transparent.
+      ! Derived here so that every caller gets the same convention at the
+      ! wavelengths where C_ext underflows to zero.
+      real(wp), optional, intent(out) :: albedo(:)                   ! (NLAM)
       ! Optional error report (0 = success). When present, a size mismatch is
       ! reported through it instead of stopping the process; when absent such a
       ! call stops the run, matching dust_emission.
@@ -2275,7 +2331,8 @@ contains
       if (present(status)) status = 0
 
       bad = size(Cext) /= m%NLAM .or. size(Cabs) /= m%NLAM .or. size(Csca) /= m%NLAM
-      if (present(gbar)) bad = bad .or. size(gbar) /= m%NLAM
+      if (present(gbar))   bad = bad .or. size(gbar)   /= m%NLAM
+      if (present(albedo)) bad = bad .or. size(albedo) /= m%NLAM
       if (bad) then
          if (present(status)) then
             status = 1;  return
@@ -2317,6 +2374,12 @@ contains
          gbar = 0.0_wp
          do jw = 1, m%NLAM
             if (Csca(jw) > 0.0_wp) gbar(jw) = gnum(jw) / Csca(jw)
+         end do
+      end if
+      if (present(albedo)) then
+         albedo = 0.0_wp
+         do jw = 1, m%NLAM
+            if (Cext(jw) > 0.0_wp) albedo(jw) = Csca(jw) / Cext(jw)
          end do
       end if
       deallocate(gnum)
