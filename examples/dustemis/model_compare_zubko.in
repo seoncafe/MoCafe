@@ -12,7 +12,6 @@
  par%lambda_min      = 0.0912
  par%lambda_max      = 2000.0
  par%lambda_ref      = 0.55
- par%kext_file       = '../../data/kext_astrodust_MW.dat'
  par%tstar           = 1.0e4
  par%taumax          = 5.0
  par%source_geometry = 'point'

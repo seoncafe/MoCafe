@@ -220,11 +220,13 @@ public
      !--- use_sed = .true., a single run transports photons over a log-spaced
      !--- wavelength grid [lambda_min, lambda_max] (um) with nlambda bins.
      !--- Dust properties C_ext/albedo/g vs lambda come from the grain model
-     !--- named by dust_model, integrated over its size distribution, so
-     !--- that the transport and the dust emission refer to the same grains.
-     !--- Setting kext_file overrides that with an explicit table (lambda,
-     !--- albedo, <cos>, C_ext/H columns; '#' comments), which is consistent
-     !--- with the emission only if it came from the same model.
+     !--- named by dust_model: SEDust serves the size-integrated extinction
+     !--- curve precomputed for that model (par%sed_kext) interpolated onto the
+     !--- model's own wavelength grid, so that the transport and the dust
+     !--- emission refer to the same grains.  Setting kext_file skips the grain
+     !--- model altogether and reads an explicit table (lambda, albedo, <cos>,
+     !--- C_ext/H columns; '#' comments), which is consistent with the emission
+     !--- only if it came from the same model.
      !--- The source spectrum is either a
      !--- 2-column file source_spectrum (lambda[um], L_lambda[arb]) or a
      !--- Planck function with temperature tstar (K).  The grid opacity and
@@ -304,6 +306,17 @@ public
      !--- sed_workdir (defaults point at the copied SEDust/data/zubko).
      character(len=256) :: sed_zubko_config = '../data/zubko/ZDA_BARE_GR_S_Config.dat'
      character(len=256) :: sed_zubko_dir    = '../data/zubko/'
+     !--- Precomputed size-integrated extinction curve (lambda, albedo, <cos>,
+     !--- C_ext/H, C_abs/H, C_sca/H) that SEDust interpolates onto the model
+     !--- wavelength grid to give the transport its cross sections.  Blank
+     !--- (default) = the standard table of the named dust_model, which is the
+     !--- EUV-extended product covering the plain grid as well
+     !--- (SEDust/data/kext_astrodust_MW_euv.dat, kext_dl07_MW_euv.dat,
+     !--- kext_zubko_BARE_GR_S.dat).  Naming a file here makes it mandatory --
+     !--- the run stops if it cannot be read -- and it must have been computed
+     !--- from the same model and size distribution the emission uses, which is
+     !--- what SEDust's calc_kext.x writes.  Resolved from sed_workdir.
+     character(len=256) :: sed_kext         = ''
      !--- Lucy iteration for dust self-absorption (Stage 3 follow-up #1).
      !--- dust_niter = max iterations (1 = non-iterative); dust_nphotons =
      !--- dust-emission photons per iteration; dust_tol = relative-change

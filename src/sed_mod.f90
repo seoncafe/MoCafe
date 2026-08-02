@@ -5,12 +5,13 @@ module sed_mod
 !--- spectrum (Planck or 2-column file) from which every photon draws a
 !--- continuous wavelength.
 !---
-!--- The cross sections come from the grain model named by par%dust_model,
-!--- integrated over its size distribution by grain_model_mod.  They then refer
-!--- to the same grains that radiate the absorbed energy back out in
-!--- dustemis_mod, which is what makes the energy balance of a cell physical.
-!--- An explicit table file (par%kext_file) overrides the model when set; the
-!--- two agree only if the file was produced from the same model.
+!--- The cross sections come from the grain model named by par%dust_model:
+!--- grain_model_mod hands over the size-integrated extinction curve SEDust
+!--- precomputed for that model (par%sed_kext).  They then refer to the same
+!--- grains that radiate the absorbed energy back out in dustemis_mod, which is
+!--- what makes the energy balance of a cell physical.  An explicit table file
+!--- (par%kext_file) skips the grain model when set, and is read here instead;
+!--- the two agree only if the file was produced from the same model.
 !---
 !--- The wavelength is sampled by inverting the analytic cumulative distribution
 !--- of the spectrum (spectrum_sampler_mod), not by drawing a bin index.  Pinning

@@ -239,7 +239,7 @@ or set `SEDUST_SRC=/your/SEDust`, to point at your own SEDust tree.
 | `nlambda` | 128 | Number of log-spaced wavelength bins. Binning only — a packet's wavelength is drawn continuously from the spectrum, and `s_ext`/albedo/`g` are read at that wavelength, so `nlambda` sets output resolution, not sampling fidelity |
 | `lambda_min`, `lambda_max` | 0.0912, 2000 | Wavelength range [µm] |
 | `lambda_ref` | 0.55 | Reference wavelength [µm]; `taumax`/`tauhomo` and the grid opacity are defined here |
-| `kext_file` | `''` | **Override.** Explicit table of `λ, albedo, ⟨cos⟩, C_ext/H`. Leave blank (default) and the cross sections come from the `dust_model` grain model itself, on that model's own wavelength grid. Set it only to force a different table, and only if it came from the same model — a mismatch silently breaks the absorbed-power/reemission balance |
+| `kext_file` | `''` | **Override.** Explicit table of `λ, albedo, ⟨cos⟩, C_ext/H`, read directly and without building a grain model at all. Leave blank (default) and the cross sections come from the `dust_model` grain model, which serves its own precomputed extinction curve (`sed_kext`) on the model's wavelength grid. Set it only to force a different table, and only if it came from the same model — a mismatch silently breaks the absorbed-power/reemission balance |
 | `source_spectrum` | `''` | Two-column source spectrum `λ, L_λ` (single source); column units set by `spectrum_type` |
 | `spectrum_type` | `'shape'` | Column units of every source spectrum file (see below) |
 | `tstar` | -999 | Planck source temperature [K] (single source), if no `source_spectrum` |
@@ -340,6 +340,7 @@ On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are arrays indexed by leaf plus 
 | `sed_qtable`, `sed_sizedist` | `SEDust/` | Optics / size-distribution paths for `astrodust` and `dl07` (relative to `sed_workdir`) |
 | `sed_dl07_sdindex`, `sed_dl07_uisrf` | 7, 1.0 | `dl07` only: WD01 size-distribution index (7 = MW R_V=3.1) and reference field scaling U |
 | `sed_zubko_config`, `sed_zubko_dir` | `../data/zubko/...` | `zubko` only: ZDA config file and DustEM data directory (relative to `sed_workdir`; committed under `SEDust/data/zubko/`) |
+| `sed_kext` | `''` (model default) | Precomputed size-integrated extinction curve the model serves to the transport, interpolated onto its wavelength grid. Blank uses the model's standard table — `SEDust/data/kext_astrodust_MW_euv.dat`, `kext_dl07_MW_euv.dat`, `kext_zubko_BARE_GR_S.dat`, whose EUV range contains the plain grid. Naming a file makes it mandatory (the run stops if it cannot be read) and it must come from the same model **and size distribution** as the emission: change `sed_sizedist` or `sed_dl07_sdindex` and the table has to be regenerated with SEDust's `calc_kext.x`. Relative to `sed_workdir` |
 | `sed_workdir` | `''` (auto) | Directory SEDust reads its `../data/...` tables from; blank auto-resolves to `<MoCafe.x dir>/SEDust/sed` |
 | `sed_NT`, `sed_Tlo`, `sed_Thi` | 200, 2.7, 5000 | Grain temperature grid |
 | `dust_niter` | 1 | Lucy iterations for dust self-absorption (1 = non-iterative) |

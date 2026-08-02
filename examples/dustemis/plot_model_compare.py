@@ -3,10 +3,13 @@
 (astrodust, DL07, Zubko) as computed by MoCafe.
 
 Reads the `_dustsed` outputs of three otherwise-identical runs that differ only
-in par%dust_model, and overlays lambda*L_lambda.  Each run absorbs the same
-stellar power, so the total emitted luminosity is identical and the curves
-differ only in spectral shape (PAH bands, silicate features, FIR peak, submm
-slope).
+in par%dust_model, and overlays lambda*L_lambda.  Naming the model sets both
+halves of its dust physics: each run transports through that model's own
+extinction and reemits with that model's own grains.  The curves therefore
+differ in level as well as in shape -- the models do not absorb the same
+stellar power out of an identical cloud, because tau is normalized at
+par%lambda_ref and the models part company away from it -- on top of the
+spectral differences (PAH bands, silicate features, FIR peak, submm slope).
 
 Regenerate the inputs with model_compare_{astrodust,dl07,zubko}.in:
     for m in astrodust dl07 zubko; do
