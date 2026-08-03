@@ -285,6 +285,18 @@ public
      !--- SEDust optics/size-distribution paths, resolved relative to
      !--- par%sed_workdir (build_astrodust is called from there so that
      !--- SEDust's own '../data/dielectric/...' relative reads resolve too).
+     !--- The Q table's wavelength axis IS the grain model's wavelength grid,
+     !--- so it sets the band the transport can be given cross sections over
+     !--- and the cost of every emission solve.  The table shipped here is
+     !--- SEDust's own, cut at the Lyman limit (1129 wavelengths) because that
+     !--- is where lambda_min stops as well.  SEDust's untruncated table carries
+     !--- the same optics to 1.0e-4 um (12.4 keV) in 1762 wavelengths; measured
+     !--- on examples/dustemis/model_compare_astrodust.in, those 633 extra
+     !--- wavelengths cost a factor ~2.4 in wall time and move the emitted SED
+     !--- by 0.02% (median over the bins above a tenth of the peak) while
+     !--- nothing is transported below the Lyman limit.  Taking lambda_min below
+     !--- 0.0912 um needs them, and needs no more than the untruncated file
+     !--- named here (SEDust/populate_data.sh documents the cut).
      character(len=256) :: sed_qtable       = '../tmatrix/output/q_astrodust_P0.20_Fe0.00_1.400.dat'
      character(len=256) :: sed_sizedist     = '../data/release/size_distribution.dat'
      !--- SEDust sed/ directory (self-contained under the MoCafe tree).

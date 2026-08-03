@@ -9,12 +9,11 @@ program shg_bench
    use radfield,  only: J_Mathis
    use dust_lib,  only: dust_model_t, build_zubko, dust_emission, dust_nlam, dust_lambda
    implicit none
-   !--- EDIT ZDIR to your own SEDust Zubko-data location.  This benchmark uses
-   !--- the Zubko et al. (2004) BARE-GR-S tables, which are NOT in the
-   !--- MoCafe repository (only the default 'astrodust' optics are).  Point it
-   !--- at data/zubko/ inside your SEDust tree.
-   character(len=*), parameter :: ZDIR = &
-      '/home/kiseon/MoCafe/Grain/SEDust/data/zubko/'
+   !--- The Zubko et al. (2004) BARE-GR-S optics and calorimetry this benchmark
+   !--- needs are committed under SEDust/data/zubko/, the same directory
+   !--- par%sed_zubko_dir points at, so the path below is relative to this
+   !--- directory and a fresh checkout runs the benchmark as it stands.
+   character(len=*), parameter :: ZDIR = '../../SEDust/data/zubko/'
    character(len=*), parameter :: CFG  = ZDIR//'ZDA_BARE_GR_S_Config.dat'
    type(dust_model_t)    :: m
    real(wp), allocatable :: J(:), total(:), lam(:)

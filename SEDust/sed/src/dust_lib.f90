@@ -21,13 +21,64 @@ module dust_lib
    ! longer grid; everything else about the API is unchanged. OMITTING lam_min
    ! leaves the grid, and every number the model produces, exactly as before.
    !
-   ! In the extended band the astrodust optics are Bohren-Huffman Mie on the
-   ! DH21 dielectric function for the volume-equivalent SPHERE, not the b/a=1.4
-   ! oblate spheroid of the T-matrix table -- the table simply does not reach
-   ! there. That approximation is good to ~2% over 13.6-100 eV; q_astrodust.f90
-   ! documents it size by size, and where it stops being valid. The carbonaceous
-   ! optics have no such seam: above the DL07 PAH cutoff (21.4 eV) they are Mie
-   ! on the D03 graphite dielectric functions, which run to 6.2e-5 um.
+   ! In the extended band the astrodust optics are computed from the DH21
+   ! dielectric function by the T-MATRIX, on the same b/a = 1.400 oblate
+   ! spheroid and the same random-orientation average as the Q table itself
+   ! (spheroid_q, which takes the Rayleigh dipole limit below x = 0.1 and the
+   ! geometric-optics limit above x = 50, exactly as the table's own driver
+   ! does). The band is therefore a continuation of the table, not a different
+   ! particle glued to it: measured at the seam, C_abs matches a log-log
+   ! extrapolation of the table to 0.07% at worst over the whole size range,
+   ! and <cos> agrees exactly where the table's own regime bounds put it at 0.
+   !
+   ! That spheroid is the ONLY thing in this library that needs the T-matrix,
+   ! and it is not compiled in by default. The plain libsedust.a therefore has
+   ! no T-matrix in it and links without one; asking it for the spheroid
+   ! (euv_tmatrix = .true., the default whenever lam_min is given) is REFUSED
+   ! with status 6 rather than answered with a sphere. To get the spheroid:
+   !
+   !   cd tmatrix && make libtmatrix.a
+   !   cd sed     && WITH_TMATRIX=1 make libsedust.a     # or ./build_lib.sh
+   !
+   ! and, once in the host, before the model is built:
+   !
+   !   use euv_astrodust_tmatrix, only: use_tmatrix_euv_band_optics
+   !   call use_tmatrix_euv_band_optics()
+   !
+   ! (Or register an implementation of your own: sed_register_euv_band_optics
+   ! takes any procedure matching the abstract interface euv_band_optics_i,
+   ! both re-exported here, and sed_forget_euv_band_optics undoes it.)
+   !
+   ! That costs real time. Measured here on 167 radii (gfortran 13.1, -O3),
+   ! band only:
+   !
+   !   lam_min                 n_euv  band pts  T-matrix pts  threads    time
+   !   0.0247968 um (50 eV)      113    18,871        12,204        1   527.5 s
+   !                                                               2   264.2 s
+   !                                                               4   136.7 s
+   !                                                               8    69.2 s
+   !   1.001e-4 um (12.4 keV)    590    98,530        41,900       72    73.5 s
+   !
+   ! so the band is built with OpenMP (one T-matrix workspace for each thread,
+   ! 80 MiB apiece once its full-direct arrays are allocated; nothing is
+   ! allocated when there is no EUV band). Peak resident memory grows with it:
+   ! 64 / 110 / 197 / 376 MB at 1 / 2 / 4 / 8 threads, 3.0 GB at 72. The size
+   ! loop carries no dependence, so the result does not depend on the thread
+   ! count or the schedule -- the four runs above were byte-identical.
+   !
+   ! A host that cannot afford this passes euv_tmatrix = .false.:
+   !   call build_astrodust(m, qtab, sizedist, NT, T_lo, T_hi, &
+   !                        lam_min=0.0124_wp, euv_tmatrix=.false.)
+   ! which substitutes Bohren-Huffman Mie for the volume-equivalent SPHERE and
+   ! runs in a tenth of a second. It is an APPROXIMATION: good to ~2% where the
+   ! T-matrix regime holds, but converging on a fixed ~2% underestimate for
+   ! grains in the geometric-optics limit rather than on zero, and leaving a
+   ! visible step at the seam (median 1.2%, worst 16% in C_abs; <cos> jumps
+   ! from 0.9 to 0 for a >~ 1 um). q_astrodust.f90 documents it size by size.
+   !
+   ! The carbonaceous optics have no such seam: above the DL07 PAH cutoff
+   ! (21.4 eV) they are Mie on the D03 graphite dielectric functions, which
+   ! run to 6.2e-5 um.
    !
    ! The dielectric function must be the one the Q table was computed from --
    ! same porosity, iron fraction and axial ratio -- or the model changes
@@ -159,6 +210,12 @@ module dust_lib
    !                                  3 astrodust dielectric function load failed
    !                                  4 lam_min below that dielectric function's
    !                                    shortest wavelength
+   !                                  6 euv_tmatrix = .true. but the spheroid
+   !                                    optics of that band are not available:
+   !                                    no euv_band_optics_i is registered (a
+   !                                    library built without the T-matrix), or
+   !                                    the registered one could not compute
+   !                                    the band
    !   build_zubko:   1 config read failed        2 fewer than 3 components
    !                  3 a component's optics read  4 grid inconsistent
    !                  5 a component's calorimetry read failed
@@ -169,6 +226,20 @@ module dust_lib
    !                     7 size-dist read    8 calorimetry read failed
    !                     9 an explicitly named kext_path failed to load
    !
+   ! LINKING. One archive, and one .mod search path:
+   !   cd sed && make libsedust.a          # or ./build_lib.sh -> sed/lib/
+   !   gfortran -I<sed> my_rt.f90 -L<sed> -lsedust -fopenmp -o my_rt.x
+   ! Nothing in this library reaches the T-matrix, so ../tmatrix need not even
+   ! be built.
+   !
+   ! A host that wants the astrodust EUV band on the spheroid builds the
+   ! T-matrix into the SAME archive, so the link line does not change:
+   !   cd tmatrix && make libtmatrix.a
+   !   cd sed     && WITH_TMATRIX=1 make libsedust.a
+   !   gfortran -I<sed> my_rt.f90 -L<sed> -lsedust -fopenmp -o my_rt.x
+   ! and calls use_tmatrix_euv_band_optics() once, as above. libtmatrix.a
+   ! itself needs no OpenMP runtime; the threading is on the SEDust side.
+   !
    ! The validated solver core (sed_grain_loop & helpers in sed_astrodust_mod)
    ! is untouched; this module only re-exports the model API and adds the
    ! table/interpolation layer.
@@ -178,7 +249,9 @@ module dust_lib
                                 build_astrodust, build_dl07, build_zubko, build_from_files, &
                                 dust_emission, dust_emission_single_teq, &
                                 dust_extinction, size_integrated_extinction, &
-                                dust_mass_per_H
+                                dust_mass_per_H, euv_band_optics_i, &
+                                sed_register_euv_band_optics, &
+                                sed_forget_euv_band_optics
    implicit none
    private
 
@@ -186,6 +259,9 @@ module dust_lib
    public :: dust_model_t, build_astrodust, build_dl07, build_zubko, build_from_files
    public :: dust_emission, dust_emission_single_teq, dust_extinction
    public :: size_integrated_extinction, dust_mass_per_H
+   ! Optics of the astrodust EUV band; see the EXTREME ULTRAVIOLET note above.
+   public :: euv_band_optics_i
+   public :: sed_register_euv_band_optics, sed_forget_euv_band_optics
    ! Table API
    public :: dust_emis_table_t, dust_build_table, dust_emission_interp, dust_free_table
    ! Convenience accessors
@@ -297,7 +373,7 @@ contains
       real(wp),                intent(out) :: lamI_total(:)      ! (NLAM)
       real(wp), optional,      intent(out) :: lamI_chan(:,:)     ! (NLAM, n_channel)
       ! Optional error report (0 = success); see the module header for codes.
-      ! Validation is scalar/size-only to keep this on the per-cell hot path.
+      ! Validation is scalar/size-only to keep this on the hot path.
       integer, optional,       intent(out) :: status
       real(wp) :: ly(tab%NU)
       real(wp) :: lr, lUq
