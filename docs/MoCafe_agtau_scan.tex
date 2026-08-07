@@ -1,0 +1,384 @@
+%% MoCafe — Single-run scans over albedo, asymmetry, and optical depth.
+%% Author: Kwang-Il Seon
+%% Written 2026-05-30 for kiseon_memo.cls.
+\documentclass[english,a4paper]{kiseon_memo}
+\synctex=1
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{microtype}
+
+\newcommand{\rd}{\mathrm{d}}
+\newcommand{\ee}{\mathrm{e}}
+\newcommand{\obs}{\mathrm{obs}}
+\newcommand{\edg}{\mathrm{e}}
+\newcommand{\HG}{\Phi}
+\newcommand{\src}{\mathrm{src}}
+\newcommand{\half}{\tfrac{1}{2}}
+
+\begin{document}
+
+\title{Single-Run Scans over Albedo, Asymmetry, and Optical Depth in MoCafe}
+\author{Kwang-Il Seon}
+\date{2026-05-30}
+\maketitle
+
+\begin{abstract}
+\noindent
+MoCafe can record a peeling-off scattered image for an entire grid of dust
+parameters from a \emph{single} Monte-Carlo run.  Photons are propagated with one
+simulated asymmetry factor $g_0$ and one simulated optical depth $\tau_0$, while
+closed-form per-photon weights---requiring no additional random numbers and no
+re-tracing---fill in the results for a grid of albedos $a$, asymmetry factors
+$g$, and optical depths $\tau$.  The scattered image becomes the five-dimensional
+array $J(x,y,a,g,\tau)$.  The albedo/asymmetry reweighting follows
+Seon (2010); the optical-depth (``polychromatic'') reweighting follows
+Jonsson (2006).  This memo collects the underlying estimator, the reweighting
+formulae, the proof that the forced first-scattering normalization cancels, and
+the resulting separable form of the image accumulation.
+\end{abstract}
+
+\tableofcontents
+\bigskip
+
+%=============================================================================
+\section{Baseline Monte-Carlo estimator}
+%=============================================================================
+
+MoCafe solves dust radiative transfer with a next-event (``peeling-off'')
+estimator (Yusef-Zadeh, Morris \& White 1984): at every emission and scattering
+site a deterministic estimate of the flux that would reach each observer is
+added to the image, in addition to advancing the random walk.  The forward walk
+uses two standard variance-reduction devices:
+
+\begin{itemize}
+\item \textbf{Forced first scattering} (Cashwell \& Everett 1959).  Let
+  $\tau^{\edg}$ be the optical depth from the emission point to the edge of the
+  grid along the initial direction.  The packet weight is multiplied by
+  $(1-\ee^{-\tau^{\edg}})$---the probability of interacting before escaping---and
+  the first interaction optical depth is drawn from the truncated exponential on
+  $[0,\tau^{\edg}]$,
+  \begin{equation}
+    \tau_1 = -\ln\!\big[\,1 - R\,(1-\ee^{-\tau^{\edg}})\,\big],
+    \qquad R\sim U(0,1),
+    \label{eq:forced}
+  \end{equation}
+  whose probability density is
+  \begin{equation}
+    f_1(\tau_1) = \frac{\ee^{-\tau_1}}{1-\ee^{-\tau^{\edg}}},
+    \qquad \tau_1\in[0,\tau^{\edg}].
+    \label{eq:fdens}
+  \end{equation}
+\item \textbf{Continuous absorption (reduced weight).}  Beyond the first
+  interaction, free paths are drawn from the unbiased exponential,
+  $\tau_k=-\ln R$ with density $\ee^{-\tau_k}$, and the packet is never killed by
+  absorption; instead its survival is carried as a weight.  The packet
+  terminates only by escaping the grid.
+\end{itemize}
+
+Write the packet weight after the forced first scattering as
+$w \equiv (1-\ee^{-\tau^{\edg}})$ (taking the emission weight to be unity).  Let
+$P_k$ be the position of the $k$-th scattering, $r_k=|P_k-\mathbf{x}_\obs|$ the
+distance to the observer, $\tau_\obs(P_k)$ the optical depth from $P_k$ to the
+edge along the observer direction, and $\mu_{\obs,k}$ the cosine of the angle
+between the incoming direction and the observer direction.  For a single dust
+model with albedo $a$ and asymmetry $g$, the peeling-off contribution of the
+$k$-th scattering to the image pixel onto which $P_k$ projects is
+\begin{equation}
+  \Delta J_k \;=\; \frac{w}{r_k^2}\;a^{k}\;
+  \frac{\HG(\mu_{\obs,k}\,|\,g)}{4\pi}\;\ee^{-\tau_\obs(P_k)} ,
+  \label{eq:peel}
+\end{equation}
+where the factor $a^{k}$ accounts for $k$ survival events (the packet has
+scattered $k$ times by event $k$), and $\HG$ is the scattering phase function.
+The direct (unscattered) image is the analogous estimate evaluated once at the
+emission point.
+
+MoCafe uses the Henyey--Greenstein (1941) phase function,
+\begin{equation}
+  \HG(\mu\,|\,g) \;=\; \frac{1-g^2}{\big(1+g^2-2g\mu\big)^{3/2}},
+  \label{eq:hg}
+\end{equation}
+normalized so that $\int \HG(\mu|g)\,\rd\Omega/4\pi = 1$ (here $\mu=\cos\theta$ is
+the cosine of the scattering angle).
+
+%=============================================================================
+\section{Albedo and asymmetry scan (Seon 2010)}
+%=============================================================================
+
+The goal is to obtain $J(x,y,a,g)$ on a grid $\{a_i\}\times\{g_l\}$ from one run.
+The key observation is that the random walk's \emph{geometry}---the interaction
+points and directions---can be sampled once and reweighted, because neither $a$
+nor $g$ changes the extinction optical depth that drives the free paths.
+
+\subsection{Asymmetry reweighting}
+
+Sample the actual scattering cosines $\mu_j$ from the single simulated phase
+function $\HG(\cdot\,|\,g_0)$.  A path realized with $g_0$ represents a path with
+output asymmetry $g$ if each scattering is reweighted by the ratio of phase
+functions (Seon 2010, eq.~2),
+\begin{equation}
+  W_g^{(k)} \;=\; \prod_{j=1}^{k}
+  \frac{\HG(\mu_j\,|\,g)}{\HG(\mu_j\,|\,g_0)} .
+  \label{eq:Wg}
+\end{equation}
+At the peel of event $k$ the scattering \emph{toward the observer} contributes
+$\HG(\mu_{\obs,k}|g)$ directly, while the $k-1$ \emph{previous} scatterings are
+represented by $W_g^{(k-1)}$.  The method is accurate while $|g-g_0|$ is not too
+large; Seon (2010) finds $g_0\simeq0.4$--$0.5$ optimal for covering
+$g=0.0$--$0.9$.
+
+\subsection{Albedo reweighting}
+
+The albedo controls only survival, not the extinction optical depth, so the
+$a$-grid is filled by replacing the single factor $a^k$ in \eqref{eq:peel} with a
+per-albedo accumulator
+\begin{equation}
+  A_a^{(k)} \;=\; a^{\,k} ,
+  \label{eq:Aa}
+\end{equation}
+updated once per scattering (before the peel, so that the $k$-th peel sees
+$a^{k}$).
+
+\subsection{Four-dimensional image}
+
+Combining \eqref{eq:peel}, \eqref{eq:Wg}, and \eqref{eq:Aa}, the $k$-th
+scattering deposits, for every grid point $(a_i,g_l)$,
+\begin{equation}
+  J(x,y,a_i,g_l)\;\mathrel{+}=\;
+  \frac{w}{r_k^2}\,\ee^{-\tau_\obs(P_k)}\;
+  A_{a_i}^{(k)}\;\frac{\HG(\mu_{\obs,k}\,|\,g_l)}{4\pi}\;W_{g_l}^{(k-1)} .
+  \label{eq:J4}
+\end{equation}
+The expensive geometric quantities---$\tau_\obs$ (a ray trace), $1/r_k^2$, and the
+image pixel---do not depend on $(a,g)$ and are computed \emph{once} per event;
+only the closed-form factors vary across the $n_a\times n_g$ grid.  Because no
+random numbers are consumed by the reweighting, the slice at $(a,g_0)$ is
+bit-for-bit identical to an ordinary run with that albedo and $g=g_0$.  The
+direct image is independent of $a$ and $g$ and stays two-dimensional.
+
+%=============================================================================
+\section{Optical-depth (polychromatic) scan (Jonsson 2006)}
+%=============================================================================
+
+The optical-depth scan is the polychromatic algorithm of Jonsson (2006)
+specialized to a \emph{grey} rescaling of one medium: all opacities are scaled by
+a constant factor, so every optical depth along every ray scales by the same
+amount.  Let the simulated reference be $\tau_0=$ \texttt{par\%taumax} and let the
+target optical depths be $\{\tau_t\}$, with scaling factors
+\begin{equation}
+  s_t \;=\; \frac{\tau_t}{\tau_0} .
+  \label{eq:st}
+\end{equation}
+Because the medium is uniformly rescaled, the optical depth to \emph{any} point
+along a fixed ray satisfies $\tau^{(t)}=s_t\,\tau^{(\mathrm{ref})}$.
+
+\subsection{Free-path reweighting}
+
+Consider a segment in which the reference run draws free-path optical depth
+$\tau_k$ and interacts at the physical point $P_k$.  Under the scaling $s_t$ the
+same physical point carries optical depth $s_t\tau_k$, and the probability of
+interacting there changes.  In the integration variable $\tau_k$, the reference
+interaction density is $\ee^{-\tau_k}$, while the target density is
+$\ee^{-s_t\tau_k}\,s_t$ (the factor $s_t$ is the Jacobian
+$\rd(s_t\tau_k)/\rd\tau_k$).  The importance weight is their ratio
+(Jonsson 2006, eq.~31),
+\begin{equation}
+  w_t^{(k)} \;=\;
+  \frac{\ee^{-s_t\tau_k}\,s_t}{\ee^{-\tau_k}}
+  \;=\; s_t\,\ee^{(1-s_t)\,\tau_k} ,
+  \label{eq:wstep}
+\end{equation}
+and the cumulative per-photon optical-depth weight after $k$ segments is
+\begin{equation}
+  W_\tau^{(k)}(t) \;=\; \prod_{j=1}^{k} w_t^{(j)}
+  \;=\; s_t^{\,k}\,\exp\!\Big[(1-s_t)\textstyle\sum_{j=1}^{k}\tau_j\Big] .
+  \label{eq:Wtau}
+\end{equation}
+\emph{The forced first segment uses the identical factor} \eqref{eq:wstep}; the
+$(1-\ee^{-\tau^{\edg}})$ normalization of forced scattering cancels in the
+contribution ratio, as shown in Appendix~\ref{app:forced}.
+
+\subsection{Peel attenuation and the escape decision}
+
+The optical depth from a scattering site to the observer also scales, so the
+extinction factor in the peel is evaluated per target,
+\begin{equation}
+  \ee^{-\tau_\obs(P_k)} \;\longrightarrow\; \ee^{-s_t\,\tau_\obs(P_k)} .
+  \label{eq:atten}
+\end{equation}
+A useful property of the grey rescaling is that the \emph{interact-versus-escape}
+decision is scale invariant: a non-forced segment draws $\tau_k=-\ln R$ and
+escapes if $\tau_k$ exceeds the edge optical depth $D_k$; since the target edge
+optical depth is $s_t D_k$ and the target interaction depth would be $s_t\tau_k$,
+the ratio $\tau_k/D_k$ is independent of $s_t$.  Hence the entire forward walk is
+driven by the reference run, and the scan only (i)~accumulates $W_\tau$ and
+(ii)~applies the per-target attenuation \eqref{eq:atten}.  The random-number
+stream is untouched, so the slice at $\tau_t=\tau_0$ (i.e.\ $s_t=1$) is
+bit-for-bit identical to an ordinary single run.
+
+%=============================================================================
+\section{Combined five-dimensional estimator}
+%=============================================================================
+
+Stacking the albedo, asymmetry, and optical-depth reweightings, the $k$-th
+scattering deposits, for every grid point $(a_i,g_l,\tau_t)$,
+\begin{equation}
+  J(x,y,a_i,g_l,\tau_t)\;\mathrel{+}=\;
+  \underbrace{\frac{w}{r_k^2}}_{\text{base}}\;
+  \underbrace{A_{a_i}^{(k)}}_{\text{albedo}}\;
+  \underbrace{\frac{\HG(\mu_{\obs,k}|g_l)}{4\pi}\,W_{g_l}^{(k-1)}}_{\text{asymmetry}}\;
+  \underbrace{\ee^{-s_t\tau_\obs(P_k)}\,W_\tau^{(k)}(t)}_{\text{optical depth}} .
+  \label{eq:J5}
+\end{equation}
+The three parameter axes never mix inside the bracketed factors, so
+\eqref{eq:J5} is the outer product of three vectors scaled by the common
+geometric base $w/r_k^2$.  Defining
+\begin{align}
+  u_a(i) &= A_{a_i}^{(k)}, &
+  v_g(l) &= \frac{\HG(\mu_{\obs,k}|g_l)}{4\pi}\,W_{g_l}^{(k-1)}, &
+  q_\tau(t) &= \ee^{-s_t\tau_\obs(P_k)}\,W_\tau^{(k)}(t),
+\end{align}
+the per-event update is the rank-one tensor
+$J_{ilt}\mathrel{+}=(w/r_k^2)\,u_a(i)\,v_g(l)\,q_\tau(t)$.  The cost is therefore
+one ray trace and $n_a n_g n_t$ multiply--add operations per scattering per
+observer, while the forward random walk is unchanged.
+
+\paragraph{Direct (unscattered) light.}
+Unlike $a$ and $g$, the optical depth changes the attenuation of the direct beam.
+With $w_0$ the emission weight and $\tau_\obs^{\src}$ the source-to-observer
+optical depth, the direct image is
+\begin{equation}
+  J_{\mathrm{dir}}(x,y,\tau_t)\;\mathrel{+}=\;
+  \frac{w_0}{4\pi r^2}\,\ee^{-s_t\,\tau_\obs^{\src}} ,
+  \label{eq:direct}
+\end{equation}
+which carries a $\tau$ axis but no $a$ or $g$ axis.  The unattenuated image
+$J_{\mathrm{dir,0}}=w_0/(4\pi r^2)$ is independent of all three parameters and
+stays two-dimensional.
+
+%=============================================================================
+\section{Implementation in MoCafe}
+%=============================================================================
+
+The scan state lives in \texttt{scan\_mod.f90}.  The per-photon accumulators
+$A_a$ (\texttt{scan\_Aalb}), $W_g$ (\texttt{scan\_Wg}), and $W_\tau$
+(\texttt{scan\_Wtau}) are reset at each photon birth.  Per scattering event:
+$A_a$ and $W_\tau$ are advanced \emph{before} the peel (so the $k$-th peel sees
+$a^k$ and the product of $k$ optical-depth factors), and $W_g$ is advanced
+\emph{after} the peel using the actual scattering cosine (so the peel sees the
+previous $k-1$ scatterings).  The free-path optical depth $\tau_k$ of the segment
+that just ended is handed to the scan through the module variable
+\texttt{scan\_tau\_step}, set in both photon-loop drivers in
+\texttt{run\_simulation\_mod.f90} immediately before the call to the scatterer.
+
+The switches and grids are
+\begin{center}
+\begin{tabular}{lll}
+\hline
+parameter & meaning & default \\
+\hline
+\texttt{par\%use\_ag\_list}  & enable the $(a,g)$ scan      & \texttt{.false.} \\
+\texttt{par\%albedo\_list}   & albedo grid $\{a_i\}$        & $0.1,\dots,1.0$ \\
+\texttt{par\%hgg\_list}      & asymmetry grid $\{g_l\}$     & $0.0,\dots,0.9$ \\
+\texttt{par\%hgg}            & simulated $g_0$              & --- \\
+\texttt{par\%use\_tau\_list} & enable the $\tau$ scan       & \texttt{.false.} \\
+\texttt{par\%tau\_list}      & optical-depth grid $\{\tau_t\}$ & $\sqrt2$-spaced in $[0.5,2]\,\tau_0$ \\
+\texttt{par\%taumax}         & simulated $\tau_0$           & --- \\
+\hline
+\end{tabular}
+\end{center}
+The two switches compose: the scattered image is $J(x,y)$, $J(x,y,a,g)$,
+$J(x,y,\tau)$, or $J(x,y,a,g,\tau)$ for the four combinations.  When the $\tau$
+scan is on without the $(a,g)$ scan, the $a$ and $g$ axes collapse to length one
+(holding \texttt{par\%albedo} and \texttt{par\%hgg}).  The reference
+$\tau_0$ slice is auto-inserted into \texttt{tau\_list} if absent.  The scan is
+restricted to the no-Stokes Henyey--Greenstein path and (for $\tau$) to internal
+sources.
+
+%=============================================================================
+\section{Accuracy and variance}
+%=============================================================================
+
+All reweightings are unbiased in expectation, but their variance grows as the
+target parameters depart from the simulated values (Jonsson 2006, \S3.9).  For
+the optical-depth scan, the per-segment weight \eqref{eq:wstep} is bounded for
+$s_t>1$ (thicker targets) but the forced first segment's second moment,
+$\propto\!\int_0^{\tau^{\edg}}\!\ee^{(1-2s_t)\tau_1}\rd\tau_1$, diverges with
+$\tau^{\edg}$ once $s_t<\half$.  Practical guidance:
+\begin{itemize}
+\item keep \texttt{tau\_list} within a factor of $\sim2$--$3$ of
+  \texttt{par\%taumax}, and choose \texttt{par\%taumax} near the (logarithmic)
+  middle of the target range;
+\item keep $g_0\simeq0.4$--$0.5$ (Seon 2010), and $|g-g_0|\lesssim0.5$--$0.6$;
+\item always include the reference $\tau_0$ (done automatically) for a
+  zero-variance, bit-identical anchor slice.
+\end{itemize}
+
+The implementation has been verified on a point source in a uniform sphere:
+the $s_t=1$ scattered slice is bit-identical to a single run (and the direct
+beam is exact at every $\tau_t$ since it involves no Monte-Carlo); the
+off-reference scattered slices reproduce independent single-$\tau$ runs to
+$\lesssim0.15\%$ in integrated flux, with residual pixel noise growing toward the
+faint wings, as expected.
+
+%=============================================================================
+\appendix
+\section{Cancellation of the forced-scattering normalization}
+\label{app:forced}
+%=============================================================================
+
+We show that the forced first segment uses the same weight \eqref{eq:wstep} as an
+ordinary segment, i.e.\ that the $(1-\ee^{-\tau^{\edg}})$ factor cancels in the
+contribution ratio.
+
+For the reference run the forced first scattering multiplies the packet weight by
+$w=(1-\ee^{-\tau^{\edg}})$ and samples $\tau_1$ from the density $f_1$ of
+\eqref{eq:fdens}.  Writing $g(\tau_1)$ for the (parameter-dependent) peel factors
+that multiply the weight at the interaction point, the reference image
+expectation per emitted photon is
+\begin{equation}
+  E_{\mathrm{ref}}
+  = \int_0^{\tau^{\edg}}\! f_1(\tau_1)\,w\,g(\tau_1)\,\rd\tau_1
+  = \int_0^{\tau^{\edg}}\! \ee^{-\tau_1}\,g(\tau_1)\,\rd\tau_1 ,
+\end{equation}
+where the normalization $(1-\ee^{-\tau^{\edg}})$ in $w$ cancels the same factor in
+the denominator of $f_1$.
+
+For an independent run at scaling $s$ (target optical depth $s\tau_0$), the edge
+depth is $s\tau^{\edg}$ and the forced first scattering samples $\tau_1'$ from
+$\ee^{-\tau_1'}/(1-\ee^{-s\tau^{\edg}})$ with weight $(1-\ee^{-s\tau^{\edg}})$.
+Substituting $\tau_1'=s\tau_1$ (so that the physical interaction point, hence
+$g$, coincides with the reference's) gives
+\begin{equation}
+  E_{\mathrm{indep}}(s)
+  = \int_0^{\tau^{\edg}}\! \ee^{-s\tau_1}\,s\,g_s(\tau_1)\,\rd\tau_1 ,
+\end{equation}
+where $g_s$ differs from $g$ only through the per-target peel attenuation
+$\ee^{-s\tau_\obs}$ already accounted for in \eqref{eq:atten}.  Reweighting the
+reference samples by \eqref{eq:wstep} reproduces this exactly:
+\begin{equation}
+  \int_0^{\tau^{\edg}}\! \ee^{-\tau_1}\,g_s(\tau_1)\,
+  \big[\,s\,\ee^{(1-s)\tau_1}\big]\,\rd\tau_1
+  = \int_0^{\tau^{\edg}}\! s\,\ee^{-s\tau_1}\,g_s(\tau_1)\,\rd\tau_1
+  = E_{\mathrm{indep}}(s) .
+\end{equation}
+The factor $(1-\ee^{-\tau^{\edg}})$ never appears, so the forced first segment is
+weighted by $s\,\ee^{(1-s)\tau_1}$, identical in form to an ordinary
+(non-forced) segment.  The same change of variables, applied segment by segment,
+establishes the unbiasedness of \eqref{eq:Wtau} for all scattering orders.
+\hfill$\blacksquare$
+
+%=============================================================================
+\begin{thebibliography}{9}
+%=============================================================================
+\bibitem{cashwell1959} Cashwell, E.~D., \& Everett, C.~J. 1959,
+  \textit{A Practical Manual on the Monte Carlo Method for Random Walk
+  Problems} (Pergamon Press).
+\bibitem{hg1941} Henyey, L.~G., \& Greenstein, J.~L. 1941, ApJ, 93, 70.
+\bibitem{jonsson2006} Jonsson, P. 2006, MNRAS, 372, 2.
+\bibitem{seon2010} Seon, K.-I. 2010, PKAS, 25, 177.
+\bibitem{yzmw1984} Yusef-Zadeh, F., Morris, M., \& White, R.~L. 1984, ApJ,
+  278, 186.
+\end{thebibliography}
+
+\end{document}

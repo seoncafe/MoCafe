@@ -1,0 +1,224 @@
+%% MoCafe — Clumpy dust medium (dust-only).
+%% Author: Kwang-Il Seon
+%% Written 2026-05-30 for kiseon_memo.cls.
+\documentclass[english,a4paper]{kiseon_memo}
+\synctex=1
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{microtype}
+
+\newcommand{\rd}{\mathrm{d}}
+\newcommand{\ee}{\mathrm{e}}
+\newcommand{\obs}{\mathrm{obs}}
+\newcommand{\kc}{\kappa_{\mathrm c}}
+\newcommand{\rc}{r_{\mathrm c}}
+\newcommand{\fcov}{f_{\mathrm{cov}}}
+\newcommand{\fvol}{f_{\mathrm{vol}}}
+\newcommand{\Ncl}{N_{\mathrm{cl}}}
+
+\begin{document}
+
+\title{The Clumpy Dust Medium in MoCafe}
+\author{Kwang-Il Seon}
+\date{2026-05-30}
+\maketitle
+
+\begin{abstract}
+MoCafe's clumpy-medium mode (\texttt{par\%grid\_type = 'clump'}) replaces the
+Cartesian density grid with a population of $\Ncl$ non-overlapping spherical
+dust clumps of radius $\rc$ placed inside a sphere of radius $R$; the
+inter-clump space is vacuum.  The clumps are discrete spheres (not a two-phase
+or continuous medium), implemented with the placement and ray-tracing machinery
+ported from LaRT but stripped to grey dust radiative transfer:
+because the dust opacity is frequency-independent, no Doppler width, Voigt
+profile, frequency tracking, or velocity field is needed, and the clump
+subsystem reduces to pure geometry plus a per-clump scalar opacity.  The
+scattering and peeling-off physics are shared verbatim with the Cartesian
+dust path; only the optical-depth integration differs.  This memo records the
+model, the clump-count and opacity calibration, the Random-Sequential-Addition
+placement, the CSR/DDA accelerated ray-tracer, and the validation against a
+homogeneous sphere.
+\end{abstract}
+
+\section{Model}
+A point or extended source illuminates $\Ncl$ spherical dust clumps, each of
+radius $\rc$ (possibly varying with clump-center radius via a profile) and grey
+dust opacity $\kc$ (extinction per unit path length).  Clump centers lie in the
+spherical shell $r_{\min}\le r\le R$, where $R=$ \texttt{par\%rmax} and
+$r_{\min}=\max(0,\texttt{par\%rmin})$; with $r_{\min}=0$ the shell is a full
+ball.  Outside the clumps the medium is vacuum, so a photon alternates between
+\emph{vacuum flight} (find the next clump it enters) and \emph{clump traversal}
+(accumulate $\kc\,\ell$ along the chord of length $\ell$).  No opacity, and
+hence no interaction, occurs between clumps.
+
+\section{Clump count}
+For uniform clumps the realized covering and volume filling factors of $\Ncl$
+clumps in the shell are
+\begin{equation}
+  \fvol = \frac{\Ncl\,\rc^{3}}{R^{3}-r_{\min}^{3}},
+  \qquad
+  \fcov = \frac{3}{4}\,
+          \frac{\Ncl\,\rc^{2}}{R^{2}+R\,r_{\min}+r_{\min}^{2}} ,
+  \label{eq:fvolfcov}
+\end{equation}
+so that $\fvol = \tfrac{4}{3}\,\fcov\,\rc/R$ for $r_{\min}=0$.  The user
+specifies exactly one of \texttt{clump\_N\_clumps}, \texttt{clump\_f\_vol}, or
+\texttt{clump\_f\_cov}; the other two follow from \eqref{eq:fvolfcov}.  When a
+radial \emph{number} profile $n_{\mathrm{cl}}(r)\propto$ \texttt{shape}$(r)$ is
+active, $\Ncl$, $\fvol$, and $\fcov$ are obtained by quadrature of
+$n_{\mathrm{cl}}(r)$ over the shell (the line-of-sight definition of $\fcov$).
+Reliable random placement requires $\fvol\lesssim0.35$ (three-dimensional
+jamming $\approx0.38$); MoCafe aborts with guidance if the placement stalls.
+
+\section{Per-clump opacity}
+The grey dust opacity $\kc$ of a clump is set, in priority order, by one of
+\begin{equation}
+  \kc = \frac{\tau_{0}}{\rc}
+  \quad(\texttt{clump\_tau0}),
+  \qquad
+  \kc = n\,C_{\mathrm{ext}}\,\ell_{\mathrm{cm}}
+  \quad(\texttt{clump\_ndust} \text{ or } \texttt{clump\_nH}),
+  \label{eq:kappa}
+\end{equation}
+where $\tau_{0}$ is the dimensionless dust optical depth from a clump's center
+to its surface, $C_{\mathrm{ext}}=$ \texttt{par\%cext\_dust} is the dust
+extinction per H, and $\ell_{\mathrm{cm}}=$ \texttt{par\%distance2cm} converts
+code length to cm (the same $n\,C_{\mathrm{ext}}\,\ell_{\mathrm{cm}}$ used by the
+Cartesian grid).  Alternatively the population is calibrated to a system-level
+radial target $\tau_{\max}$ or $\tau_{\mathrm{homo}}$ by back-solving
+\begin{equation}
+  \kc = \frac{\tau_{\mathrm{target}}}{\mathrm{GF}},\qquad
+  \mathrm{GF} = \frac{\Ncl\,\rc^{3}}{R^{2}+R\,r_{\min}+r_{\min}^{2}}
+  \quad(\text{uniform}),
+\end{equation}
+with the profile-mode geometric factor obtained by quadrature.
+
+\paragraph{System scalars.}
+From the placed population MoCafe reports
+\begin{align}
+  \tau_{\mathrm{homo}} &= \sum_{i}
+     \frac{\kc^{(i)}\,\rc^{(i)\,3}}{R^{2}+R\,r_{\min}+r_{\min}^{2}},
+  \label{eq:tauhomo}\\
+  \tau_{\max} &= \sum_{i}
+     \frac{\kc^{(i)}\,\rc^{(i)\,3}}{3\,\max\!\big(d_{i}^{2},\,\rc^{(i)\,2}\big)},
+  \label{eq:taumax}
+\end{align}
+where $d_{i}=|\mathbf{r}_{i}|$ is the clump-center distance from the origin.
+Equation~\eqref{eq:tauhomo} is the opacity of the clumps smeared uniformly over
+the shell and traversed radially; \eqref{eq:taumax} is the small-angle expected
+radial optical depth (the $\max$ caps the singularity for a clump straddling
+the origin).  In the uniform-isotropic limit both reduce to
+$\Ncl\,\rc^{3}\kc/(R^{2}+R\,r_{\min}+r_{\min}^{2}) = \tfrac{4}{3}\,\fcov\,\tau_0$
+(the uniform discrete-clump closed form).
+
+\section{Placement: Random Sequential Addition}
+Clump centers are drawn one at a time and accepted only if the new clump does
+not overlap any previously placed one (\textsc{rsa}).  A linked-list hash grid
+with cells of side $\ge 2\,\rc^{\max}$ makes the overlap test $O(1)$: a trial
+center is checked only against clumps registered in its own cell and the 26
+neighbors (the 27-cell rule).  Uniform placement uses box rejection inside the
+shell; profile placement draws the center radius from the tabulated inverse CDF
+of $n_{\mathrm{cl}}(r)\,r^{2}$ and isotropic (or biconical) angles.  Placement
+runs once on the global root rank and is broadcast to one rank per node, then
+shared within the node through MPI-3 shared memory, so every node holds an
+identical clump layout.
+
+\section{Accelerated ray-tracing}
+\paragraph{CSR acceleration grid.}
+A uniform $C^{3}$ grid over the bounding box indexes the clumps in
+compressed-sparse-row form: a two-pass build fills \texttt{cg\_start} (per-cell
+offsets) and \texttt{cg\_list} (clump indices), registering each clump in every
+cell its bounding box overlaps.  The grid and the clump arrays live in MPI-3
+shared memory (one copy per node).
+
+\paragraph{Ray--sphere intersection.}
+For a ray $P(t)=\mathbf{o}+t\,\hat{\mathbf k}$ and a clump centered at
+$\mathbf c$ with radius $\rc$, writing $\mathbf{b}=\mathbf{o}-\mathbf{c}$,
+\begin{equation}
+  t_{\pm} = -(\mathbf{b}\!\cdot\!\hat{\mathbf k})
+            \pm\sqrt{(\mathbf{b}\!\cdot\!\hat{\mathbf k})^{2}
+                     -|\mathbf{b}|^{2}+\rc^{2}} ,
+\end{equation}
+with a real intersection when the discriminant is non-negative and $t_{+}>0$.
+
+\paragraph{DDA traversal.}
+The next clump a photon in vacuum will enter is found by stepping the ray
+through the CSR grid with the Amanatides \& Woo (1987) digital differential
+analyzer: the per-axis distances $t_{x},t_{y},t_{z}$ to the next cell face are
+advanced by $\Delta t_{x}=\Delta x/|k_{x}|$ (and similarly for $y,z$); at each
+cell every registered clump is tested with the ray--sphere formula and the
+nearest positive entry is kept.  Traversal stops once the cell-entry distance
+exceeds the best hit or the sphere boundary.
+
+\paragraph{Transport.}
+\texttt{raytrace\_to\_tau\_clump} advances the photon until a sampled optical
+depth $\tau$ is accumulated: inside a clump it scatters at
+$\rd s=\tau_{\mathrm{rem}}/\kc$ if $\tau_{\mathrm{rem}}\le\kc\,\ell$, otherwise
+it subtracts $\kc\,\ell$, steps to the clump exit, and resumes in vacuum;
+in vacuum it advances to the next clump (or escapes through the sphere).
+\texttt{raytrace\_to\_edge\_clump} sums $\kc\,\ell$ over every clump the
+line of sight crosses to the sphere boundary, and is used by the peeling-off
+estimator.
+
+\section{Reuse of the dust physics}
+Clump mode swaps only the two ray-tracing procedure pointers
+(\texttt{raytrace\_to\_tau}, \texttt{raytrace\_to\_edge}); the forced first
+scattering, the Henyey--Greenstein (or Mueller-matrix) scattering, and the
+peeling-off to each observer are \emph{identical} to the Cartesian dust path.
+This is possible because the peel routines integrate the optical depth to the
+observer through the \texttt{raytrace\_to\_edge} pointer rather than calling the
+Cartesian routine directly; the default binding keeps the Cartesian results
+bit-identical.  The forced-first-scattering weight $1-\ee^{-\tau_{0}}$ uses the
+clump optical depth $\tau_{0}$ to the sphere edge along the emission direction,
+which is zero (the photon escapes unscattered) for sight lines that miss every
+clump.  The birth clump is identified at emission so a source inside a clump is
+handled correctly.
+
+\section{File I/O and the standalone generator}
+With \texttt{par\%save\_clump\_info} the population is written to a binary
+table (FITS or HDF5): columns \texttt{X, Y, Z} (centers) plus \texttt{R\_CLUMP}
+and \texttt{RHOKAP} when non-uniform, and header keywords
+\texttt{N\_CLUMPS, SPHERE\_R, RMIN, CL\_RAD, F\_VOL, F\_COV, TAU0, RHOKAP,
+RMAX, DISTUNIT, DIST\_CM}.  A pre-built population is read back through
+\texttt{par\%clump\_input\_file} (a \texttt{DENSITY}/\texttt{DENS} column is
+converted to opacity with $C_{\mathrm{ext}}\,\ell_{\mathrm{cm}}$), optionally
+rescaled so its realized $\tau_{\max}$ or $\tau_{\mathrm{homo}}$ matches a
+target.  The Python helper \texttt{python/make\_clumps.py} writes such files
+(uniform random populations or a single centered clump).
+
+\section{Validation}
+\paragraph{Homogeneous limit.}
+A single clump centered at the origin with $\rc=R$ and $\kc=\tau_{0}/R$ fills
+the sphere with uniform opacity, so it must reproduce the homogeneous dust
+sphere of radial optical depth $\tau_{0}$.  At $\tau_{0}=1$, albedo $0.5$,
+isotropic scattering, $2\times10^{6}$ photons, the integrated images agree with
+the Cartesian reference to Monte-Carlo precision:
+\begin{center}
+\begin{tabular}{lccc}
+\hline
+section    & homogeneous & giant clump & rel.\ diff.\\
+\hline
+Scattered  & $6.38690\times10^{1}$ & $6.38682\times10^{1}$ & $-0.001\%$\\
+Direct     & $1.21791\times10^{2}$ & $1.21791\times10^{2}$ & $+0.000\%$\\
+Direct0    & $3.31062\times10^{2}$ & $3.31062\times10^{2}$ & $+0.000\%$\\
+\hline
+\end{tabular}
+\end{center}
+The direct images are deterministic (one source point) and match exactly; the
+scattered totals match to $10^{-5}$.  The mean number of scatterings agrees to
+$0.06\%$.  More generally the clumpy result approaches the smooth sphere as
+$\fcov$ grows at fixed $\tau_{\mathrm{homo}}$.
+
+\section{Scope}
+Gas velocity and temperature are out of scope at this stage, so the LaRT
+Doppler width, Voigt profile, frequency tracking, per-clump velocity, and the
+Lyman-$\alpha$ resonance machinery are not ported.  The ray-tracer assumes
+non-overlapping clumps (RSA enforces this); the overlap-aware path is recorded
+for a future revision.  See \texttt{AMR\_CLUMPS\_PLAN.md} Part~B.
+
+\begin{thebibliography}{9}
+\bibitem{AW87} Amanatides, J., \& Woo, A. 1987, A Fast Voxel Traversal
+  Algorithm for Ray Tracing, in Eurographics '87, 3
+\end{thebibliography}
+
+\end{document}

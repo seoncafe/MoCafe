@@ -1,0 +1,168 @@
+%% MoCafe — AMR octree dust grid (dust-only).
+%% Author: Kwang-Il Seon
+%% Written 2026-05-30 for kiseon_memo.cls.
+\documentclass[english,a4paper]{kiseon_memo}
+\synctex=1
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{microtype}
+
+\newcommand{\rd}{\mathrm{d}}
+\newcommand{\ee}{\mathrm{e}}
+
+\begin{document}
+
+\title{The AMR Octree Dust Grid in MoCafe}
+\author{Kwang-Il Seon}
+\date{2026-05-30}
+\maketitle
+
+\begin{abstract}
+MoCafe's AMR mode (\texttt{par\%grid\_type = 'amr'}) replaces the uniform
+Cartesian density grid with an adaptive octree read from a generic AMR file
+(FITS / HDF5 / text) produced by the Python builders or by RAMSES /
+Illustris-TNG converters.  The octree machinery is ported from LaRT but
+stripped to grey dust radiative transfer: each leaf carries a single dust
+opacity $\kappa(il)$ (extinction per unit code length), and the photon walks
+the tree via a precomputed face-neighbor table.  Because dust scattering is
+leaf-independent, the scattering and peeling-off physics are shared verbatim
+with the Cartesian path; only the optical-depth integration (the raytrace)
+is octree-specific.  This memo records the file schema, the octree build and
+traversal, the dust-opacity models and normalization, and the validation
+against a homogeneous sphere.
+\end{abstract}
+
+\section{Model and file schema}
+The domain is a cube $[-L/2,L/2]^3$ (recentred on the origin) partitioned by
+an octree: cell index runs over internal and leaf cells, root $=1$, octant
+$=1+i_x+2i_y+4i_z$ with $i_x=1$ if $x\ge$ the cell center.  Only leaves carry
+opacity.  The grid is read from a binary table (or text) with the mandatory
+columns
+\[
+  \texttt{x, y, z, level, nH, T, vx, vy, vz}
+\]
+and the header keywords \texttt{NAXIS2} (= number of leaves), \texttt{BOXLEN},
+and \texttt{ORIGINX/Y/Z}.  Optional columns \texttt{metallicity, xHI, ndust}
+feed the dust models below.  (\texttt{T} and the velocities are read for
+format compatibility but are ignored by the dust-only transport.)
+\texttt{amr\_type = 'ramses'} is rejected with a pointer to the Python
+converter --- MoCafe reads only the generic format.
+
+\section{Octree: build, neighbors, traversal}
+\paragraph{Build.}
+\texttt{amr\_build\_tree} inserts each leaf from the root, creating internal
+nodes as needed, so the flat arrays of leaf positions and levels reconstruct
+the full tree (\texttt{parent}, \texttt{children(8,:)}, \texttt{level},
+cell centers / half-widths, and the leaf$\leftrightarrow$cell maps).  The tree
+arrays and the per-leaf opacity live in MPI-3 shared memory (one copy per
+node).
+
+\paragraph{Neighbor table.}
+\texttt{amr\_build\_neighbors} precomputes, for every cell, the same-level
+face neighbor in each of the six directions ($+x,-x,+y,-y,+z,-z$) by querying
+the tree one cell-width past the face; ancestor returns (refinement gaps) are
+marked as ``no neighbor.''  This makes each boundary crossing $O(1)$ instead
+of an $O(\log N)$ descent from the root.
+
+\paragraph{Cell exit and next leaf.}
+\texttt{amr\_cell\_exit} returns the distance to the nearest face of the
+current leaf and the face index.  \texttt{amr\_next\_leaf} then follows the
+neighbor pointer and descends into the destination subtree using the two
+transverse sub-octant bits from the crossing point and the normal bit fixed
+\emph{topologically} from the face index (so a photon sitting exactly on a
+face is routed without an $\varepsilon$ nudge).  For a space-filling octree
+this finds the entered leaf in $O(1)$; a return of $0$ means the photon left
+the box (or hit a reflective / periodic boundary, handled per
+\texttt{par\%xyz\_symmetry} / \texttt{par\%xy\_periodic}).
+
+\section{Dust opacity and normalization}
+The per-leaf grey dust opacity is set, by \texttt{par\%dust\_density\_law}, to one of
+\begin{align}
+  \texttt{global\_dgr}:&\quad \kappa = n_{\rm H}\,C_{\rm ext}\,\mathrm{DGR}\,\ell_{\rm cm}, \\
+  \texttt{from\_file}:&\quad \kappa = n_{\rm dust}\,C_{\rm ext}\,\ell_{\rm cm}, \\
+  \texttt{laursen09}:&\quad \kappa = \frac{Z}{Z_{\rm ref}}\big(n_{\rm H}x_{\rm HI}
+       + f_{\rm ion}\,n_{\rm H}(1-x_{\rm HI})\big)\,C_{\rm ext}\,\ell_{\rm cm},
+\end{align}
+with $C_{\rm ext}=$ \texttt{par\%cext\_dust} and $\ell_{\rm cm}=$
+\texttt{par\%distance2cm}.  The \texttt{laursen09} model requires an explicit
+\texttt{xHI} column (the $T\!\to\!x_{\rm HI}$ CIE path is deferred with
+temperature).  When a system target is given, the whole population is rescaled
+by one factor so that the radial optical depth from the center to the $+z$
+edge equals \texttt{par\%taumax} (a pole traversal of the octree), or the
+volume-averaged $\kappa\,(L/2)$ equals \texttt{par\%tauhomo}.
+
+\section{Reuse of the dust physics}
+AMR mode binds only the two raytrace procedure pointers
+(\texttt{raytrace\_to\_tau} $\to$ \texttt{raytrace\_to\_tau\_amr},
+\texttt{raytrace\_to\_edge} $\to$ \texttt{raytrace\_to\_edge\_amr}); the
+forced first scattering, the Henyey--Greenstein (or Mueller-matrix)
+scattering, and the peeling-off are \emph{identical} to the Cartesian dust
+path, because for grey dust they are leaf-independent.
+\texttt{raytrace\_to\_edge\_amr} locates its start leaf from the photon
+position, so the peel works on a redirected copy of the photon without extra
+state.  The photon's current leaf index (\texttt{photon\%icell\_amr}) is
+maintained across the forward walk and set at emission via
+\texttt{amr\_find\_leaf}.
+
+\section{Generators and converters (Python)}
+All generic AMR files share the schema of \S2 and are produced by
+\texttt{python/AMR\_grid/}:
+\begin{itemize}
+\item \texttt{AMR\_grid.py} --- dust-only octree builder (\texttt{AMRGrid}):
+  uniform or density-gradient refinement, per-leaf \texttt{set\_density} /
+  \texttt{set\_metallicity} / \texttt{set\_neutral\_fraction} /
+  \texttt{set\_dust\_density}, and FITS/HDF5/text writers (the module-level
+  \texttt{write\_leaves} writes flat leaf arrays directly).
+\item \texttt{make\_amr\_sphere.py} --- a compact analytic sphere (uniform
+  level or radially refined) for validation.
+\item \texttt{convert\_ramses\_to\_generic.py} --- parses a native RAMSES
+  output (\texttt{amr\_*}/\texttt{hydro\_*} Fortran-unformatted files, directly,
+  no \texttt{yt}) and emits \texttt{x,y,z,level,nH} plus optional
+  \texttt{metallicity} (metal hydro variable or uniform), \texttt{xHI}
+  (ionization variable), and \texttt{ndust} (\texttt{--emit-ndust}).
+\item \texttt{convert\_illustris\_to\_generic.py} --- reads an Illustris-TNG
+  gas cutout (local HDF5 or TNG.org API), converts comoving$+h$ code units to
+  physical kpc and $n_{\rm H}$, builds an octree (uniform or density-gradient,
+  optionally matched to the local Voronoi cell size) via \texttt{AMRGrid}, and
+  assigns \texttt{nH}, \texttt{metallicity} (\texttt{GFM\_Metallicity}),
+  \texttt{xHI} (\texttt{NeutralHydrogenAbundance}) by nearest-neighbor lookup,
+  plus optional \texttt{ndust}.
+\end{itemize}
+Both converters are \emph{dust only}: gas velocity and temperature (and the
+RAMSES energy/pressure and Illustris \texttt{InternalEnergy}/\texttt{Velocities})
+are skipped.  The Illustris converter was validated end-to-end on a real TNG50
+cutout (uniform-level FITS and adaptive-level HDF5 grids both read by MoCafe and
+imaged); the RAMSES converter's generic-file output path is validated against
+MoCafe, while its Fortran-record reader is a faithful port of LaRT's.  See
+\texttt{AMR\_CONVERTERS\_PLAN.md}.
+
+\section{Validation}
+A uniform-density sphere on a uniform-level-5 octree (32 cells across) was
+compared with the homogeneous Cartesian sphere at the same resolution
+($32^3$), point source at the center, $\tau_{\max}=1$, albedo $0.5$, isotropic
+scattering, $2\times10^{6}$ photons:
+\begin{center}
+\begin{tabular}{lccc}
+\hline
+section    & Cartesian & AMR uniform & rel.\ diff.\\
+\hline
+Scattered  & $6.37856\times10^{1}$ & $6.37825\times10^{1}$ & $-0.005\%$\\
+Direct     & $1.21791\times10^{2}$ & $1.21791\times10^{2}$ & $+0.000\%$\\
+Direct0    & $3.31062\times10^{2}$ & $3.31062\times10^{2}$ & $+0.000\%$\\
+\hline
+\end{tabular}
+\end{center}
+The uniform octree reproduces the Cartesian result to Monte-Carlo precision.
+The \emph{same} uniform sphere on a radially-refined octree (levels 3--6)
+agrees to $-0.47\%$ in the scattered total (Direct exact), the residual being
+the coarser cell sampling of the sphere limb; the agreement while crossing
+three refinement levels validates the octree's level-crossing ray traversal.
+
+\section{Scope}
+Gas velocity and temperature are deferred, so the LaRT Doppler width, Voigt
+profile, frequency tracking, per-cell velocity, diffuse Ly$\alpha$ emissivity,
+and the HEALPix inside-observer output are not ported.  The pole-gap traversal
+helpers are kept for sparse (non-space-filling) octrees.  See
+\texttt{AMR\_CLUMPS\_PLAN.md} Part~A.
+
+\end{document}
