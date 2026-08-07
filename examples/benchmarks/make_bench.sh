@@ -42,7 +42,7 @@ for tau in 0.1 1.0 5.0 20.0; do
   mk $tau lucy
   # bw variant: drop single_teq line (bw ignores it) and lucy jlam requirement
   sed 's/dust_emission_method = .lucy./dust_emission_method = '"'"'bw01'"'"'/' bench_tau${tau}_lucy.in | \
-    sed '/dust_single_teq/d; /save_jlam/d; /sed_qtable/d; /sed_sizedist/d' > bench_tau${tau}_bw01.in
+    sed '/dust_single_teq/d; /save_jlam/d' > bench_tau${tau}_bw01.in
   sed -i "s/bench_tau${tau}_lucy.h5/bench_tau${tau}_bw01.h5/" bench_tau${tau}_bw01.in
 done
 echo "generated bench inputs"

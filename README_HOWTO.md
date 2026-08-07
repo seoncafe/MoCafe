@@ -219,14 +219,20 @@ cd SEDust/sed && ./build_lib.sh          # -> SEDust/sed/lib/libsedust.a
 The MoCafe `Makefile` links `SEDust/sed/lib/libsedust.a` automatically
 (variable `SEDUST_LIBDIR`).
 
-**Data works out of the box.** The optics tables the `astrodust`+PAH and `dl07`
-paths read (~26 MB) and the `zubko` DustEM tables (~25 MB, `SEDust/data/zubko/`)
-are committed to the repository, and `par%sed_workdir`
-defaults to blank so MoCafe auto-resolves the SEDust directory relative to the
-`MoCafe.x` executable at run time — a fresh checkout runs dust emission from any
-working directory with no path editing.  You only need `SEDust/populate_data.sh`
-to fetch the one file kept out of git (the 17 MB D16 spheroid Q-library, used
-only by the non-default graphite path); edit the source path inside that script,
+**Data works out of the box.** Each model's whole optics is one HDF5 product,
+`SEDust/data/<model>/sedust_<model>.h5` (~35 MB for the three), and those are
+committed together with the dielectric functions, the size distribution and the
+ZDA model definition; `par%sed_datadir`
+defaults to blank so MoCafe auto-resolves the SEDust data directory relative to
+the `MoCafe.x` executable at run time — a fresh checkout runs dust emission from
+any working directory with no path editing.  That directory is the data root for
+the whole build, the dielectric functions included, so there is no directory to
+change into either.  You only need `SEDust/populate_data.sh` to fetch what is
+kept out of git — the 17 MB D16 spheroid Q-library (used only by the non-default
+graphite path), the text Q tables and extinction curves, and the 25 MB
+distributed ZDA optics tables, which a run that has `sedust_zubko.h5` never
+opens (that product carries them as its default `/qtable`) and only an `HDF5=0`
+build needs; edit the source path inside that script,
 or set `SEDUST_SRC=/your/SEDust`, to point at your own SEDust tree.
 
 ### 1. Multi-wavelength (SED) mode
@@ -337,11 +343,9 @@ On AMR the `_jlam`/`_dustsed`/`_bwdust` outputs are arrays indexed by leaf plus 
 | `use_dustemis` | `.false.` | Compute dust emission (requires `use_sed`) |
 | `dust_emission_method` | `'lucy'` | `'lucy'` (SEDust) or `'bw01'` (Bjorkman & Wood) |
 | `dust_model` | `'astrodust'` | SEDust grain model: `'astrodust'` (Hensley & Draine 2023), `'dl07'` (Draine & Li 2007), or `'zubko'` (Zubko et al. 2004 BARE-GR-S) |
-| `sed_qtable`, `sed_sizedist` | `SEDust/` | Optics / size-distribution paths for `astrodust` and `dl07` (relative to `sed_workdir`). The Q table's wavelength axis **is** the grain model's wavelength grid, so it fixes both the band the transport can be given cross sections over and the cost of each emission solve. The table shipped here is SEDust's own, cut at the Lyman limit (1129 wavelengths) because that is where `lambda_min` stops as well. SEDust's untruncated table carries the same optics to 1.0e-4 µm (12.4 keV) in 1762 wavelengths; on `examples/dustemis/model_compare_astrodust.in` those extra wavelengths cost a factor ≈2.4 in wall time and move the emitted SED by 0.02 % (median over bins above a tenth of the peak) while nothing is transported below the Lyman limit. Taking `lambda_min` below 0.0912 µm needs them — copy the untruncated file in over this one (`SEDust/populate_data.sh` documents the cut) |
+| `sed_datadir` | `''` (auto) | The SEDust data directory, and the only path a run names; blank auto-resolves to `<MoCafe.x dir>/SEDust/data`. It is the data root for the whole build — the optics product, the size distribution, the dielectric functions and the default extinction curve all resolve inside it, so there is no working directory to change into. The whole of the named model's optics — its wavelength axis, its `(λ, a_eff)` cross sections and its size-integrated extinction curve alike — is one file, `<sed_datadir>/<dust_model>/sedust_<dust_model>.h5`; what is not optics comes from beside it (the size distribution under `release/`, the dielectric functions and PAH cross sections under `dielectric/`, the ZDA config and calorimetry under `zubko/`). That product carries **one** wavelength axis with the Lyman limit marked in it, so the grain model's grid is a view of it rather than a choice of file: its non-ionizing part unless `lambda_min` asks for shorter wavelengths, and then the whole axis. `grain_model_mod` decides that from `lambda_min`; there is nothing to set. The two views are 1129 of 1762 wavelengths for `astrodust`, 1129 of 1823 for `dl07`, 866 of 1201 for `zubko`; the cut is an index cut at the last node at or below the Lyman limit, so the grid covers that limit whichever model is named, and on `examples/dustemis/model_compare_astrodust.in` the wider one costs a factor ≈2.4 in wall time and moves the emitted SED by 0.02 % (median over bins above a tenth of the peak) |
 | `sed_dl07_sdindex`, `sed_dl07_uisrf` | 7, 1.0 | `dl07` only: WD01 size-distribution index (7 = MW R_V=3.1) and reference field scaling U |
-| `sed_zubko_config`, `sed_zubko_dir` | `../data/zubko/...` | `zubko` only: ZDA config file and DustEM data directory (relative to `sed_workdir`; committed under `SEDust/data/zubko/`) |
-| `sed_kext` | `''` (model default) | Precomputed size-integrated extinction curve the model serves to the transport, interpolated onto its wavelength grid. Blank uses the model's standard table — `SEDust/data/kext_astrodust_MW_euv.dat`, `kext_dl07_MW_euv.dat`, `kext_zubko_BARE_GR_S.dat`, whose EUV range contains the plain grid. Naming a file makes it mandatory (the run stops if it cannot be read) and it must come from the same model **and size distribution** as the emission: change `sed_sizedist` or `sed_dl07_sdindex` and the table has to be regenerated with SEDust's `calc_kext.x`. Relative to `sed_workdir` |
-| `sed_workdir` | `''` (auto) | Directory SEDust reads its `../data/...` tables from; blank auto-resolves to `<MoCafe.x dir>/SEDust/sed` |
+| `sed_kext` | `''` (model default) | Precomputed size-integrated extinction curve the model serves to the transport, interpolated onto its wavelength grid. Blank takes `/kext` from the model's own product, which is the same size integral over the same optics on the same axis — read on the whole of it, so it covers whichever view the grid is. Naming a file makes it mandatory (the run stops if it cannot be read) and it must come from the same model **and size distribution** as the emission: change `sed_dl07_sdindex` and the curve has to be regenerated with SEDust's `calc_kext.x` |
 | `sed_NT`, `sed_Tlo`, `sed_Thi` | 200, 2.7, 5000 | Grain temperature grid |
 | `dust_niter` | 1 | Lucy iterations for dust self-absorption (1 = non-iterative) |
 | `dust_no_photons` | 1e6 | Dust-emission photons per iteration |

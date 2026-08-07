@@ -282,52 +282,51 @@ public
      !--- reemission (approximate, equilibrium mixture-mean opacity, no PAH).
      character(len=8)   :: dust_emission_method = 'lucy'
      character(len=16)  :: dust_model   = 'astrodust'
-     !--- SEDust optics/size-distribution paths, resolved relative to
-     !--- par%sed_workdir (build_astrodust is called from there so that
-     !--- SEDust's own '../data/dielectric/...' relative reads resolve too).
-     !--- The Q table's wavelength axis IS the grain model's wavelength grid,
-     !--- so it sets the band the transport can be given cross sections over
-     !--- and the cost of every emission solve.  The table shipped here is
-     !--- SEDust's own, cut at the Lyman limit (1129 wavelengths) because that
-     !--- is where lambda_min stops as well.  SEDust's untruncated table carries
-     !--- the same optics to 1.0e-4 um (12.4 keV) in 1762 wavelengths; measured
-     !--- on examples/dustemis/model_compare_astrodust.in, those 633 extra
-     !--- wavelengths cost a factor ~2.4 in wall time and move the emitted SED
-     !--- by 0.02% (median over the bins above a tenth of the peak) while
-     !--- nothing is transported below the Lyman limit.  Taking lambda_min below
-     !--- 0.0912 um needs them, and needs no more than the untruncated file
-     !--- named here (SEDust/populate_data.sh documents the cut).
-     character(len=256) :: sed_qtable       = '../tmatrix/output/q_astrodust_P0.20_Fe0.00_1.400.dat'
-     character(len=256) :: sed_sizedist     = '../data/release/size_distribution.dat'
-     !--- SEDust sed/ directory (self-contained under the MoCafe tree).
-     !--- Blank (default) = auto-resolve to <executable dir>/SEDust/sed at
-     !--- run time (see read_input), so a fresh checkout works from any path.
-     !--- Set an explicit absolute path here only to override that.
-     character(len=256) :: sed_workdir      = ''
+     !--- SEDust data directory, and the ONE path a run names.  It is the data
+     !--- root for the whole library while the model is built: SEDust keeps one
+     !--- directory per dust model holding everything that model owns, so
+     !--- build_dust takes the whole of the named model's optics -- its
+     !--- wavelength axis, its (lambda, a_eff) cross sections and its
+     !--- size-integrated extinction curve alike -- out of
+     !--- <sed_datadir>/<dust_model>/sedust_<dust_model>.h5, and what is not
+     !--- optics from beside it: the size distribution under release/, the
+     !--- dielectric functions and PAH cross sections under dielectric/, the
+     !--- ZDA config and calorimetry under zubko/.  Blank (default) =
+     !--- auto-resolve to <executable dir>/SEDust/data at run time (see
+     !--- read_input), so a fresh checkout runs from any working directory.
+     !---
+     !--- That product carries ONE wavelength axis and the index at which it
+     !--- crosses the Lyman limit, so the grain model's grid is a view of it
+     !--- rather than a choice of file: the non-ionizing part (1129 wavelengths
+     !--- from 0.0912 um for astrodust, 1129 of 1823 for dl07, 866 of 1201 for
+     !--- zubko) unless par%lambda_min asks for shorter wavelengths, and then
+     !--- the whole axis.  The cut is an index cut at the last node at or below
+     !--- the Lyman limit, so the grid covers that limit whichever model is
+     !--- named.  grain_model_mod decides the view from lambda_min; there is
+     !--- nothing to set here.  The wider view costs roughly a factor 2.4 in
+     !--- emission-solve wall time for astrodust and moves the emitted SED by
+     !--- 0.02% (median over the bins above a tenth of the peak), so a run that
+     !--- transports nothing below the Lyman limit should not ask for it.
+     character(len=256) :: sed_datadir      = ''
      integer            :: sed_NT           = 200
      real(kind=wp)      :: sed_Tlo          = 2.7_wp
      real(kind=wp)      :: sed_Thi          = 5.0e3_wp
-     !--- DL07 (Draine & Li 2007; dust_model='dl07') reuses sed_qtable and
-     !--- sed_sizedist (same files as astrodust).  sed_dl07_sdindex = WD01
-     !--- size-distribution index (7 = MW R_V=3.1, b_C=6e-5); sed_dl07_uisrf =
-     !--- reference radiation-field scaling U (1 = MMP83 diffuse ISM).
+     !--- DL07 (Draine & Li 2007; dust_model='dl07') only: sed_dl07_sdindex =
+     !--- WD01 size-distribution index (7 = MW R_V=3.1, b_C=6e-5);
+     !--- sed_dl07_uisrf = reference radiation-field scaling U at which the PAH
+     !--- ionization balance is computed (1 = MMP83 diffuse ISM).  Ignored by
+     !--- the other models, whose size distributions come from their own files.
      integer            :: sed_dl07_sdindex = 7
      real(kind=wp)      :: sed_dl07_uisrf   = 1.0_wp
-     !--- Zubko (ZDA 2004 BARE-GR-S; dust_model='zubko'): the ZDA config
-     !--- file and the DustEM optics/calorimetry directory, resolved from
-     !--- sed_workdir (defaults point at the copied SEDust/data/zubko).
-     character(len=256) :: sed_zubko_config = '../data/zubko/ZDA_BARE_GR_S_Config.dat'
-     character(len=256) :: sed_zubko_dir    = '../data/zubko/'
      !--- Precomputed size-integrated extinction curve (lambda, albedo, <cos>,
      !--- C_ext/H, C_abs/H, C_sca/H) that SEDust interpolates onto the model
      !--- wavelength grid to give the transport its cross sections.  Blank
-     !--- (default) = the standard table of the named dust_model, which is the
-     !--- EUV-extended product covering the plain grid as well
-     !--- (SEDust/data/kext_astrodust_MW_euv.dat, kext_dl07_MW_euv.dat,
-     !--- kext_zubko_BARE_GR_S.dat).  Naming a file here makes it mandatory --
-     !--- the run stops if it cannot be read -- and it must have been computed
+     !--- (default) = /kext of the model's own product, which is the same size
+     !--- integral over the same optics on the same axis, so it covers whichever
+     !--- view of that axis the grid is.  Naming a file here makes it mandatory
+     !--- -- the run stops if it cannot be read -- and it must have been computed
      !--- from the same model and size distribution the emission uses, which is
-     !--- what SEDust's calc_kext.x writes.  Resolved from sed_workdir.
+     !--- what SEDust's calc_kext.x writes.
      character(len=256) :: sed_kext         = ''
      !--- Lucy iteration for dust self-absorption (Stage 3 follow-up #1).
      !--- dust_niter = max iterations (1 = non-iterative); dust_nphotons =

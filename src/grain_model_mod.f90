@@ -10,28 +10,33 @@ module grain_model_mod
 !---   extinction dust_extinction() -- sed_mod (the transport cross sections)
 !--- The emission is computed from the populations above.  The extinction is
 !--- the size-integrated curve precomputed for the same model, which the
-!--- builder loads from SEDust/data/kext_*.dat and dust_extinction interpolates
-!--- onto the model's own wavelength grid; the size integral behind that file
-!--- is SEDust's size_integrated_extinction, run by its calc_kext.x.  Both
-!--- halves therefore refer to the same grains -- the energy a cell absorbs is
-!--- set by C_abs of the size distribution that then radiates it away -- for as
-!--- long as the table matches the model actually built.  It does for the
-!--- shipped tables and the default par%sed_* inputs; change the size
-!--- distribution (par%sed_sizedist, par%sed_dl07_sdindex) and the table has to
-!--- be regenerated with calc_kext.x, or the two halves part company.  Naming
-!--- the model (par%dust_model) is otherwise enough to fix the dust physics.
+!--- builder loads from /kext of SEDust/data/<model>/sedust_<model>.h5 and
+!--- dust_extinction interpolates onto the model's own wavelength grid; the
+!--- size integral behind that curve is SEDust's size_integrated_extinction,
+!--- run by its calc_kext.x.  Both halves therefore refer to the same grains --
+!--- the energy a cell absorbs is set by C_abs of the size distribution that
+!--- then radiates it away -- because the optics and the curve come out of the
+!--- one file.  Change the size distribution (par%sed_dl07_sdindex, or a
+!--- par%sed_kext naming a curve computed for another one) and the two halves
+!--- part company.  Naming the model (par%dust_model) is otherwise enough to
+!--- fix the dust physics.
 !---
 !--- Built once for each run; both callers go through build_grain_model, which
 !--- returns immediately after the first call.
 !---------------------------------------------------------------
   use define
-  use dust_lib, only : dust_model_t, build_astrodust, build_dl07, build_zubko, &
+  use dust_lib, only : dust_model_t, build_dust, &
                        dust_extinction, dust_nlam, dust_lambda
   implicit none
   private
 
   type(dust_model_t), save, public :: dmodel
   logical,            save, public :: grain_model_ready = .false.
+
+  !--- Lyman limit [um].  Every SEDust product stores one wavelength axis with
+  !--- this point marked in it, and the grain model is built on the axis above
+  !--- it or on the whole of it.
+  real(kind=wp), parameter :: LAM_LYMAN_UM = 0.0912_wp
 
   public :: build_grain_model, grain_extinction_table
 
@@ -41,86 +46,68 @@ contains
   !--- copy from the same files, so the result is identical without a broadcast.
   subroutine build_grain_model()
   use mpi
-  use ifport, only : chdir, getcwd
   implicit none
-  integer :: ierr, cstat, st
-  character(len=512) :: cwd_save
-  logical :: kext_named
+  integer :: ierr, st
+  character(len=256) :: why
+  logical :: kext_named, euv
 
   if (grain_model_ready) return
   st = 0
 
-  !--- A blank par%sed_kext leaves the extinction table to SEDust's own default
-  !--- for the model, so the standard table names stay in one place (SEDust).
-  !--- A named file is instead mandatory: the build fails if it cannot be read.
+  !--- A blank par%sed_kext leaves the extinction curve to /kext of the model's
+  !--- own product, so the standard names stay in one place (SEDust).  A named
+  !--- file is instead mandatory: the build fails if it cannot be read.
   kext_named = len_trim(par%sed_kext) > 0
 
-  !--- SEDust reads its dielectric tables via paths hard-coded relative to its
-  !--- sed/ directory ('../data/dielectric/...'), so build the model from
-  !--- par%sed_workdir (default SEDust/sed) and restore the working directory.
-  !--- par%sed_qtable / par%sed_sizedist are given as absolute paths.
-  !--- chdir/getcwd are the Intel IFPORT integer functions (return 0 on success).
-  cstat = getcwd(cwd_save)
-  if (len_trim(par%sed_workdir) > 0) then
-     cstat = chdir(trim(par%sed_workdir))
-     if (cstat /= 0 .and. mpar%p_rank == 0) write(*,'(3a)') &
-        'WARNING: could not chdir to par%sed_workdir = ''', trim(par%sed_workdir), &
-        ''' (SEDust dielectric files may not be found).'
+  !--- Which view of the model's stored wavelength axis to build on.  The axis
+  !--- is one array with the Lyman limit marked in it, and dust_extinction is
+  !--- refused rather than extrapolated outside the grid the model was built
+  !--- on, so the grid has to reach at least as far as the transport does --
+  !--- and no further, the ionizing part being what makes every emission solve
+  !--- roughly 2.4x more expensive.  par%lambda_min is that boundary.  The cut
+  !--- is an index cut at the last node at or below the Lyman limit, the same
+  !--- for every model, so the grid covers that limit whichever model is named.
+  euv = par%lambda_min < LAM_LYMAN_UM
+
+  !--- One entry point for every model SEDust codes: the model name selects the
+  !--- builder, and par%sed_datadir is the data root for the whole build -- the
+  !--- optics product, the size distribution, the dielectric functions and the
+  !--- default extinction curve all resolve inside it -- so the run names one
+  !--- directory and stays where it is.  sd_index/u_isrf are DL07's alone and
+  !--- are ignored by the other models.
+  if (kext_named) then
+     call build_dust(dmodel, trim(par%dust_model), trim(par%sed_datadir), &
+                     par%sed_NT, par%sed_Tlo, par%sed_Thi, include_euv=euv, &
+                     status=st, message=why, sd_index=par%sed_dl07_sdindex, &
+                     u_isrf=par%sed_dl07_uisrf, kext_path=trim(par%sed_kext))
+  else
+     call build_dust(dmodel, trim(par%dust_model), trim(par%sed_datadir), &
+                     par%sed_NT, par%sed_Tlo, par%sed_Thi, include_euv=euv, &
+                     status=st, message=why, sd_index=par%sed_dl07_sdindex, &
+                     u_isrf=par%sed_dl07_uisrf)
   endif
-
-  select case (trim(par%dust_model))
-  case ('astrodust')
-     if (kext_named) then
-        call build_astrodust(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
-                             par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st, &
-                             kext_path=trim(par%sed_kext))
-     else
-        call build_astrodust(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
-                             par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st)
-     endif
-  case ('dl07')
-     if (kext_named) then
-        call build_dl07(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
-                        par%sed_dl07_sdindex, par%sed_dl07_uisrf, &
-                        par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st, &
-                        kext_path=trim(par%sed_kext))
-     else
-        call build_dl07(dmodel, trim(par%sed_qtable), trim(par%sed_sizedist), &
-                        par%sed_dl07_sdindex, par%sed_dl07_uisrf, &
-                        par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st)
-     endif
-  case ('zubko')
-     if (kext_named) then
-        call build_zubko(dmodel, trim(par%sed_zubko_config), trim(par%sed_zubko_dir), &
-                         par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st, &
-                         kext_path=trim(par%sed_kext))
-     else
-        call build_zubko(dmodel, trim(par%sed_zubko_config), trim(par%sed_zubko_dir), &
-                         par%sed_NT, par%sed_Tlo, par%sed_Thi, status=st)
-     endif
-  case default
-     cstat = chdir(trim(cwd_save))
-     if (mpar%p_rank == 0) write(*,'(3a)') &
-        'ERROR: par%dust_model = ''', trim(par%dust_model), &
-        ''' unknown (use ''astrodust'', ''dl07'', or ''zubko'').'
-     call MPI_FINALIZE(ierr);  stop
-  end select
-
-  cstat = chdir(trim(cwd_save))
 
   !--- SEDust reports a missing or malformed input through status instead of
   !--- stopping itself, so a bad par%sed_* path fails cleanly on every rank
-  !--- here rather than aborting mid-build.
+  !--- here rather than aborting mid-build.  message names the stage in words,
+  !--- in one vocabulary shared by every model.
   if (st /= 0) then
-     if (mpar%p_rank == 0) write(*,'(3a,i0,a)') &
-        'ERROR: SEDust failed to build the ''', trim(par%dust_model), &
-        ''' dust model (status=', st, '); check the par%sed_* input paths.'
-     !--- A named extinction table is required, and is the last thing a builder
-     !--- reads, so it is the likeliest source of a status from a build whose
-     !--- optics paths are otherwise the defaults.
-     if (mpar%p_rank == 0 .and. kext_named) write(*,'(3a)') &
-        '       par%sed_kext = ''', trim(par%sed_kext), &
-        ''' must be readable from par%sed_workdir.'
+     if (mpar%p_rank == 0) then
+        write(*,'(3a,i0,a)') 'ERROR: SEDust failed to build the ''', &
+           trim(par%dust_model), ''' dust model (status=', st, ').'
+        write(*,'(2a)') '       ', trim(why)
+        if (st == 90) write(*,'(3a)') &
+           '       par%dust_model = ''', trim(par%dust_model), &
+           ''' is not one of ''astrodust'', ''dl07'', ''zubko''.'
+        if (st /= 90) write(*,'(3a)') &
+           '       par%sed_datadir = ''', trim(par%sed_datadir), &
+           ''' must hold <dust_model>/sedust_<dust_model>.h5.'
+        !--- A named extinction curve is required, unlike the model's own, so
+        !--- it is the likeliest source of a status from a build whose other
+        !--- inputs are the defaults.
+        if (kext_named) write(*,'(3a)') &
+           '       par%sed_kext = ''', trim(par%sed_kext), ''' must be readable.'
+     endif
      call MPI_FINALIZE(ierr);  stop
   endif
 
@@ -130,10 +117,10 @@ contains
   !---------------------------------------------------------------
   !--- Size-integrated extinction of the model, on the model's own wavelength
   !--- grid, in the (lambda, albedo, <cos>, C_ext) form the transport reads.
-  !--- dust_extinction serves the precomputed curve of the model's kext table,
+  !--- dust_extinction serves the precomputed curve of the model's own product,
   !--- interpolated onto that grid -- a power law in lambda for the cross
   !--- sections, linear in ln(lambda) for <cos>.  The size integral behind the
-  !--- table is
+  !--- curve is
   !---
   !---   C_ext(lambda) = sum_pop sum_a dn(a) [C_abs(lambda,a) + C_sca(lambda,a)]
   !---   albedo        = C_sca / C_ext
@@ -166,14 +153,14 @@ contains
   if (st /= 0) then
      if (mpar%p_rank == 0) then
         write(*,'(a,i0,a)') 'ERROR: dust_extinction failed (status=', st, ').'
-        !--- The two statuses a run can actually provoke: no table was loaded
-        !--- (the model's default file is missing under SEDust/data), or the
-        !--- model grid reaches past the table, which is never extrapolated.
+        !--- The two statuses a run can actually provoke: no curve was loaded
+        !--- (the model's product is missing under par%sed_datadir), or the
+        !--- model grid reaches past the curve, which is never extrapolated.
         if (st == 2) write(*,'(3a)') &
-           '       no extinction table was loaded for the ''', trim(par%dust_model), &
-           ''' model; set par%sed_kext, or restore SEDust/data/kext_*.dat.'
+           '       no extinction curve was loaded for the ''', trim(par%dust_model), &
+           ''' model; set par%sed_kext, or restore its sedust_*.h5.'
         if (st == 3) write(*,'(a)') &
-           '       the model wavelength grid reaches outside that table.'
+           '       the model wavelength grid reaches outside that curve.'
      endif
      call MPI_FINALIZE(ierr);  stop
   endif

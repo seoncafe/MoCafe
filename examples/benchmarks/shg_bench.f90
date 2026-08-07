@@ -7,14 +7,13 @@ program shg_bench
    !--- SKIRT, DustEM, ...).  Validates the emission engine, not the RT.
    use constants, only: wp
    use radfield,  only: J_Mathis
-   use dust_lib,  only: dust_model_t, build_zubko, dust_emission, dust_nlam, dust_lambda
+   use dust_lib,  only: dust_model_t, build_dust, dust_emission, dust_nlam, dust_lambda
    implicit none
-   !--- The Zubko et al. (2004) BARE-GR-S optics and calorimetry this benchmark
-   !--- needs are committed under SEDust/data/zubko/, the same directory
-   !--- par%sed_zubko_dir points at, so the path below is relative to this
-   !--- directory and a fresh checkout runs the benchmark as it stands.
-   character(len=*), parameter :: ZDIR = '../../SEDust/data/zubko/'
-   character(len=*), parameter :: CFG  = ZDIR//'ZDA_BARE_GR_S_Config.dat'
+   !--- One data directory is all this names, the same par%sed_datadir a MoCafe
+   !--- run names: build_dust resolves the Zubko model from SEDust/data/zubko/
+   !--- under it.  The path is relative to this directory, so a fresh checkout
+   !--- runs the benchmark as it stands.
+   character(len=*), parameter :: DATA = '../../SEDust/data'
    type(dust_model_t)    :: m
    real(wp), allocatable :: J(:), total(:), lam(:)
    real(wp) :: Ulist(9), U
@@ -25,7 +24,20 @@ program shg_bench
    Ulist = [1.0e-2_wp, 1.0e-1_wp, 1.0e0_wp, 1.0e1_wp, 1.0e2_wp, &
             1.0e3_wp, 1.0e4_wp, 1.0e5_wp, 1.0e6_wp]
 
-   call build_zubko(m, CFG, ZDIR, 300, 2.7_wp, 5.0e3_wp)
+   !--- Whatever SEDust serves for 'zubko' is what is measured.  Which optics
+   !--- that model is made of -- the Zubko et al. tables as distributed, or
+   !--- SEDust's own recomputation of them -- is SEDust's decision, not this
+   !--- code's, and reproducing the published model is SEDust's business to get
+   !--- right.  SEDust now makes it a named argument, zubko_optics, whose default
+   !--- 'zda' is the distributed tables the seven codes read; this program leaves
+   !--- it unset, so what it measures is the library's own default, which is also
+   !--- what a MoCafe run with par%dust_model = 'zubko' gets.
+   !---
+   !--- include_euv = .true. keeps the whole 1201-point axis of the Zubko optics
+   !--- tables, from 1.0e-3 um, which is the range the benchmark's own reference
+   !--- spectra cover.  The non-ionizing view would cut it at the Lyman limit --
+   !--- right for a transport run, whose field stops there, but not for this.
+   call build_dust(m, 'zubko', DATA, 300, 2.7_wp, 5.0e3_wp, include_euv=.true.)
    lam = dust_lambda(m)
    allocate(J(dust_nlam(m)), total(dust_nlam(m)))
    print '(a,i0)', 'SEDust zubko model built, NLAM = ', dust_nlam(m)

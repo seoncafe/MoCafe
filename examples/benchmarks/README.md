@@ -7,34 +7,58 @@ published multi-code stochastic-heating-of-grains (SHG) benchmark, using the
 same Zubko et al. (2004) BARE-GR-S dust model the benchmark defines.
 
 - `shg_bench.f90` links `SEDust/sed/lib/libsedust.a`, builds the Zubko
-  BARE-GR-S model (`build_zubko`) from the optics committed under
-  `SEDust/data/zubko/`, and computes the dust emission for the Mathis ISRF
-  scaled by U = 1e-2 … 1e6.  Build/run:
+  BARE-GR-S model through `build_dust` from `SEDust/data`, and computes the dust
+  emission for the Mathis ISRF scaled by U = 1e-2 … 1e6.  Build/run (the archive
+  reads its optics as HDF5, so it comes before the HDF5 libraries):
   ```
+  H=/data/opt/hdf5_intel
   ifort -O2 -qopenmp -I../../SEDust/sed/lib shg_bench.f90 \
-        ../../SEDust/sed/lib/libsedust.a -o shg_bench.x
+        ../../SEDust/sed/lib/libsedust.a \
+        $H/lib/libhdf5_fortran.a $H/lib/libhdf5.a -lsz -ldl -lz -lm \
+        -o shg_bench.x
   OMP_NUM_THREADS=8 ./shg_bench.x
   ```
-  It prints one warning about not finding `../data/kext_zubko_BARE_GR_S.dat`,
-  because that path is relative to `SEDust/sed/` and the benchmark runs from
-  here.  Nothing is missing: the benchmark exercises `dust_emission` only, and
-  never asks the model for its extinction curve.
+  It builds on the whole 1201-point axis (`include_euv = .true.`), the range the
+  benchmark's own reference spectra cover; the non-ionizing view would cut it at
+  the Lyman limit, which is right for a transport run but not for this.
+- **What it measures is the library as delivered.**  Whether SEDust's `zubko`
+  is made of the Zubko et al. tables as distributed or of SEDust's own
+  recomputation of them is SEDust's decision, and reproducing the published
+  model is SEDust's business; this program goes through the plain entry point
+  and reports how far the result is from the seven-code median.  It matters
+  which: the two differ by up to 36% over the bins above a tenth of the peak
+  (measured here), because the recomputation reproduces the silicate to 2.4e-6
+  but the graphite only to 8% in `Q_abs` and implements the PAH component
+  differently.  SEDust now makes the choice an argument, `zubko_optics`, whose
+  default `'zda'` is the distributed tables the seven codes read; this program
+  leaves it unset, so what it measures is the library's own default, and a
+  MoCafe run with `par%dust_model = 'zubko'` gets the same model.
 - `cmp_shg.py` / `plot_shg.py` compare the output against the reference
   spectra of 7 codes (CRT, DIRTY, SKIRT, DustEM, TRADING, MCFOST, DARTRAY)
-  under `~/MoCafe/Grain/SHG_Benchmark/Results_FullSolution/`.
+  under `~/MoCafe/Grain/SHG_Benchmark/Results_FullSolution/`.  Those files are
+  in the benchmark's own units, ~7 decades below ours at every U, so both
+  scripts normalize before comparing: the benchmark constrains the **shape**,
+  while the level is set by the absorbed power and is checked by the energy
+  conservation test below.  `plot_shg.py` used to overlay them raw, which piled
+  every envelope into one clump at the bottom of the axes instead of putting it
+  on the curve it belongs to; the figure has been regenerated.
 
 **Result:** the SEDust emission agrees with the 7-code median to a **median
-relative difference of 2.5–4.4%** across U = 1e-2…1e4, and the emission peak
-wavelength matches the code median to within one wavelength bin
+relative difference of 2.5–4.4%** across U = 1e-2…1e4 (3.8 / 4.2 / 4.4 / 2.5% at
+U = 1e-2 / 1e0 / 1e2 / 1e4), inside the multi-code envelope at every U, and the
+emission peak wavelength matches the code median to within one wavelength bin
 (288/308, 142/143, 60/62, 34/34 µm) — i.e. within the inter-code scatter.
 See `shg_benchmark.pdf`.
 
-Remeasured against SEDust revision `04b6ed8`, whose `calc_P` fix stopped the
-emission solvers absorbing photons the radiation field does not carry.  That
-moved these spectra by 0.4% (median over the bins above a thousandth of the
-peak, 3–6% at worst) and the agreement with the code median by at most 0.3
-percentage points, from the 3.7 / 4.2 / 4.2 / 2.2% measured before it to
-3.8 / 4.2 / 4.4 / 2.5% at U = 1e-2 / 1e0 / 1e2 / 1e4.
+Measured against SEDust `ff4ff47` plus the `zubko_optics` revision on top of it.
+The agreement had gone to 1.6–5.9% for as long as the library served the
+recomputation for `zubko`; making the distributed tables the default moved the
+spectra back by 1.3–2.7% (median over the bins above a tenth of the peak, ~36%
+at worst) and the agreement to the figures above.  Before that, `04b6ed8`'s
+`calc_P` fix — which stopped the emission solvers absorbing photons the
+radiation field does not carry — had moved the spectra by 0.4% (median over the
+bins above a thousandth of the peak, 3–6% at worst) and the agreement by at
+most 0.3 percentage points.
 
 ## 2. Internal mode cross-check (Mode 1 Lucy vs Mode 2 B&W)
 

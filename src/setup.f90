@@ -36,17 +36,20 @@ contains
   read(unit,parameters)
   close(unit)
 
-  !--- Resolve the SEDust directory relative to the executable when the
-  !--- user leaves par%sed_workdir blank, so a fresh checkout runs dust emission
+  !--- Resolve the SEDust data directory relative to the executable when the
+  !--- user leaves par%sed_datadir blank, so a fresh checkout runs dust emission
   !--- from any working directory without editing paths.  argv(0) is the path to
-  !--- MoCafe.x (e.g. '../../MoCafe.x'); take its directory and append SEDust/sed.
-  if (len_trim(par%sed_workdir) == 0) then
+  !--- MoCafe.x (e.g. '../../MoCafe.x'); take its directory and append SEDust/data.
+  !--- That directory is the data root for the whole build -- the dielectric
+  !--- functions and the default extinction curves resolve inside it too -- so
+  !--- there is nothing else to point at and no directory to change into.
+  if (len_trim(par%sed_datadir) == 0) then
      call get_command_argument(0, exepath)
      islash = index(trim(exepath), '/', back=.true.)
      if (islash > 0) then
-        par%sed_workdir = exepath(1:islash-1) // '/SEDust/sed'
+        par%sed_datadir = exepath(1:islash-1) // '/SEDust/data'
      else
-        par%sed_workdir = 'SEDust/sed'
+        par%sed_datadir = 'SEDust/data'
      endif
   endif
 
@@ -311,25 +314,15 @@ contains
         'WARNING: par%luminosity <= 1; set it to the physical stellar luminosity [erg/s] for absolute dust temperatures.'
   endif
 
-  !--- Inputs of the named grain model.  It is built whenever the transport
-  !--- takes its cross sections from it (par%kext_file blank) or the Lucy
-  !--- iteration needs its emission, so both cases are checked here.
+  !--- The named grain model.  It is built whenever the transport takes its
+  !--- cross sections from it (par%kext_file blank) or the Lucy iteration needs
+  !--- its emission, so both cases are checked here.  Only the name is checked:
+  !--- everything the build reads is resolved from par%sed_datadir by SEDust,
+  !--- which reports what it cannot read as a build status.
   if (par%use_sed .and. (len_trim(par%kext_file) == 0 .or. &
       (par%use_dustemis .and. trim(par%dust_emission_method) == 'lucy'))) then
      select case (trim(par%dust_model))
-     case ('astrodust', 'dl07')
-        if (len_trim(par%sed_qtable) == 0 .or. len_trim(par%sed_sizedist) == 0) then
-           if (mpar%p_rank == 0) write(*,'(3a)') &
-              'ERROR: dust_model=''', trim(par%dust_model), &
-              ''' requires par%sed_qtable and par%sed_sizedist.'
-           call MPI_FINALIZE(ierr);  stop
-        endif
-     case ('zubko')
-        if (len_trim(par%sed_zubko_config) == 0 .or. len_trim(par%sed_zubko_dir) == 0) then
-           if (mpar%p_rank == 0) write(*,'(a)') &
-              'ERROR: dust_model=''zubko'' requires par%sed_zubko_config and par%sed_zubko_dir.'
-           call MPI_FINALIZE(ierr);  stop
-        endif
+     case ('astrodust', 'dl07', 'zubko')
      case default
         if (mpar%p_rank == 0) write(*,'(3a)') &
            'ERROR: par%dust_model = ''', trim(par%dust_model), &
