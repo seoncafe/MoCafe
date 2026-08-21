@@ -4,8 +4,9 @@
 # What a MoCafe run needs is already in the repository, so a fresh checkout runs
 # dust emission out of the box -- you normally do NOT need this script.  Run it
 # to bring this copy up to date with a newer SEDust, or to fetch the files kept
-# out of git: the 17 MB D16 spheroid Q-library (read only by q_graphite_d16_mod,
-# which nothing uses by default), and the text products described below.
+# out of git: the 17 MB D16 spheroid Q-library (read only when
+# qpah_graphite_source is 'd16_spheroid', a sensitivity setting no MoCafe path
+# selects), and the text products described below.
 #
 # WHAT THE LAYOUT IS.  SEDust keeps one directory per dust model, holding
 # everything that model owns, and keeps what the models SHARE beside those

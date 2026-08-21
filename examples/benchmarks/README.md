@@ -50,7 +50,12 @@ emission peak wavelength matches the code median to within one wavelength bin
 (288/308, 142/143, 60/62, 34/34 µm) — i.e. within the inter-code scatter.
 See `shg_benchmark.pdf`.
 
-Measured against SEDust `ff4ff47` plus the `zubko_optics` revision on top of it.
+Measured against SEDust `2d23b34`.  The revision that followed `ff4ff47` --
+the DL07 eq. 2 cation continuum, the random-orientation average of the D16
+spheroid table, and the exact-statistical cooling option -- leaves every
+spectrum here byte-identical: none of the three enters the `zubko` model,
+whose carbonaceous optics come from the ZDA tables and whose cooling stays on
+the thermal-discrete kernel.
 The agreement had gone to 1.6–5.9% for as long as the library served the
 recomputation for `zubko`; making the distributed tables the default moved the
 spectra back by 1.3–2.7% (median over the bins above a tenth of the peak, ~36%
