@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Compare the intrinsic dust-emission SED of the three SEDust grain models
-(astrodust, DL07, Zubko) as computed by MoCafe.
+"""Compare the intrinsic dust-emission SED of the four SEDust grain models
+(astrodust, DL07, MRN, Zubko) as computed by MoCafe.
 
-Reads the `_dustsed` outputs of three otherwise-identical runs that differ only
+Reads the `_dustsed` outputs of four otherwise-identical runs that differ only
 in par%dust_model, and overlays lambda*L_lambda.  Naming the model sets both
 halves of its dust physics: each run transports through that model's own
 extinction and reemits with that model's own grains.  The curves therefore
@@ -11,8 +11,8 @@ stellar power out of an identical cloud, because tau is normalized at
 par%lambda_ref and the models part company away from it -- on top of the
 spectral differences (PAH bands, silicate features, FIR peak, submm slope).
 
-Regenerate the inputs with model_compare_{astrodust,dl07,zubko}.in:
-    for m in astrodust dl07 zubko; do
+Regenerate the inputs with model_compare_{astrodust,dl07,mrn,zubko}.in:
+    for m in astrodust dl07 mrn zubko; do
         mpirun -np 4 ../../MoCafe.x model_compare_$m.in
     done
 then run this script.
@@ -29,6 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MODELS = [
     ("astrodust", "Astrodust (HD23)", "#1f77b4"),
     ("dl07",      "DL07",             "#d62728"),
+    ("mrn",       "MRN (DL84)",       "#ff7f0e"),
     ("zubko",     "Zubko (ZDA BARE-GR-S)", "#2ca02c"),
 ]
 
@@ -44,16 +45,24 @@ def load_sed(model):
     return lam, lam * Llam                       # lambda*L_lambda [erg/s]
 
 
+LAM_LO, LAM_HI = 1.0, 2.0e3
+
 fig, ax = plt.subplots(figsize=(7.0, 4.6))
+curves = []
 for model, label, color in MODELS:
     lam, lLl = load_sed(model)
     ax.plot(lam, lLl, color=color, lw=1.8, label=label)
+    curves.append((lam, lLl))
 
 ax.set_xscale("log")
 ax.set_yscale("log")
-ax.set_xlim(1.0, 2.0e3)
-ymax = ax.get_ylim()[1]
-ax.set_ylim(ymax * 1e-4, ymax)
+ax.set_xlim(LAM_LO, LAM_HI)
+# The top of the axis comes from the data inside the plotted range, not from the
+# autoscale: MRN has no PAHs, so its near-infrared bins hold essentially no
+# emission, and a log autoscale that has to accommodate them spans hundreds of
+# decades and leaves the far-infrared peaks in a sliver.
+ymax = max(lLl[(lam >= LAM_LO) & (lam <= LAM_HI)].max() for lam, lLl in curves)
+ax.set_ylim(ymax * 2e-4, ymax * 2.0)
 ax.set_xlabel(r"$\lambda\ [\mu\mathrm{m}]$")
 ax.set_ylabel(r"$\lambda L_\lambda\ [\mathrm{erg\,s^{-1}}]$")
 ax.legend(frameon=False, loc="upper left")

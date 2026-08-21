@@ -297,9 +297,10 @@ energy balance depends on two independently specified dust models agreeing.
 
 Each model supplies its scattering optics in the way that model is defined:
 \texttt{astrodust} from its random-orientation T-matrix $Q$ table; \texttt{dl07}
-from Mie theory on the D03 astrosilicate and graphite dielectric functions, its
-PAH component entering through absorption alone because a PAH scatters
-negligibly; \texttt{zubko} and a file-defined model from the $Q_{\rm sca}$ and
+and \texttt{mrn} from Mie theory on the D03 astrosilicate and graphite
+dielectric functions, the DL07 PAH component entering through absorption alone
+because a PAH scatters negligibly and MRN having no PAHs at all;
+\texttt{zubko} and a file-defined model from the $Q_{\rm sca}$ and
 $\langle\cos\rangle$ columns of their own tables.
 
 An explicit table \pp{kext\_file} ($\lambda$, $a$, $\langle\cos\rangle$,
@@ -922,7 +923,7 @@ Parameter & Meaning & Default \\
 \pp{use\_reduced\_wgt}  & forced first scattering + reduced weight & \code{.true.}\\
 \pp{use\_stokes}        & polarized Mueller-matrix scattering      & \code{.false.}\\
 \pp{lambda\_ref}        & reference wavelength for grey rescaling  & --- \\
-\pp{dust\_model}   & grain model (\code{astrodust}/\code{dl07}/\code{zubko}) & \code{astrodust}\\
+\pp{dust\_model}   & grain model (\code{astrodust}/\code{dl07}/\code{mrn}/\code{zubko}) & \code{astrodust}\\
 \pp{dust\_single\_teq}  & equilibrium-only emission (fast)         & \code{.false.}\\
 \pp{dust\_fast\_table}  & $U$-interpolated emission table          & \code{.false.}\\
 \pp{dust\_niter}        & self-absorption iterations               & 1 \\
@@ -949,6 +950,10 @@ Parameter & Meaning & Default \\
 \item Camps, P.\ et al. 2015, A\&A, 580, A87 --- stochastic-heating dust-emission
       benchmark.
 \item Draine, B.~T. \& Li, A. 2007, ApJ, 657, 810 --- DL07 dust model.
+\item Mathis, J.~S., Rumpl, W., \& Nordsieck, K.~H. 1977, ApJ, 217, 425 --- the
+      $a^{-3.5}$ size distribution.
+\item Draine, B.~T. \& Lee, H.~M. 1984, ApJ, 285, 89 --- graphite and silicate
+      optical properties; the normalization of the MRN model used here.
 \item Zubko, V., Dwek, E., \& Arendt, R.~G. 2004, ApJS, 152, 211 --- BARE-GR-S
       model.
 \item Min, M.\ et al. 2009, A\&A, 497, 155; Robitaille, T.~P. 2010, A\&A, 520,

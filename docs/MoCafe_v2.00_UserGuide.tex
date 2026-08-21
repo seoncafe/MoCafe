@@ -147,7 +147,7 @@ The MoCafe \file{Makefile} links \file{SEDust/sed/lib/libsedust.a}
 automatically (variable \code{SEDUST\_LIBDIR}).  The \textsc{SEDust} module
 named \code{mathlib} is renamed to \code{sed\_mathlib} to avoid a clash with
 MoCafe's own \code{mathlib}.  Each model's whole optics is one HDF5 product,
-\file{SEDust/data/<model>/sedust\_<model>.h5} ($\sim$35\,MB for the three), and
+\file{SEDust/data/<model>/sedust\_<model>.h5} ($\sim$41\,MB for the four), and
 those are committed to the repository, and
 \code{par\%sed\_datadir} defaults to blank so MoCafe auto-resolves the
 \textsc{SEDust} data directory relative to the \file{MoCafe.x} executable at
@@ -419,9 +419,10 @@ supplies the dust emission.  Naming the model is therefore enough to fix the
 dust physics of a run: the energy a cell absorbs and the spectrum it radiates
 back come from one size distribution and one set of cross sections.  Every model
 carries its scattering optics --- \code{astrodust} from its T-matrix $Q$ table,
-\code{dl07} from Mie theory on the astrosilicate and graphite dielectric
-functions, \code{zubko} from the $Q_{\rm sca}$ and $\langle\cos\rangle$ columns of
-its own tables --- so all three give a physical albedo.  Setting \pp{kext\_file}
+\code{dl07} and \code{mrn} from Mie theory on the astrosilicate and graphite
+dielectric functions, \code{zubko} from the $Q_{\rm sca}$ and
+$\langle\cos\rangle$ columns of its own tables --- so all four give a physical
+albedo.  Setting \pp{kext\_file}
 replaces them with a tabulated file; the balance above then holds only if that
 file came from the same model.
 
@@ -541,7 +542,7 @@ the AMR octree; see \S\ref{sec:amremission}).
 \midrule \endhead
 use\_dustemis      & .false.   & Compute dust emission (requires \pp{use\_sed})\\
 dust\_emission\_method & 'lucy'& 'lucy' (\textsc{SEDust}) or 'bw01' (Bjorkman \& Wood)\\
-dust\_model   & 'astrodust' & \textsc{SEDust} grain model: 'astrodust', 'dl07', or 'zubko'\\
+dust\_model   & 'astrodust' & \textsc{SEDust} grain model: 'astrodust', 'dl07', 'mrn', or 'zubko'\\
 sed\_datadir       & blank (auto) & \textsc{SEDust} data directory, the only path a run names and the data root of the whole build; blank auto-resolves to \code{<MoCafe.x dir>/SEDust/data}\\
 sed\_dl07\_sdindex, sed\_dl07\_uisrf & 7, 1.0 & 'dl07' only: WD01 size-dist.\ index and reference $U$\\
 sed\_kext          & blank     & Extinction curve to serve; blank takes it from the model's own product\\
@@ -590,8 +591,9 @@ wavelengths, and then the whole of it.  MoCafe decides that from
 \pp{lambda\_min}, there being nothing to set --- the grid has to reach at least
 as far as the transport does, and no further, since the extinction is refused
 rather than extrapolated outside the grid the model was built on.  The two
-views are 1129 of 1762 wavelengths for astrodust, 1129 of 1823 for dl07 and 866
-of 1201 for zubko, the cut being an index cut at the last node at or below the
+views are 1129 of 1762 wavelengths for astrodust, 1129 of 1823 for dl07 and mrn,
+which share an axis, and 866 of 1201 for zubko, the cut being an index cut at
+the last node at or below the
 Lyman limit, so the grid covers that limit whichever model is named; on \file{examples/dustemis/model\_compare\_astrodust.in} the
 wider one costs a factor $\simeq 2.4$ in wall time and moves the emitted SED by
 0.02\% (median over the bins above a tenth of the peak) for as long as nothing
@@ -843,8 +845,8 @@ dust density.}
   \includegraphics[width=\textwidth]{../examples/dustemis/table_accuracy.pdf}
 \end{minipage}
 \caption{\emph{Left}: the emission spectrum of a single cell heated by the same
-radiation field, for the three \textsc{SEDust} grain models
-(\code{astrodust}, \code{dl07}, \code{zubko}); the total power is identical (each
+radiation field, for the four \textsc{SEDust} grain models
+(\code{astrodust}, \code{dl07}, \code{mrn}, \code{zubko}); the total power is identical (each
 is normalized to the absorbed luminosity) while the PAH bands and the
 far-infrared slope differ by model.  \emph{Right}: the \pp{dust\_fast\_table}
 approximation against the exact stochastic solve --- the total luminosity is

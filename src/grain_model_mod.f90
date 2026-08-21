@@ -98,7 +98,7 @@ contains
         write(*,'(2a)') '       ', trim(why)
         if (st == 90) write(*,'(3a)') &
            '       par%dust_model = ''', trim(par%dust_model), &
-           ''' is not one of ''astrodust'', ''dl07'', ''zubko''.'
+           ''' is not one of ''astrodust'', ''dl07'', ''mrn'', ''zubko''.'
         if (st /= 90) write(*,'(3a)') &
            '       par%sed_datadir = ''', trim(par%sed_datadir), &
            ''' must hold <dust_model>/sedust_<dust_model>.h5.'

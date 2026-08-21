@@ -12,16 +12,16 @@
 # everything that model owns, and keeps what the models SHARE beside those
 # directories:
 #
-#   data/astrodust/  data/dl07/  data/zubko/     one per par%dust_model
-#   data/dielectric/                             optical constants, PAH cross sections
-#   data/release/                                published tables + the size distribution
+#   data/<model>/     one per par%dust_model: astrodust, dl07, mrn, zubko
+#   data/dielectric/  optical constants, PAH cross sections
+#   data/release/     published tables + the size distribution
 #
 # WHAT IS COMMITTED, AND WHAT IS NOT.  A model's whole optics -- its wavelength
 # axis, its (lambda, a_eff) cross sections and its size-integrated extinction
 # curve -- is ONE file, data/<model>/sedust_<model>.h5, and that is what
 # build_dust reads and what this tree ships.  SEDust writes the same numbers as
-# text as well (the q_*.dat Q tables and the kext_*.dat curves, ~200 MB for the
-# three models), for a tree built without HDF5; those are regenerable by the
+# text as well (the q_*.dat Q tables and the kext_*.dat curves, ~250 MB for the
+# four models), for a tree built without HDF5; those are regenerable by the
 # programs that wrote the product, nothing here opens them, and they are not
 # committed.  This script copies them anyway when the source tree has them, so
 # that an HDF5=0 build has what it needs.
@@ -66,11 +66,11 @@ mkdir -p "$HERE/data"
 # directories rather than inside one of them.
 mkdir -p "$HERE/data/dielectric" "$HERE/data/release"
 cp "$SED"/data/dielectric/{index_CpaD03,index_CpeD03,index_silD03,index_DH21Ad_P0.20_0.00_1.400,PAHion.31,PAHneu.31,q_D16graphite.dat,qlib_gra_D16MGemt_1.400} "$HERE/data/dielectric/"
-cp "$SED"/data/release/{extinction.dat,kext_albedo_WD_MW_3.1_60_D03.all_2003,scattering.dat,size_distribution.dat} "$HERE/data/release/"
+cp "$SED"/data/release/{extinction.dat,kext_albedo_WD_MW_3.1_60_D03.all_2003,kext_albedo_MRN,scattering.dat,size_distribution.dat} "$HERE/data/release/"
 
 # One directory per model: the product, the text products behind it, and -- for
 # zubko, whose model definition IS a set of files -- that definition.
-for m in astrodust dl07 zubko; do
+for m in astrodust dl07 mrn zubko; do
   mkdir -p "$HERE/data/$m"
   cp "$SED"/data/"$m"/sedust_"$m".h5 "$HERE/data/$m/"
   for f in "$SED"/data/"$m"/q_*.dat "$SED"/data/"$m"/kext_*.dat; do

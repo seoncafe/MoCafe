@@ -322,11 +322,11 @@ contains
   if (par%use_sed .and. (len_trim(par%kext_file) == 0 .or. &
       (par%use_dustemis .and. trim(par%dust_emission_method) == 'lucy'))) then
      select case (trim(par%dust_model))
-     case ('astrodust', 'dl07', 'zubko')
+     case ('astrodust', 'dl07', 'mrn', 'zubko')
      case default
         if (mpar%p_rank == 0) write(*,'(3a)') &
            'ERROR: par%dust_model = ''', trim(par%dust_model), &
-           ''' unknown (use ''astrodust'', ''dl07'', or ''zubko'').'
+           ''' unknown (use ''astrodust'', ''dl07'', ''mrn'', or ''zubko'').'
         call MPI_FINALIZE(ierr);  stop
      end select
   endif

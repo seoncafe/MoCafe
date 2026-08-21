@@ -45,7 +45,7 @@ The scattered-light image is in units of `(luminosity unit) cm^-2 sr^-1`.
   - **Lucy (1999) + [SEDust](SEDust/)** — equilibrium + stochastically heated
     grains + PAHs; iterable for dust self-absorption; fast equilibrium
     (`dust_single_teq`) and table (`dust_fast_table`) options; grain models
-    **astrodust / DL07 / Zubko**.
+    **astrodust / DL07 / MRN / Zubko**.
   - **Bjorkman & Wood (2001)** — immediate reemission, no iteration.
   - **Galaxy models** — multiple stellar populations; radially-exponential and
     `sech²` disks with **log-spiral arms**; **Sersic** (alias-sampled) and
@@ -93,4 +93,4 @@ Kwang-il Seon (KASI/UST)
 
 ---
 
-Last updated: 2026-08-21 10:20 KST
+Last updated: 2026-08-21 20:46 KST

@@ -281,6 +281,14 @@ public
      !--- stochastic + PAH; iterable); 'bw01' = Bjorkman & Wood 2001 immediate
      !--- reemission (approximate, equilibrium mixture-mean opacity, no PAH).
      character(len=8)   :: dust_emission_method = 'lucy'
+     !--- the SEDust grain model the run's dust physics comes from:
+     !---   'astrodust'  Hensley & Draine 2023, one composite grain + PAHs
+     !---   'dl07'       Draine & Li 2007, astrosilicate + carbonaceous + PAHs
+     !---   'mrn'        Mathis, Rumpl & Nordsieck 1977 as Draine & Lee 1984
+     !---                normalized it: graphite + silicate on a^-3.5 over
+     !---                0.005-0.25 um, with no PAHs, so the emergent SED
+     !---                carries no aromatic features
+     !---   'zubko'      Zubko et al. 2004 BARE-GR-S
      character(len=16)  :: dust_model   = 'astrodust'
      !--- SEDust data directory, and the ONE path a run names.  It is the data
      !--- root for the whole library while the model is built: SEDust keeps one
@@ -298,11 +306,11 @@ public
      !--- That product carries ONE wavelength axis and the index at which it
      !--- crosses the Lyman limit, so the grain model's grid is a view of it
      !--- rather than a choice of file: the non-ionizing part (1129 wavelengths
-     !--- from 0.0912 um for astrodust, 1129 of 1823 for dl07, 866 of 1201 for
-     !--- zubko) unless par%lambda_min asks for shorter wavelengths, and then
-     !--- the whole axis.  The cut is an index cut at the last node at or below
-     !--- the Lyman limit, so the grid covers that limit whichever model is
-     !--- named.  grain_model_mod decides the view from lambda_min; there is
+     !--- from 0.0912 um for astrodust, 1129 of 1823 for dl07 and mrn, which
+     !--- share an axis, 866 of 1201 for zubko) unless par%lambda_min asks for
+     !--- shorter wavelengths, and then the whole axis.  The cut is an index
+     !--- cut at the last node at or below the Lyman limit, so the grid covers
+     !--- that limit whichever model is named.  grain_model_mod decides the view from lambda_min; there is
      !--- nothing to set here.  The wider view costs roughly a factor 2.4 in
      !--- emission-solve wall time for astrodust and moves the emitted SED by
      !--- 0.02% (median over the bins above a tenth of the peak), so a run that
