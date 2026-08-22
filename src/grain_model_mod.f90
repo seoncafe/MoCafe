@@ -127,9 +127,12 @@ contains
   !---   <cos>         = sum dn C_sca g / sum dn C_sca
   !---
   !--- Cross sections are per H atom [cm^2/H], the same normalization as a
-  !--- table read through par%kext_file.  Populations without scattering optics
-  !--- (the PAHs) enter through absorption only, so the albedo falls where they
-  !--- dominate.  albedo and <cos> are zero wherever nothing scatters.
+  !--- table read through par%kext_file.  Every population of every model
+  !--- carries scattering optics: in the PAH populations what scatters is the
+  !--- graphite fraction xi_gra(a) of the grain (HD23 eq. 15), a PAH having an
+  !--- absorption cross section and no scattering one.  Its whole weight is in
+  !--- the far-UV -- a few percent of C_sca at 0.1 um and nothing longward of
+  !--- 0.3 um.  albedo and <cos> are zero wherever nothing scatters.
   subroutine grain_extinction_table(lam, alb, cosg, cext, n)
   use mpi
   implicit none

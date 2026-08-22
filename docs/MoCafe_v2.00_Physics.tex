@@ -298,10 +298,13 @@ energy balance depends on two independently specified dust models agreeing.
 Each model supplies its scattering optics in the way that model is defined:
 \texttt{astrodust} from its random-orientation T-matrix $Q$ table; \texttt{dl07}
 and \texttt{mrn} from Mie theory on the D03 astrosilicate and graphite
-dielectric functions, the DL07 PAH component entering through absorption alone
-because a PAH scatters negligibly and MRN having no PAHs at all;
-\texttt{zubko} and a file-defined model from the $Q_{\rm sca}$ and
-$\langle\cos\rangle$ columns of their own tables.
+dielectric functions, MRN having no PAHs at all; \texttt{zubko} and a
+file-defined model from the $Q_{\rm sca}$ and $\langle\cos\rangle$ columns of
+their own tables.  A PAH population scatters as the graphite fraction
+$\xi_{\rm gra}(a)$ of the grain (Hensley \& Draine 2023, eq.~15), a PAH having
+an absorption cross section and no scattering one; that term carries a few
+percent of $C_{\rm sca}$ at $0.1\,\mu$m and nothing longward of
+$0.3\,\mu$m.
 
 An explicit table \pp{kext\_file} ($\lambda$, $a$, $\langle\cos\rangle$,
 $\Cext/$H) overrides this.  It is then the user's responsibility that the table
@@ -947,6 +950,8 @@ Parameter & Meaning & Default \\
 \item Draine, B.~T. \& Li, A. 2001, ApJ, 551, 807 --- thermal-discrete stochastic
       heating; grain enthalpies.
 \item Draine, B.~T. \& Hensley, B.~S. 2021, ApJ, 909, 94 --- astrodust model.
+\item Hensley, B.~S. \& Draine, B.~T. 2023, ApJ, 948, 55 --- the astrodust+PAH
+      model; the graphite fraction $\xi_{\rm gra}(a)$.
 \item Camps, P.\ et al. 2015, A\&A, 580, A87 --- stochastic-heating dust-emission
       benchmark.
 \item Draine, B.~T. \& Li, A. 2007, ApJ, 657, 810 --- DL07 dust model.
