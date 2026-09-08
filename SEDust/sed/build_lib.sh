@@ -111,7 +111,7 @@ esac
 SED_SRCS="constants sed_paths sed_mathlib sedust_h5 sedust_product enthalpy_v2 size_dist q_table \
       enthalpy_astrodust mie \
       q_astrodust q_graphite q_graphite_d16 q_graphite_d16_sphere qpah radfield \
-      p_sub stoch_qm pah_ioniz grain_dist q_silicate pah_ld01 dust_model_mod \
+      p_sub stoch_qm pah_ioniz grain_dist q_silicate pah_ld01 dust_model_mod dustem_io \
       kext_table zubko_io q_component sed_astrodust dust_lib"
 
 mkdir -p lib

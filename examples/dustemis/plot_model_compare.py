@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Compare the intrinsic dust-emission SED of the four SEDust grain models
-(astrodust, DL07, MRN, Zubko) as computed by MoCafe.
+"""Compare the intrinsic dust-emission SED of the six SEDust grain models
+(astrodust, DL07, MRN, Zubko, THEMIS, G18 Model D) as computed by MoCafe.
 
-Reads the `_dustsed` outputs of four otherwise-identical runs that differ only
+Reads the `_dustsed` outputs of six otherwise-identical runs that differ only
 in par%dust_model, and overlays lambda*L_lambda.  Naming the model sets both
 halves of its dust physics: each run transports through that model's own
 extinction and reemits with that model's own grains.  The curves therefore
@@ -11,8 +11,8 @@ stellar power out of an identical cloud, because tau is normalized at
 par%lambda_ref and the models part company away from it -- on top of the
 spectral differences (PAH bands, silicate features, FIR peak, submm slope).
 
-Regenerate the inputs with model_compare_{astrodust,dl07,mrn,zubko}.in:
-    for m in astrodust dl07 mrn zubko; do
+Regenerate the inputs with model_compare_{astrodust,dl07,mrn,zubko,themis,g18d}.in:
+    for m in astrodust dl07 mrn zubko themis g18d; do
         mpirun -np 4 ../../MoCafe.x model_compare_$m.in
     done
 then run this script.
@@ -31,6 +31,8 @@ MODELS = [
     ("dl07",      "DL07",             "#d62728"),
     ("mrn",       "MRN (DL84)",       "#ff7f0e"),
     ("zubko",     "Zubko (ZDA BARE-GR-S)", "#2ca02c"),
+    ("themis",    "THEMIS (J13)",     "#9467bd"),
+    ("g18d",      "G18 Model D",      "#8c564b"),
 ]
 
 

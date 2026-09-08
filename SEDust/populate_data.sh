@@ -12,16 +12,17 @@
 # everything that model owns, and keeps what the models SHARE beside those
 # directories:
 #
-#   data/<model>/     one per par%dust_model: astrodust, dl07, mrn, zubko
+#   data/<model>/     one per par%dust_model: astrodust, dl07, mrn, zubko,
+#                     themis, g18d
 #   data/dielectric/  optical constants, PAH cross sections
-#   data/release/     published tables + the size distribution
+#   data/release/     published reference tables (nothing here reads them)
 #
 # WHAT IS COMMITTED, AND WHAT IS NOT.  A model's whole optics -- its wavelength
 # axis, its (lambda, a_eff) cross sections and its size-integrated extinction
 # curve -- is ONE file, data/<model>/sedust_<model>.h5, and that is what
 # build_dust reads and what this tree ships.  SEDust writes the same numbers as
 # text as well (the q_*.dat Q tables and the kext_*.dat curves, ~250 MB for the
-# four models), for a tree built without HDF5; those are regenerable by the
+# six models), for a tree built without HDF5; those are regenerable by the
 # programs that wrote the product, nothing here opens them, and they are not
 # committed.  This script copies them anyway when the source tree has them, so
 # that an HDF5=0 build has what it needs.
@@ -31,13 +32,20 @@
 # product opens none of them.
 #
 # What is NOT optics still comes from beside the product and IS committed: the
-# size distribution under release/, the dielectric functions and PAH cross
-# sections under dielectric/, and the ZDA config, size distributions and
-# calorimetry under zubko/.
+# dielectric functions and PAH cross sections under dielectric/, and the ZDA
+# config, size distributions and calorimetry under zubko/, and the DustEM
+# GRAIN_*.DAT, oprop/LAMBDA.DAT and hcap/ heat capacities under themis/ and
+# g18d/ (build_dustem reads those three even when the product supplies the
+# optics).  The HD23 size
+# distribution is analytic (size_dist.f90); release/size_distribution.dat is
+# the table it was refit to and is carried as a reference only.
 #
-# The sources under sed/src/ and sed/build_lib.sh are byte-identical to their
-# SEDust v1.00 counterparts, so `cmp` against that tree is the whole check that
-# this copy is current.  The one file of the library that reaches into the
+# The sources under sed/src/ are byte-identical to their SEDust v1.00
+# counterparts, so `cmp` against that tree is the whole check that this copy is
+# current.  sed/build_lib.sh differs from upstream's in one word: its SED_SRCS
+# lists dustem_io, the module sed_astrodust has used since SEDust 94be548,
+# which upstream's own build_lib.sh does not list (its Makefile does).  The one
+# file of the library that reaches into the
 # T-matrix, src/euv_astrodust_tmatrix.f90, is deliberately not copied: it serves
 # the astrodust EUV band, which only a lam_min shorter than 0.0912 um asks for,
 # and MoCafe never passes one -- its ionizing band, when it wants one, is inside
@@ -70,7 +78,7 @@ cp "$SED"/data/release/{extinction.dat,kext_albedo_WD_MW_3.1_60_D03.all_2003,kex
 
 # One directory per model: the product, the text products behind it, and -- for
 # zubko, whose model definition IS a set of files -- that definition.
-for m in astrodust dl07 mrn zubko; do
+for m in astrodust dl07 mrn zubko themis g18d; do
   mkdir -p "$HERE/data/$m"
   cp "$SED"/data/"$m"/sedust_"$m".h5 "$HERE/data/$m/"
   for f in "$SED"/data/"$m"/q_*.dat "$SED"/data/"$m"/kext_*.dat; do
@@ -86,5 +94,17 @@ done
 cp "$SED"/data/zubko/{Gra_121_1201.dat,suvSil_121_1201.dat,PAH_28_1201_neu.dat} "$HERE/data/zubko/"
 cp "$SED"/data/zubko/{Graphitic_Calorimetry_1000.dat,Silicate_Calorimetry_1000.dat} "$HERE/data/zubko/"
 cp "$SED"/data/zubko/{ZDA_BARE_GR_S_Config.dat,ZDA_BARE_GR_S_SzDist_Gra.dat,ZDA_BARE_GR_S_SzDist_PAH.dat,ZDA_BARE_GR_S_SzDist_Sil.dat,zubko_descriptor.txt} "$HERE/data/zubko/"
+# The two DustEM-defined models.  The definition, wavelength grid, heat
+# capacities and the published extinction curves are committed; the DustEM
+# Q_ and G_ optics tables (12 MB) are the product's default /qtable and are
+# fetched here only for a tree built without HDF5.
+for m in themis g18d; do
+  mkdir -p "$HERE/data/$m/oprop" "$HERE/data/$m/hcap" "$HERE/data/$m/reference"
+  cp "$SED"/data/"$m"/GRAIN_*.DAT "$SED"/data/"$m"/where.txt "$HERE/data/$m/"
+  cp "$SED"/data/"$m"/oprop/*.DAT "$HERE/data/$m/oprop/"
+  cp "$SED"/data/"$m"/hcap/*.DAT "$HERE/data/$m/hcap/"
+  cp "$SED"/data/"$m"/reference/EXT_*.RES "$HERE/data/$m/reference/"
+done
+cp "$SED"/data/g18d/ALIGN_G17_ModelD.DAT "$HERE/data/g18d/"
 
 echo "Populated SEDust data under $HERE (from $SED)"

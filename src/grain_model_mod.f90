@@ -71,8 +71,8 @@ contains
 
   !--- One entry point for every model SEDust codes: the model name selects the
   !--- builder, and par%sed_datadir is the data root for the whole build -- the
-  !--- optics product, the size distribution, the dielectric functions and the
-  !--- default extinction curve all resolve inside it -- so the run names one
+  !--- optics product, the dielectric functions and the default extinction
+  !--- curve all resolve inside it -- so the run names one
   !--- directory and stays where it is.  sd_index/u_isrf are DL07's alone and
   !--- are ignored by the other models.
   if (kext_named) then
@@ -98,7 +98,7 @@ contains
         write(*,'(2a)') '       ', trim(why)
         if (st == 90) write(*,'(3a)') &
            '       par%dust_model = ''', trim(par%dust_model), &
-           ''' is not one of ''astrodust'', ''dl07'', ''mrn'', ''zubko''.'
+           ''' is not one of ''astrodust'', ''dl07'', ''mrn'', ''zubko'', ''themis'', ''g18d''.'
         if (st /= 90) write(*,'(3a)') &
            '       par%sed_datadir = ''', trim(par%sed_datadir), &
            ''' must hold <dust_model>/sedust_<dust_model>.h5.'
@@ -164,6 +164,12 @@ contains
            ''' model; set par%sed_kext, or restore its sedust_*.h5.'
         if (st == 3) write(*,'(a)') &
            '       the model wavelength grid reaches outside that curve.'
+        !--- A model whose optics tables carry no scattering asymmetry: the
+        !--- transport would run with <cos> = 0, isotropic scattering, which is
+        !--- not a measurement, so the run stops here instead.
+        if (st == 4) write(*,'(3a)') &
+           '       the ''', trim(par%dust_model), &
+           ''' model carries no scattering asymmetry <cos>; give par%kext_file a table that has one.'
      endif
      call MPI_FINALIZE(ierr);  stop
   endif

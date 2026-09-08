@@ -289,6 +289,10 @@ public
      !---                0.005-0.25 um, with no PAHs, so the emergent SED
      !---                carries no aromatic features
      !---   'zubko'      Zubko et al. 2004 BARE-GR-S
+     !---   'themis'     THEMIS (Jones et al. 2013 carbon grains, Koehler et
+     !---                al. 2014 silicates, Ysard et al. 2015 densities and
+     !---                mass ratios), read from its DustEM input files
+     !---   'g18d'       Guillet et al. 2018 Model D, read the same way
      character(len=16)  :: dust_model   = 'astrodust'
      !--- SEDust data directory, and the ONE path a run names.  It is the data
      !--- root for the whole library while the model is built: SEDust keeps one
@@ -297,9 +301,12 @@ public
      !--- wavelength axis, its (lambda, a_eff) cross sections and its
      !--- size-integrated extinction curve alike -- out of
      !--- <sed_datadir>/<dust_model>/sedust_<dust_model>.h5, and what is not
-     !--- optics from beside it: the size distribution under release/, the
-     !--- dielectric functions and PAH cross sections under dielectric/, the
-     !--- ZDA config and calorimetry under zubko/.  Blank (default) =
+     !--- optics from beside it: the dielectric functions and PAH cross
+     !--- sections under dielectric/, the ZDA config, size distributions and
+     !--- calorimetry under zubko/, the DustEM GRAIN_*.DAT, wavelength grid
+     !--- and heat capacities under themis/ and g18d/.  The HD23 size
+     !--- distribution is analytic (SEDust size_dist_mod), so nothing is read
+     !--- for it.  Blank (default) =
      !--- auto-resolve to <executable dir>/SEDust/data at run time (see
      !--- read_input), so a fresh checkout runs from any working directory.
      !---
@@ -307,7 +314,8 @@ public
      !--- crosses the Lyman limit, so the grain model's grid is a view of it
      !--- rather than a choice of file: the non-ionizing part (1129 wavelengths
      !--- from 0.0912 um for astrodust, 1129 of 1823 for dl07 and mrn, which
-     !--- share an axis, 866 of 1201 for zubko) unless par%lambda_min asks for
+     !--- share an axis, 866 of 1201 for zubko, 750 of 800 for themis and
+     !--- g18d) unless par%lambda_min asks for
      !--- shorter wavelengths, and then the whole axis.  The cut is an index
      !--- cut at the last node at or below the Lyman limit, so the grid covers
      !--- that limit whichever model is named.  grain_model_mod decides the view from lambda_min; there is
@@ -323,7 +331,7 @@ public
      !--- WD01 size-distribution index (7 = MW R_V=3.1, b_C=6e-5);
      !--- sed_dl07_uisrf = reference radiation-field scaling U at which the PAH
      !--- ionization balance is computed (1 = MMP83 diffuse ISM).  Ignored by
-     !--- the other models, whose size distributions come from their own files.
+     !--- the other models, whose size distributions are fixed by the model.
      integer            :: sed_dl07_sdindex = 7
      real(kind=wp)      :: sed_dl07_uisrf   = 1.0_wp
      !--- Precomputed size-integrated extinction curve (lambda, albedo, <cos>,
