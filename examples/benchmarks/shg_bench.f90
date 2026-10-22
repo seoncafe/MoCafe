@@ -51,7 +51,7 @@ program shg_bench
       open(newunit=unit, file=trim(adjustl(fname)), status='replace')
       write(unit,'(a)') '# lambda[um]   lambda*emission (SEDust zubko BARE-GR-S, per H)'
       do il = 1, dust_nlam(m)
-         write(unit,'(es14.6,es16.7)') lam(il), total(il)
+         write(unit,'(es15.6e3,es17.7e3)') lam(il), total(il)
       end do
       close(unit)
       print '(a,es9.1,a,es12.4,a,f7.1,a)', '  U=', U, ' : peak lamI=', &

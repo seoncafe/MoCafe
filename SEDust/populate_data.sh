@@ -40,12 +40,12 @@
 # distribution is analytic (size_dist.f90); release/size_distribution.dat is
 # the table it was refit to and is carried as a reference only.
 #
-# The sources under sed/src/ are byte-identical to their SEDust v1.00
-# counterparts, so `cmp` against that tree is the whole check that this copy is
-# current.  sed/build_lib.sh differs from upstream's in one word: its SED_SRCS
-# lists dustem_io, the module sed_astrodust has used since SEDust 94be548,
-# which upstream's own build_lib.sh does not list (its Makefile does).  The one
-# file of the library that reaches into the
+# The sources under sed/src/ and sed/build_lib.sh are byte-identical to their
+# SEDust v1.00 counterparts (revision 9a2b7c1, 2026-10-22), so `cmp` against
+# that tree is the whole check that this copy is current.  This script copies
+# data only; the sources are copied by hand and checked with `cmp`, and an
+# optics product from a newer SEDust than the sources here is the pairing to
+# avoid.  The one file of the library that reaches into the
 # T-matrix, src/euv_astrodust_tmatrix.f90, is deliberately not copied: it serves
 # the astrodust EUV band, which only a lam_min shorter than 0.0912 um asks for,
 # and MoCafe never passes one -- its ionizing band, when it wants one, is inside

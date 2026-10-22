@@ -9,12 +9,15 @@ same Zubko et al. (2004) BARE-GR-S dust model the benchmark defines.
 - `shg_bench.f90` links `SEDust/sed/lib/libsedust.a`, builds the Zubko
   BARE-GR-S model through `build_dust` from `SEDust/data`, and computes the dust
   emission for the Mathis ISRF scaled by U = 1e-2 … 1e6.  Build/run (the archive
-  reads its optics as HDF5, so it comes before the HDF5 libraries):
+  reads its optics as HDF5, so it comes before the HDF5 libraries; `H` must be
+  the HDF5 the archive was built against, which `make main` at the top level
+  keeps equal to the Makefile's `HDF5_PREFIX`):
   ```
-  H=/data/opt/hdf5_intel
+  H=/opt/hdf5_intel
   ifort -O2 -qopenmp -I../../SEDust/sed/lib shg_bench.f90 \
         ../../SEDust/sed/lib/libsedust.a \
-        $H/lib/libhdf5_fortran.a $H/lib/libhdf5.a -lsz -ldl -lz -lm \
+        $H/lib/libhdf5_fortran.a $(ls $H/lib/libhdf5_f90cstub.a 2>/dev/null) \
+        $H/lib/libhdf5.a -lsz -ldl -lz -lm \
         -o shg_bench.x
   OMP_NUM_THREADS=8 ./shg_bench.x
   ```
@@ -26,8 +29,9 @@ same Zubko et al. (2004) BARE-GR-S dust model the benchmark defines.
   recomputation of them is SEDust's decision, and reproducing the published
   model is SEDust's business; this program goes through the plain entry point
   and reports how far the result is from the seven-code median.  It matters
-  which: the two differ by up to 36% over the bins above a tenth of the peak
-  (measured here), because the recomputation reproduces the silicate to 2.4e-6
+  which: over the bins above a tenth of the peak the two differ by a median
+  1.3-2.7% and by up to 24.9% (measured here against SEDust `9a2b7c1`, U =
+  1e-2 ... 1e6; 36% at worst on 2026-08-07), because the recomputation reproduces the silicate to 2.4e-6
   but the graphite only to 8% in `Q_abs` and implements the PAH component
   differently.  SEDust now makes the choice an argument, `zubko_optics`, whose
   default `'zda'` is the distributed tables the seven codes read; this program
@@ -43,27 +47,33 @@ same Zubko et al. (2004) BARE-GR-S dust model the benchmark defines.
   every envelope into one clump at the bottom of the axes instead of putting it
   on the curve it belongs to; the figure has been regenerated.
 
-**Result:** the SEDust emission agrees with the 7-code median to a **median
-relative difference of 2.5–4.4%** across U = 1e-2…1e4 (3.8 / 4.2 / 4.4 / 2.5% at
-U = 1e-2 / 1e0 / 1e2 / 1e4), inside the multi-code envelope at every U, and the
-emission peak wavelength matches the code median to within one wavelength bin
-(288/308, 142/143, 60/62, 34/34 µm) — i.e. within the inter-code scatter.
-See `shg_benchmark.pdf`.
+**Result** (SEDust `9a2b7c1`, measured 2026-10-22 with `cmp_shg.py`; `validate.py`
+gives the same figures): over 3-1000 um and the bins above 2% of the code
+median's peak, the SEDust emission differs from the 7-code median by a
+**median relative 4.7 / 4.8 / 4.8 / 3.0%** at U = 1e-2 / 1e0 / 1e2 / 1e4, and
+the emission peak, ours against the code median's, lies at 292/308, 142/143,
+60/62 and 34/34 um.  It is not inside the multi-code envelope
+everywhere: the fraction of those bins between the lowest and the highest of
+the seven codes is 28 / 19 / 17 / 23%.  See `shg_benchmark.pdf`.
 
-Measured against SEDust `2d23b34`.  The revision that followed `ff4ff47` --
-the DL07 eq. 2 cation continuum, the random-orientation average of the D16
-spheroid table, and the exact-statistical cooling option -- leaves every
-spectrum here byte-identical: none of the three enters the `zubko` model,
-whose carbonaceous optics come from the ZDA tables and whose cooling stays on
-the thermal-discrete kernel.
-The agreement had gone to 1.6–5.9% for as long as the library served the
-recomputation for `zubko`; making the distributed tables the default moved the
-spectra back by 1.3–2.7% (median over the bins above a tenth of the peak, ~36%
-at worst) and the agreement to the figures above.  Before that, `04b6ed8`'s
-`calc_P` fix — which stopped the emission solvers absorbing photons the
-radiation field does not carry — had moved the spectra by 0.4% (median over the
-bins above a thousandth of the peak, 3–6% at worst) and the agreement by at
-most 0.3 percentage points.
+What moved the spectra here, newest first:
+
+- `9a2b7c1` (synced 2026-10-22): `calc_P` takes its upward transition rates
+  from the Draine & Li (2001) bin overlap, eqs. (15)-(24), instead of one photon
+  energy per bin pair, so each enthalpy bin absorbs exactly what the field
+  delivers.  Against the previous copy the median difference from the code
+  median moves 5.0 / 4.8 / 4.7 / 2.8% -> 4.7 / 4.8 / 4.8 / 3.0%, and the U = 1e-2
+  peak 288 -> 292 um.  The run takes 8.4 s instead of 13.7 s (8 threads).
+- The figures this file quoted before, 3.8 / 4.2 / 4.4 / 2.5%, were measured
+  against `2d23b34` and were no longer what the copy before this sync gave
+  (5.0 / 4.8 / 4.7 / 2.8%, remeasured the same day); the revisions between are
+  not separated here.
+- Making the distributed ZDA tables the default `zubko` optics, instead of
+  SEDust's recomputation of them, moved the spectra by 1.3-2.7% (median over
+  the bins above a tenth of the peak, ~36% at worst).
+- `04b6ed8`'s `calc_P` fix, which stopped the emission solvers absorbing
+  photons the radiation field does not carry, moved the spectra by 0.4%
+  (median over the bins above a thousandth of the peak, 3-6% at worst).
 
 ## 2. Internal mode cross-check (Mode 1 Lucy vs Mode 2 B&W)
 

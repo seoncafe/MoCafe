@@ -23,7 +23,19 @@ thick regions.  See **[Dust Thermal Emission (v2.00)](#dust-thermal-emission-v20
    GNU `mpif90`).  MoCafe is MPI-only.
 2. **CFITSIO** — <https://heasarc.gsfc.nasa.gov/fitsio/> (required).
 3. **HDF5** (optional, default on) — 1.14+ with Fortran bindings built by the
-   same compiler.  Build with `make HDF5=1` (default) or `make HDF5=0` to skip.
+   same compiler.  The default `HDF5_PREFIX` follows the compiler:
+   `/opt/hdf5_intel` (HDF5 2.2.0, ifx 2026.1.1) for `mpiifort`/`mpiifx`, and
+   `/opt/hdf5_gfortran` (HDF5 2.2.0, gfortran 13.1) for `make F90=mpif90`; the
+   SEDust archive is built with the same compiler (`ifort`, `ifx` or
+   `gfortran`).  A GNU build needs an MPI built for gfortran, such as MPICH in
+   `/opt/mpich_gcc`, first on `PATH` and with the oneAPI variables
+   (`LIBRARY_PATH`, `LD_LIBRARY_PATH`) out of the environment; Intel MPI's
+   `mpif90` supplies an `mpi.mod` that gfortran cannot read.  Build with `make HDF5=1` (default) or `make HDF5=0` to
+   skip.  That install is a local rebuild whose static Fortran archives contain
+   their C stubs (source and patch:
+   `/nfs/mocafe/kiseon/MoCafe/new/hdf5-2.2.0/LOCAL_CHANGES`), so it links
+   exactly as 1.14 does.  An unmodified 2.x install has one more archive,
+   `libhdf5_f90cstub.a`, which the Makefile adds when the prefix has it.
 4. **Python 3** (for the analysis tools / converters): `numpy`, `astropy`,
    `h5py`, and `scipy` (Illustris converter only).
 
@@ -209,15 +221,25 @@ monochromatic scattering run is unchanged.
 ### The SEDust grain library
 
 The Lucy emission engine is the **SEDust** library, self-contained
-under `SEDust/` (synced from SEDust revision `583095f`, 2026-07-16).  Build it
-once (Intel):
+under `SEDust/`: `SEDust/sed/src/` is byte-identical to SEDust v1.00 revision
+`9a2b7c1` (2026-10-22), and so is `SEDust/sed/build_lib.sh` except for its two
+default HDF5 prefixes, `/opt/hdf5_intel` and `/opt/hdf5_gfortran` here
+(`/data/opt/...` upstream).  `make` builds
+it as part of MoCafe:
 
 ```bash
-cd SEDust/sed && ./build_lib.sh          # -> SEDust/sed/lib/libsedust.a
+make main                                # builds SEDust/sed/lib/libsedust.a when needed
+make sedust                              # rebuild the archive alone
 ```
 
-The MoCafe `Makefile` links `SEDust/sed/lib/libsedust.a` automatically
-(variable `SEDUST_LIBDIR`).
+The archive is compiled against the HDF5 Fortran modules, so it must come from
+the same HDF5 as MoCafe.  `make main` records the `HDF5`/`HDF5_PREFIX` it was
+built with in `SEDust/sed/lib/hdf5_build.txt` and rebuilds the archive when
+they change or a source under `SEDust/sed/src/` is newer.  Running
+`SEDust/sed/build_lib.sh` by hand uses that script's own default prefix,
+`/opt/hdf5_intel`, the same as the Makefile's; with any other `HDF5_PREFIX`
+for MoCafe it would mix two HDF5s, so `make sedust` is the way to rebuild the
+archive.
 
 **Data works out of the box.** Each model's whole optics is one HDF5 product,
 `SEDust/data/<model>/sedust_<model>.h5` (~44 MB for the six), and those are

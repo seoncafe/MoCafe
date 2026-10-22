@@ -26,7 +26,7 @@ module dustemis_mod
   use dust_lib, only : dust_emis_table_t, &
                        dust_emission, dust_emission_single_teq, &
                        dust_build_table, dust_emission_interp, &
-                       dust_nlam, dust_lambda
+                       dust_nlam, dust_lambda, isolated_radiation_support_count
   use grain_model_mod, only : dmodel, build_grain_model
   implicit none
   private
@@ -96,6 +96,7 @@ contains
   real(kind=wp), allocatable :: Jcgs(:), Jsi(:), Jsed(:), lamI_sed(:), lamI_edge(:), lamj(:), jem_sed(:), emis(:)
   real(kind=wp) :: vol, dist2, jnorm, Labs, esum, lam_mean, csum, cell_Teq_true, rhk
   integer :: nl_mc, ic, il, ierr, ndone, nmine, est, emis_err
+  integer(kind=int64) :: n_isolated
 
   nl_mc = sed_nlam
   ndone = 0
@@ -115,6 +116,12 @@ contains
 
   allocate(Jcgs(nl_mc), Jsi(nl_mc), Jsed(nl_sed), lamI_sed(nl_sed), &
            lamI_edge(nl_mc+1), lamj(nl_mc+1), jem_sed(nl_sed), emis(nl_mc))
+
+  !--- SEDust integrates a field over its significant continuum, which needs two
+  !--- distinct SEDust wavelengths.  A field it sees at one wavelength only is
+  !--- absorbed as zero and only counted, so that cell would drop the power it
+  !--- absorbed.  Count the cases from here on, the table build included.
+  n_isolated = isolated_radiation_support_count
 
   !--- fast path: build the emission table once from the current (stellar)
   !--- field, then interpolate per cell instead of solving exactly.
@@ -218,6 +225,14 @@ contains
   if (emis_err /= 0) then
      if (mpar%p_rank == 0) write(*,'(a,i0,a)') &
         'ERROR: SEDust dust_emission failed (status=', emis_err, ').'
+     call MPI_FINALIZE(ierr);  stop
+  endif
+  n_isolated = isolated_radiation_support_count - n_isolated
+  call MPI_ALLREDUCE(MPI_IN_PLACE, n_isolated, 1, MPI_INTEGER8, MPI_SUM, MPI_COMM_WORLD, ierr)
+  if (n_isolated > 0) then
+     if (mpar%p_rank == 0) write(*,'(a,i0,a/a)') &
+        'ERROR: SEDust saw ', n_isolated, ' radiation field(s) at a single SEDust wavelength and absorbed nothing,', &
+        '       so those cells would not reemit their absorbed power.  Widen the wavelength bins (par%nlambda).'
      call MPI_FINALIZE(ierr);  stop
   endif
 
