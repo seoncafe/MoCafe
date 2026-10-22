@@ -31,9 +31,16 @@ FLAGS		= -cpp -DMPI
 DEBUG		= 0
 HDF5		= 1
 
-# HDF5 installation prefix (set when HDF5=1). Override on command line if needed:
+# HDF5 installation prefix (set when HDF5=1), by default the install for the
+# compiler, because Fortran module files are compiler-specific: /opt/hdf5_intel
+# for ifx/ifort, /opt/hdf5_gfortran for gfortran.  Override on command line if
+# needed:
 #   make HDF5=1 HDF5_PREFIX=/usr/local/hdf5
-HDF5_PREFIX	?= /data/opt/hdf5_intel
+ifeq ($(FC), mpif90)
+    HDF5_PREFIX	?= /opt/hdf5_gfortran
+else
+    HDF5_PREFIX	?= /opt/hdf5_intel
+endif
 
 ifneq ($(HDF5), 0)
    FLAGS    += -DHDF5 -I$(HDF5_PREFIX)/include
